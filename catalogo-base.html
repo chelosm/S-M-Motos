@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repuestos HADA - Catálogo Mayorista</title>
+<style>
+  /* ============================================
+     1) VARIABLES DE COLOR
+     Las definimos una sola vez acá arriba para poder
+     reusarlas en toda la hoja de estilos (como si fueran
+     "cajitas" con un nombre, que guardan un color).
+     ============================================ */
+  :root {
+    --asfalto: #16181d;        /* fondo oscuro, como un taller */
+    --metal: #2a2e37;          /* paneles / tarjetas */
+    --metal-claro: #3a3f4b;    /* bordes, líneas */
+    --texto: #e8e6df;          /* texto principal, blanco hueso */
+    --texto-tenue: #9a9fab;    /* texto secundario */
+    --naranja: #ff6a1a;        /* acento: naranja "señal de taller" */
+    --amarillo: #ffb84d;       /* acento secundario: precaución */
+    --verde-stock: #4ade80;
+    --rojo-sinstock: #f87171;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--asfalto);
+    color: var(--texto);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    line-height: 1.5;
+  }
+
+  /* ============================================
+     2) ENCABEZADO
+     ============================================ */
+  header {
+    background: linear-gradient(90deg, #0f1013, var(--metal));
+    border-bottom: 3px solid var(--naranja);
+    padding: 28px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: Arial, sans-serif;
+    font-weight: 900;
+    font-size: 1.6rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--naranja); }
+  .logo small {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--texto-tenue);
+    font-weight: 400;
+    letter-spacing: 3px;
+  }
+
+  /* ============================================
+     3) BLOQUE DE LOGIN (simulado)
+     ============================================ */
+  #login-box {
+    background: var(--metal);
+    border: 1px solid var(--metal-claro);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #login-box input {
+    background: var(--asfalto);
+    border: 1px solid var(--metal-claro);
+    color: var(--texto);
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    width: 150px;
+  }
+  #login-box button {
+    background: var(--naranja);
+    color: #1a1a1a;
+    border: none;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #login-box button:hover { background: var(--amarillo); }
+  #estado-login {
+    font-size: 0.78rem;
+    color: var(--texto-tenue);
+  }
+  #estado-login.activo { color: var(--verde-stock); font-weight: 600; }
+
+  /* ============================================
+     4) TABLA DE PRODUCTOS
+     ============================================ */
+  main { padding: 32px 24px; max-width: 1100px; margin: 0 auto; }
+
+  .aviso {
+    background: rgba(255,106,26,0.1);
+    border-left: 3px solid var(--naranja);
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--texto-tenue);
+    margin-bottom: 24px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--metal);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  thead {
+    background: #1e2128;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 1px;
+    color: var(--texto-tenue);
+  }
+  th, td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--metal-claro);
+    font-size: 0.88rem;
+  }
+  tbody tr:hover { background: #31363f; }
+  .codigo { color: var(--amarillo); font-weight: 600; white-space: nowrap; }
+  .precio { font-weight: 700; text-align: right; }
+  .precio.bloqueado { color: var(--texto-tenue); font-weight: 400; font-style: italic; }
+  .estado-badge {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+  .estado-badge.sinstock { background: rgba(248,113,113,0.15); color: var(--rojo-sinstock); }
+  .estado-badge.ok { background: rgba(74,222,128,0.15); color: var(--verde-stock); }
+
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--texto-tenue);
+    font-size: 0.78rem;
+  }
+</style>
+<!-- Librería oficial de Supabase para hablar con tu proyecto desde el navegador -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="logo">REPUESTOS <span>HADA</span><small>DISTRIBUIDORA MAYORISTA · MOTOS</small></div>
+
+  <!-- Bloque de login real: valida contra Supabase (email + contraseña) -->
+  <div id="login-box">
+    <input type="email" id="email" placeholder="Email mayorista">
+    <input type="password" id="password" placeholder="Contraseña">
+    <button onclick="iniciarSesion()">Ingresar</button>
+    <button onclick="registrarse()" style="background:var(--metal-claro); color:var(--texto);">Registrarse</button>
+    <button onclick="cerrarSesion()" id="btn-salir" style="display:none; background:var(--metal-claro); color:var(--texto);">Salir</button>
+    <span id="estado-login">Sin sesión — precios ocultos</span>
+  </div>
+  <div id="debug-box" style="width:100%; font-size:0.78rem; color:var(--amarillo); margin-top:4px;"></div>
+</header>
+
+<main>
+  <div class="aviso">
+    Catálogo de prueba — primeras 15 filas de la lista HADA (noviembre 2025).
+    Los precios solo se muestran con sesión de mayorista iniciada.
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Descripción</th>
+        <th style="text-align:right">Precio Lista</th>
+      </tr>
+    </thead>
+    <tbody id="tabla-productos">
+      <!-- Las filas se generan con JavaScript a partir de PRODUCTOS -->
+    </tbody>
+  </table>
+</main>
+
+<footer>Repuestos HADA · Uso interno / demo de desarrollo</footer>
+
+<script>
+  /* ============================================
+     5) LOS DATOS
+     Esto sería, en el futuro, lo que traemos de tu Excel /
+     base de datos real. Por ahora lo escribimos a mano
+     como una lista de objetos (una "fila" = un objeto {}).
+     ============================================ */
+  const PRODUCTOS = [
+    { codigo: "ACL001",     desc: "ANTENA CORTA CABLES 58CM", precio: 3.55 },
+    { codigo: "ACS001",     desc: "CARGADOR USB PARA MOTO", precio: 4.90 },
+    { codigo: "ACS001-1",   desc: "CARGADOR DE CELULAR PARA MOTO CON BOTON DE APAGAR, SOPORTE MANUBRIO", precio: 3.43 },
+    { codigo: "ACS001-2",   desc: "CARGADOR DE CELULAR PARA MOTO CON LUZ INDICADOR, SOPORTE A ESPEJO", precio: 2.39 },
+    { codigo: "ACS001-3",   desc: "CARGADOR DE CELULAR PARA MOTO CON DOBLE USB, BOTON DE APAGAR Y LUZ DE INDICADOR, SOPORTE A ESPEJO Y MANUBRIO", precio: 5.26 },
+    { codigo: "ACS001-4",   desc: "CARGADOR DE CELULAR PARA MOTO CON ENCENDEDOR Y BOTON DE APAGAR, SOPORTE A MANUBRIO (INGRESO: 5-32V, SALIDA: 3-12V, 18W)", precio: 4.96 },
+    { codigo: "ACS001-5",   desc: "CARGADOR DE CELULAR PARA MOTO CON INDICADOR DE VOLTAJE, USB-A+TYPE-C BOTON APAGAR, SOPORTE A ESPEJO Y MANUBRIO", precio: 11.38 },
+    { codigo: "ACS001-6",   desc: "CARGADOR DE CELU. USB-A-18W, BOTON APAGAR, SOPORTE A ESPEJO Y MANUBRIO", precio: 11.58 },
+    { codigo: "ACS001-7",   desc: "CARGADOR DE CELU. USB-A+TYPE-C-18W, BOTON APAGAR, SOPORTE A ESPEJO Y MANUBRIO", precio: 14.15 },
+    { codigo: "ACS001-8",   desc: "CARGADOR DE CELU. USB-A, QC3.0, BOTON APAGAR, SOPORTE A ESPEJO Y MANUBRIO", precio: 9.06 },
+    { codigo: "ACS001-9",   desc: "CARGADOR DE CELU. CON INDICADOR DE VOLTAJE, ENCENDEDOR, APAGADOR TACTIL", precio: 15.72 },
+    { codigo: "ACS001-11",  desc: "CARGADOR DE CELU. DOBLE USB, INDICADOR DE VOLTAJE, INGRESO: 12-24V, SALIDA: 5/9/12V", precio: 31.56 },
+    { codigo: "ACS002",     desc: "CARGADOR USB PARA MOTO C/SOPORTE PARA CELULAR", precio: 11.21 },
+    { codigo: "ACS002-1",   desc: "CARGADOR DE CELULAR PARA MOTO DE ABS, CARGA INALAMBRICA, CON QUICK CHARGE 3.0, SOPORTE A ESPEJO (INGRESO: 10-24V, SALIDA: 5W/7.5W/10W/15W), ANTIVIBRADOR", precio: 47.39 },
+  ];
+
+  /* ============================================
+     6) CONEXIÓN A SUPABASE
+     Acá le damos a la librería la URL de tu proyecto y la
+     clave pública ("anon key"). Esta clave NO es secreta:
+     está pensada para viajar dentro del código del navegador.
+     Lo que realmente protege los datos son las reglas que
+     configuramos del lado de Supabase (RLS - Row Level Security),
+     no esta clave.
+     ============================================ */
+  const SUPABASE_URL = "https://dbftctaqvekrfynyvsor.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_JrxdEvbMseKcviCDb0lUhA_QDfaeQl2";
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Esta variable ahora refleja una sesión REAL, confirmada por Supabase
+  let logueado = false;
+
+  async function registrarse() {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    mostrarDebug("Registrando...");
+
+    if (!email || !password) {
+      mostrarDebug("Completá email y contraseña para registrarte.");
+      return;
+    }
+    if (password.length < 6) {
+      mostrarDebug("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+
+    try {
+      // signUp crea el usuario en tu proyecto de Supabase. Según cómo esté
+      // configurado el proyecto, puede pedir confirmar el email antes de
+      // poder loguearse (eso se ajusta en Authentication → Settings).
+      const { data, error } = await db.auth.signUp({ email, password });
+
+      if (error) {
+        mostrarDebug("No se pudo registrar: " + error.message);
+        return;
+      }
+
+      if (data.session) {
+        logueado = true;
+        actualizarUI(email);
+        renderTabla();
+        mostrarDebug("Registrado y logueado correctamente.");
+      } else {
+        mostrarDebug("Usuario creado. Revisá el email " + email + " para confirmar la cuenta.");
+      }
+    } catch (e) {
+      // Si esto aparece, el problema es de conexión (por ejemplo el
+      // navegador no pudo llegar a Supabase, no que Supabase dijo "no")
+      mostrarDebug("Error de conexión: " + e.message);
+    }
+  }
+
+  async function iniciarSesion() {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    mostrarDebug("Iniciando sesión...");
+
+    if (!email || !password) {
+      mostrarDebug("Completá email y contraseña.");
+      return;
+    }
+
+    try {
+      // signInWithPassword le pregunta a Supabase "¿este email+contraseña existen
+      // y coinciden?". Si sí, Supabase nos devuelve una sesión válida.
+      const { data, error } = await db.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        mostrarDebug("No se pudo iniciar sesión: " + error.message);
+        return;
+      }
+
+      logueado = true;
+      actualizarUI(email);
+      renderTabla();
+      mostrarDebug("Sesión iniciada correctamente.");
+    } catch (e) {
+      mostrarDebug("Error de conexión: " + e.message);
+    }
+  }
+
+  async function cerrarSesion() {
+    await db.auth.signOut();
+    logueado = false;
+    actualizarUI(null);
+    renderTabla();
+  }
+
+  function mostrarDebug(msg) {
+    console.log(msg);
+    const caja = document.getElementById("debug-box");
+    if (caja) caja.textContent = msg;
+  }
+
+  function actualizarUI(email) {
+    const estado = document.getElementById("estado-login");
+    const btnSalir = document.getElementById("btn-salir");
+    if (email) {
+      estado.textContent = "Sesión activa: " + email;
+      estado.classList.add("activo");
+      btnSalir.style.display = "inline-block";
+    } else {
+      estado.textContent = "Sin sesión — precios ocultos";
+      estado.classList.remove("activo");
+      btnSalir.style.display = "none";
+    }
+  }
+
+  // Al cargar la página, le preguntamos a Supabase si ya había una sesión
+  // guardada (por ejemplo si volviste a entrar más tarde sin desloguearte)
+  async function revisarSesionExistente() {
+    const { data } = await db.auth.getSession();
+    if (data.session) {
+      logueado = true;
+      actualizarUI(data.session.user.email);
+    }
+    renderTabla();
+  }
+
+  /* ============================================
+     7) DIBUJAR LA TABLA
+     Recorremos el array PRODUCTOS y por cada producto
+     armamos una fila <tr> de HTML. Si "logueado" es false,
+     tapamos el precio.
+     ============================================ */
+  function renderTabla() {
+    const tbody = document.getElementById("tabla-productos");
+    tbody.innerHTML = "";
+
+    PRODUCTOS.forEach(p => {
+      const tr = document.createElement("tr");
+
+      const precioHtml = logueado
+        ? `$${p.precio.toFixed(2)}`
+        : `<span class="precio bloqueado">Iniciá sesión</span>`;
+
+      tr.innerHTML = `
+        <td class="codigo">${p.codigo}</td>
+        <td>${p.desc}</td>
+        <td class="precio ${logueado ? '' : 'bloqueado'}">${precioHtml}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Al cargar la página: primero chequeamos si ya había sesión,
+  // y esa función se encarga de dibujar la tabla al final
+  revisarSesionExistente();
+</script>
+
+</body>
+</html>
