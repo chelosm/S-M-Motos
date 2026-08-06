@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repuestos HADA - Catálogo Mayorista</title>
+<style>
+  :root {
+    --asfalto: #16181d;
+    --metal: #2a2e37;
+    --metal-claro: #3a3f4b;
+    --texto: #e8e6df;
+    --texto-tenue: #9a9fab;
+    --naranja: #ff6a1a;
+    --amarillo: #ffb84d;
+    --verde-stock: #4ade80;
+    --rojo-sinstock: #f87171;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--asfalto);
+    color: var(--texto);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    line-height: 1.5;
+  }
+
+  header {
+    background: linear-gradient(90deg, #0f1013, var(--metal));
+    border-bottom: 3px solid var(--naranja);
+    padding: 28px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: Arial, sans-serif;
+    font-weight: 900;
+    font-size: 1.6rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--naranja); }
+  .logo small {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--texto-tenue);
+    font-weight: 400;
+    letter-spacing: 3px;
+  }
+
+  #login-box {
+    background: var(--metal);
+    border: 1px solid var(--metal-claro);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #login-box input {
+    background: var(--asfalto);
+    border: 1px solid var(--metal-claro);
+    color: var(--texto);
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    width: 150px;
+  }
+  #login-box button {
+    background: var(--naranja);
+    color: #1a1a1a;
+    border: none;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #login-box button:hover { background: var(--amarillo); }
+  #estado-login {
+    font-size: 0.78rem;
+    color: var(--texto-tenue);
+  }
+  #estado-login.activo { color: var(--verde-stock); font-weight: 600; }
+
+  /* Controles del dólar y el margen: mismo estilo, dos botoncitos */
+  .config-box { position: relative; }
+  .config-box button.abrir {
+    background: var(--metal-claro);
+    color: var(--amarillo);
+    border: 1px solid var(--amarillo);
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .panel-config {
+    display: none;
+    position: absolute;
+    top: 110%;
+    right: 0;
+    background: var(--metal);
+    border: 1px solid var(--metal-claro);
+    border-radius: 8px;
+    padding: 14px;
+    width: 220px;
+    z-index: 10;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .panel-config.abierto { display: block; }
+  .panel-config label {
+    font-size: 0.75rem;
+    color: var(--texto-tenue);
+    display: block;
+    margin-bottom: 6px;
+  }
+  .panel-config input {
+    width: 100%;
+    background: var(--asfalto);
+    border: 1px solid var(--metal-claro);
+    color: var(--texto);
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+  }
+  .panel-config button.aplicar {
+    width: 100%;
+    background: var(--naranja);
+    color: #1a1a1a;
+    border: none;
+    font-weight: 700;
+    padding: 8px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  main { padding: 32px 24px; max-width: 1200px; margin: 0 auto; }
+
+  .aviso {
+    background: rgba(255,106,26,0.1);
+    border-left: 3px solid var(--naranja);
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--texto-tenue);
+    margin-bottom: 16px;
+  }
+
+  .filtros {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  #buscador {
+    flex: 2;
+    min-width: 200px;
+    background: var(--metal);
+    border: 1px solid var(--metal-claro);
+    color: var(--texto);
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  #filtro-categoria {
+    flex: 1;
+    min-width: 160px;
+    background: var(--metal);
+    border: 1px solid var(--metal-claro);
+    color: var(--texto);
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+
+  #contador {
+    font-size: 0.8rem;
+    color: var(--texto-tenue);
+    margin-bottom: 12px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--metal);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  thead {
+    background: #1e2128;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    letter-spacing: 1px;
+    color: var(--texto-tenue);
+  }
+  th, td {
+    padding: 12px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--metal-claro);
+    font-size: 0.85rem;
+  }
+  tbody tr:hover { background: #31363f; }
+  .codigo { color: var(--amarillo); font-weight: 600; white-space: nowrap; }
+  .categoria-tag {
+    font-size: 0.68rem;
+    color: var(--texto-tenue);
+    display: block;
+    margin-top: 2px;
+  }
+  .num { text-align: right; white-space: nowrap; }
+  .num .usd { display: block; font-size: 0.68rem; font-weight: 400; color: var(--texto-tenue); }
+  .venta-sugerido { color: var(--verde-stock); font-weight: 700; }
+  .bloqueado { color: var(--texto-tenue); font-weight: 400; font-style: italic; }
+
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--texto-tenue);
+    font-size: 0.78rem;
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="logo">REPUESTOS <span>HADA</span><small>DISTRIBUIDORA MAYORISTA · MOTOS</small></div>
+
+  <div id="login-box">
+    <input type="email" id="email" placeholder="Email mayorista">
+    <input type="password" id="password" placeholder="Contraseña">
+    <button onclick="iniciarSesion()">Ingresar</button>
+    <button onclick="registrarse()" style="background:var(--metal-claro); color:var(--texto);">Registrarse</button>
+    <button onclick="cerrarSesion()" id="btn-salir" style="display:none; background:var(--metal-claro); color:var(--texto);">Salir</button>
+    <span id="estado-login">Sin sesión — precios ocultos</span>
+
+    <!-- Control del dólar -->
+    <div class="config-box">
+      <button class="abrir" onclick="togglePanel('panel-dolar')">💲 <span id="valor-dolar-actual">1.00</span></button>
+      <div id="panel-dolar" class="panel-config">
+        <label for="input-dolar">Valor del dólar (1 USD = ? ARS)</label>
+        <input type="number" id="input-dolar" step="0.01" min="0" placeholder="Ej: 1250">
+        <button class="aplicar" onclick="guardarDolar()">Aplicar</button>
+      </div>
+    </div>
+
+    <!-- Control del margen de ganancia -->
+    <div class="config-box">
+      <button class="abrir" onclick="togglePanel('panel-margen')">📈 <span id="valor-margen-actual">30</span>%</button>
+      <div id="panel-margen" class="panel-config">
+        <label for="input-margen">Margen de ganancia sobre costo+IVA (%)</label>
+        <input type="number" id="input-margen" step="1" min="0" placeholder="Ej: 30">
+        <button class="aplicar" onclick="guardarMargen()">Aplicar</button>
+      </div>
+    </div>
+  </div>
+  <div id="debug-box" style="width:100%; font-size:0.78rem; color:var(--amarillo); margin-top:4px;"></div>
+</header>
+
+<main>
+  <div class="aviso">
+    Catálogo HADA — precios cargados en USD. 💲 = valor del dólar del día · 📈 = tu margen de ganancia.
+    <strong>Costo</strong> y <strong>Precio Venta Sugerido</strong> solo se ven con sesión de mayorista iniciada.
+  </div>
+
+  <div class="filtros">
+    <input type="text" id="buscador" placeholder="Buscar por código o descripción..." oninput="renderTabla()">
+    <select id="filtro-categoria" onchange="renderTabla()">
+      <option value="">Todas las categorías</option>
+    </select>
+  </div>
+  <div id="contador"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Descripción</th>
+        <th class="num">Costo</th>
+        <th class="num">Costo + IVA (21%)</th>
+        <th class="num">Venta Sugerido</th>
+      </tr>
+    </thead>
+    <tbody id="tabla-productos"></tbody>
+  </table>
+</main>
+
+<footer>Repuestos HADA · Uso interno / demo de desarrollo</footer>
+
+<script>
+  const SUPABASE_URL = "https://dbftctaqvekrfynyvsor.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_JrxdEvbMseKcviCDb0lUhA_QDfaeQl2";
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const IVA = 0.21; // 21%, tasa general vigente en Argentina
+
+  let logueado = false;
+  let PRODUCTOS = [];
+  let valorDolar = 1;
+  let margenPct = 30; // margen de ganancia por defecto, editable
+
+  /* ============================================
+     PRODUCTOS desde Supabase (de a tandas de 1000)
+     ============================================ */
+  async function cargarProductos() {
+    mostrarDebug("Cargando catálogo...");
+    let todos = [];
+    let desde = 0;
+    const TANDA = 1000;
+
+    while (true) {
+      const { data, error } = await db
+        .from("productos")
+        .select("codigo, descripcion, categoria, precio_usd")
+        .order("codigo", { ascending: true })
+        .range(desde, desde + TANDA - 1);
+
+      if (error) {
+        mostrarDebug("Error cargando catálogo: " + error.message);
+        break;
+      }
+      todos = todos.concat(data);
+      if (data.length < TANDA) break;
+      desde += TANDA;
+    }
+
+    PRODUCTOS = todos;
+    mostrarDebug("Catálogo cargado: " + PRODUCTOS.length + " productos.");
+    poblarFiltroCategorias();
+    renderTabla();
+  }
+
+  function poblarFiltroCategorias() {
+    const select = document.getElementById("filtro-categoria");
+    const categorias = [...new Set(PRODUCTOS.map(p => p.categoria).filter(Boolean))].sort();
+    categorias.forEach(cat => {
+      const opt = document.createElement("option");
+      opt.value = cat;
+      opt.textContent = cat;
+      select.appendChild(opt);
+    });
+  }
+
+  /* ============================================
+     PANELES: dólar y margen comparten la misma lógica
+     de abrir/cerrar
+     ============================================ */
+  function togglePanel(id) {
+    document.getElementById(id).classList.toggle("abierto");
+  }
+
+  function guardarDolar() {
+    const valor = parseFloat(document.getElementById("input-dolar").value);
+    if (!valor || valor <= 0) {
+      alert("Ingresá un valor de dólar válido.");
+      return;
+    }
+    valorDolar = valor;
+    localStorage.setItem("valorDolarHada", valor);
+    document.getElementById("valor-dolar-actual").textContent = valor.toFixed(2);
+    document.getElementById("panel-dolar").classList.remove("abierto");
+    renderTabla();
+  }
+
+  function guardarMargen() {
+    const valor = parseFloat(document.getElementById("input-margen").value);
+    if (isNaN(valor) || valor < 0) {
+      alert("Ingresá un margen válido.");
+      return;
+    }
+    margenPct = valor;
+    localStorage.setItem("margenHada", valor);
+    document.getElementById("valor-margen-actual").textContent = valor;
+    document.getElementById("panel-margen").classList.remove("abierto");
+    renderTabla();
+  }
+
+  function cargarConfigGuardada() {
+    const dolarGuardado = localStorage.getItem("valorDolarHada");
+    if (dolarGuardado) {
+      valorDolar = parseFloat(dolarGuardado);
+      document.getElementById("valor-dolar-actual").textContent = valorDolar.toFixed(2);
+      document.getElementById("input-dolar").value = valorDolar;
+    }
+    const margenGuardado = localStorage.getItem("margenHada");
+    if (margenGuardado !== null) {
+      margenPct = parseFloat(margenGuardado);
+      document.getElementById("valor-margen-actual").textContent = margenPct;
+      document.getElementById("input-margen").value = margenPct;
+    } else {
+      document.getElementById("input-margen").value = margenPct;
+    }
+  }
+
+  /* ============================================
+     LOGIN
+     ============================================ */
+  async function registrarse() {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    mostrarDebug("Registrando...");
+
+    if (!email || !password) {
+      mostrarDebug("Completá email y contraseña para registrarte.");
+      return;
+    }
+    if (password.length < 6) {
+      mostrarDebug("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+
+    try {
+      const { data, error } = await db.auth.signUp({ email, password });
+      if (error) {
+        mostrarDebug("No se pudo registrar: " + error.message);
+        return;
+      }
+      if (data.session) {
+        logueado = true;
+        actualizarUI(email);
+        renderTabla();
+        mostrarDebug("Registrado y logueado correctamente.");
+      } else {
+        mostrarDebug("Usuario creado. Revisá el email " + email + " para confirmar la cuenta.");
+      }
+    } catch (e) {
+      mostrarDebug("Error de conexión: " + e.message);
+    }
+  }
+
+  async function iniciarSesion() {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    mostrarDebug("Iniciando sesión...");
+
+    if (!email || !password) {
+      mostrarDebug("Completá email y contraseña.");
+      return;
+    }
+
+    try {
+      const { data, error } = await db.auth.signInWithPassword({ email, password });
+      if (error) {
+        mostrarDebug("No se pudo iniciar sesión: " + error.message);
+        return;
+      }
+      logueado = true;
+      actualizarUI(email);
+      renderTabla();
+      mostrarDebug("Sesión iniciada correctamente.");
+    } catch (e) {
+      mostrarDebug("Error de conexión: " + e.message);
+    }
+  }
+
+  async function cerrarSesion() {
+    await db.auth.signOut();
+    logueado = false;
+    actualizarUI(null);
+    renderTabla();
+  }
+
+  function mostrarDebug(msg) {
+    console.log(msg);
+    const caja = document.getElementById("debug-box");
+    if (caja) caja.textContent = msg;
+  }
+
+  function actualizarUI(email) {
+    const estado = document.getElementById("estado-login");
+    const btnSalir = document.getElementById("btn-salir");
+    if (email) {
+      estado.textContent = "Sesión activa: " + email;
+      estado.classList.add("activo");
+      btnSalir.style.display = "inline-block";
+    } else {
+      estado.textContent = "Sin sesión — precios ocultos";
+      estado.classList.remove("activo");
+      btnSalir.style.display = "none";
+    }
+  }
+
+  async function revisarSesionExistente() {
+    const { data } = await db.auth.getSession();
+    if (data.session) {
+      logueado = true;
+      actualizarUI(data.session.user.email);
+    }
+    cargarConfigGuardada();
+    await cargarProductos();
+  }
+
+  /* ============================================
+     TABLA: filtra por texto y categoría, y calcula
+     costo / costo+IVA / precio de venta sugerido
+     ============================================ */
+  function renderTabla() {
+    const tbody = document.getElementById("tabla-productos");
+    const contador = document.getElementById("contador");
+    const busqueda = document.getElementById("buscador").value.trim().toLowerCase();
+    const catElegida = document.getElementById("filtro-categoria").value;
+
+    let lista = PRODUCTOS;
+    if (catElegida) {
+      lista = lista.filter(p => p.categoria === catElegida);
+    }
+    if (busqueda) {
+      lista = lista.filter(p =>
+        p.codigo.toLowerCase().includes(busqueda) ||
+        (p.descripcion || "").toLowerCase().includes(busqueda)
+      );
+    }
+
+    contador.textContent = lista.length + " productos" +
+      (busqueda || catElegida ? " (de " + PRODUCTOS.length + " en total)" : "");
+
+    tbody.innerHTML = "";
+
+    const LIMITE_SIN_FILTROS = 300;
+    const paraMostrar = (busqueda || catElegida) ? lista : lista.slice(0, LIMITE_SIN_FILTROS);
+
+    paraMostrar.forEach(p => {
+      const tr = document.createElement("tr");
+
+      const costoArs = p.precio_usd * valorDolar;
+      const costoConIva = costoArs * (1 + IVA);
+      const ventaSugerido = costoConIva * (1 + margenPct / 100);
+
+      const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+      let celdasNumericas;
+      if (logueado) {
+        celdasNumericas = `
+          <td class="num">$${fmt(costoArs)}<span class="usd">USD ${p.precio_usd.toFixed(2)}</span></td>
+          <td class="num">$${fmt(costoConIva)}</td>
+          <td class="num venta-sugerido">$${fmt(ventaSugerido)}</td>
+        `;
+      } else {
+        celdasNumericas = `
+          <td class="num bloqueado">Iniciá sesión</td>
+          <td class="num bloqueado">Iniciá sesión</td>
+          <td class="num bloqueado">Iniciá sesión</td>
+        `;
+      }
+
+      tr.innerHTML = `
+        <td class="codigo">${p.codigo}</td>
+        <td>${p.descripcion || ""}${p.categoria ? `<span class="categoria-tag">${p.categoria}</span>` : ""}</td>
+        ${celdasNumericas}
+      `;
+      tbody.appendChild(tr);
+    });
+
+    if (!busqueda && !catElegida && lista.length > LIMITE_SIN_FILTROS) {
+      const trAviso = document.createElement("tr");
+      trAviso.innerHTML = `<td colspan="5" style="text-align:center; color:var(--texto-tenue); font-style:italic;">
+        Mostrando los primeros ${LIMITE_SIN_FILTROS} de ${lista.length} — usá el buscador o el filtro de categoría para ver el resto.
+      </td>`;
+      tbody.appendChild(trAviso);
+    }
+  }
+
+  revisarSesionExistente();
+</script>
+
+</body>
+</html>
