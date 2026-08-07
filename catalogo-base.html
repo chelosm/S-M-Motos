@@ -245,6 +245,138 @@
     color: var(--texto-tenue);
     font-size: 0.78rem;
   }
+
+  /* ============================================
+     CARRITO
+     ============================================ */
+  .cant-input {
+    width: 50px;
+    background: var(--asfalto);
+    border: 1px solid var(--metal-claro);
+    color: var(--texto);
+    padding: 6px;
+    border-radius: 5px;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+  .btn-agregar {
+    background: var(--verde-stock);
+    color: #1a1a1a;
+    border: none;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    margin-left: 6px;
+  }
+  .btn-agregar:hover { opacity: 0.85; }
+
+  #btn-carrito-flotante {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--amarillo);
+    color: #1a1a1a;
+    border: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    cursor: pointer;
+    z-index: 20;
+  }
+  #contador-carrito {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--rojo-sinstock);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #overlay-carrito {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 30;
+    align-items: flex-end;
+  }
+  #overlay-carrito.abierto { display: flex; }
+  #panel-carrito {
+    background: var(--metal);
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+  }
+  #panel-carrito h2 {
+    font-size: 1.1rem;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel-carrito h2 button {
+    background: none;
+    border: none;
+    color: var(--texto-tenue);
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+  .item-carrito {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--metal-claro);
+    gap: 10px;
+  }
+  .item-carrito .info { flex: 1; }
+  .item-carrito .info .cod { color: var(--amarillo); font-weight: 600; font-size: 0.85rem; }
+  .item-carrito .info .desc { font-size: 0.78rem; color: var(--texto-tenue); }
+  .item-carrito .subtotal { font-weight: 700; color: var(--verde-stock); white-space: nowrap; }
+  .item-carrito .btn-quitar {
+    background: none;
+    border: none;
+    color: var(--rojo-sinstock);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+  #total-carrito {
+    text-align: right;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 16px 0;
+    color: var(--verde-stock);
+  }
+  #btn-pedir-whatsapp {
+    width: 100%;
+    background: #25D366;
+    color: #fff;
+    border: none;
+    font-weight: 700;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  #carrito-vacio {
+    color: var(--texto-tenue);
+    text-align: center;
+    padding: 20px 0;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
@@ -284,6 +416,8 @@
         <button class="aplicar" onclick="guardarMargen()">Aplicar</button>
       </div>
     </div>
+    <!-- Ojo para tapar costo/margen frente a un cliente -->
+    <button id="btn-ojo" class="abrir" onclick="toggleMostrarCostos()" style="font-size:1.1rem;" title="Mostrar/ocultar costo y margen">👁️</button>
   </div>
   <div id="debug-box" style="width:100%; font-size:0.78rem; color:var(--amarillo); margin-top:4px;"></div>
 </header>
@@ -310,6 +444,7 @@
         <th class="num">Costo</th>
         <th class="num">Costo + IVA (21%)</th>
         <th class="num">Venta Sugerido</th>
+        <th>Pedido</th>
       </tr>
     </thead>
     <tbody id="tabla-productos"></tbody>
@@ -317,6 +452,22 @@
 </main>
 
 <footer>S-M Motos · Uso interno / demo de desarrollo</footer>
+
+<!-- Botón flotante del carrito -->
+<button id="btn-carrito-flotante" onclick="abrirCarrito()">
+  🛒
+  <span id="contador-carrito" style="display:none;">0</span>
+</button>
+
+<!-- Panel del carrito -->
+<div id="overlay-carrito" onclick="if(event.target===this) cerrarCarrito()">
+  <div id="panel-carrito">
+    <h2>Mi pedido <button onclick="cerrarCarrito()">✕</button></h2>
+    <div id="lista-carrito"></div>
+    <div id="total-carrito"></div>
+    <button id="btn-pedir-whatsapp" onclick="pedirPorWhatsapp()">📲 Encargar por WhatsApp</button>
+  </div>
+</div>
 
 <script>
   const SUPABASE_URL = "https://lzozlxxcnkqznnuueuxd.supabase.co";
@@ -330,6 +481,13 @@
   let PRODUCTOS = [];
   let valorDolar = 1;
   let margenPct = 30; // margen de ganancia por defecto, editable
+  let mostrarCostos = true; // el "ojo": true = se ven costo y margen
+
+  function toggleMostrarCostos() {
+    mostrarCostos = !mostrarCostos;
+    document.getElementById("btn-ojo").textContent = mostrarCostos ? "👁️" : "🙈";
+    renderTabla();
+  }
 
   /* ============================================
      PRODUCTOS desde Supabase (de a tandas de 1000)
@@ -566,11 +724,24 @@
       const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
       let celdasNumericas;
+      let celdaPedido;
       if (logueado) {
+        const celdaCosto = mostrarCostos
+          ? `$${fmt(costoArs)}<span class="usd">USD ${p.precio_usd.toFixed(2)}</span>`
+          : `<span class="bloqueado">•••••</span>`;
+        const celdaCostoIva = mostrarCostos
+          ? `$${fmt(costoConIva)}`
+          : `<span class="bloqueado">•••••</span>`;
         celdasNumericas = `
-          <td class="num">$${fmt(costoArs)}<span class="usd">USD ${p.precio_usd.toFixed(2)}</span></td>
-          <td class="num">$${fmt(costoConIva)}</td>
+          <td class="num">${celdaCosto}</td>
+          <td class="num">${celdaCostoIva}</td>
           <td class="num venta-sugerido">$${fmt(ventaSugerido)}</td>
+        `;
+        celdaPedido = `
+          <td>
+            <input type="number" class="cant-input" id="cant-${p.codigo}" value="1" min="1">
+            <button class="btn-agregar" onclick="agregarAlCarrito('${p.codigo.replace(/'/g,"\\'")}')">+ Agregar</button>
+          </td>
         `;
       } else {
         celdasNumericas = `
@@ -578,26 +749,142 @@
           <td class="num bloqueado">Iniciá sesión</td>
           <td class="num bloqueado">Iniciá sesión</td>
         `;
+        celdaPedido = `<td class="bloqueado">—</td>`;
       }
 
       tr.innerHTML = `
         <td class="codigo">${p.codigo}</td>
         <td>${p.descripcion || ""}${p.categoria ? `<span class="categoria-tag">${p.categoria}</span>` : ""}</td>
         ${celdasNumericas}
+        ${celdaPedido}
       `;
       tbody.appendChild(tr);
     });
 
     if (lista.length > LIMITE) {
       const trAviso = document.createElement("tr");
-      trAviso.innerHTML = `<td colspan="5" style="text-align:center; color:var(--texto-tenue); font-style:italic;">
+      trAviso.innerHTML = `<td colspan="6" style="text-align:center; color:var(--texto-tenue); font-style:italic;">
         Mostrando los primeros ${LIMITE} de ${lista.length} — afiná la búsqueda para acotar más.
       </td>`;
       tbody.appendChild(trAviso);
     }
   }
 
+  /* ============================================
+     CARRITO
+     Se guarda en localStorage para que no se pierda
+     si recargás la página sin querer.
+     ============================================ */
+  let CARRITO = JSON.parse(localStorage.getItem("carritoHada") || "[]");
+
+  function guardarCarrito() {
+    localStorage.setItem("carritoHada", JSON.stringify(CARRITO));
+    actualizarContadorCarrito();
+  }
+
+  function agregarAlCarrito(codigo) {
+    const producto = PRODUCTOS.find(p => p.codigo === codigo);
+    if (!producto) return;
+
+    const inputCant = document.getElementById("cant-" + codigo);
+    const cantidad = Math.max(1, parseInt(inputCant.value) || 1);
+
+    const costoArs = producto.precio_usd * valorDolar;
+    const costoConIva = costoArs * (1 + IVA);
+    const ventaSugerido = costoConIva * (1 + margenPct / 100);
+
+    const existente = CARRITO.find(item => item.codigo === codigo);
+    if (existente) {
+      existente.cantidad += cantidad;
+    } else {
+      CARRITO.push({
+        codigo: producto.codigo,
+        descripcion: producto.descripcion || "",
+        cantidad: cantidad,
+        precioUnitario: ventaSugerido
+      });
+    }
+    guardarCarrito();
+  }
+
+  function quitarDelCarrito(codigo) {
+    CARRITO = CARRITO.filter(item => item.codigo !== codigo);
+    guardarCarrito();
+    renderCarrito();
+  }
+
+  function actualizarContadorCarrito() {
+    const totalItems = CARRITO.reduce((sum, item) => sum + item.cantidad, 0);
+    const contador = document.getElementById("contador-carrito");
+    if (totalItems > 0) {
+      contador.style.display = "flex";
+      contador.textContent = totalItems;
+    } else {
+      contador.style.display = "none";
+    }
+  }
+
+  function abrirCarrito() {
+    renderCarrito();
+    document.getElementById("overlay-carrito").classList.add("abierto");
+  }
+
+  function cerrarCarrito() {
+    document.getElementById("overlay-carrito").classList.remove("abierto");
+  }
+
+  function renderCarrito() {
+    const lista = document.getElementById("lista-carrito");
+    const totalDiv = document.getElementById("total-carrito");
+    const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    if (CARRITO.length === 0) {
+      lista.innerHTML = `<div id="carrito-vacio">Todavía no agregaste productos.</div>`;
+      totalDiv.textContent = "";
+      return;
+    }
+
+    let total = 0;
+    lista.innerHTML = CARRITO.map(item => {
+      const subtotal = item.precioUnitario * item.cantidad;
+      total += subtotal;
+      return `
+        <div class="item-carrito">
+          <div class="info">
+            <div class="cod">${item.codigo} × ${item.cantidad}</div>
+            <div class="desc">${item.descripcion}</div>
+          </div>
+          <div class="subtotal">$${fmt(subtotal)}</div>
+          <button class="btn-quitar" onclick="quitarDelCarrito('${item.codigo.replace(/'/g,"\\'")}')">✕</button>
+        </div>
+      `;
+    }).join("");
+
+    totalDiv.textContent = "Total: $" + fmt(total);
+  }
+
+  function pedirPorWhatsapp() {
+    if (CARRITO.length === 0) {
+      alert("Todavía no agregaste productos al pedido.");
+      return;
+    }
+    const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    let total = 0;
+    let mensaje = "Hola! Quiero encargar este pedido de S-M Motos:\n\n";
+    CARRITO.forEach(item => {
+      const subtotal = item.precioUnitario * item.cantidad;
+      total += subtotal;
+      mensaje += `• ${item.codigo} - ${item.descripcion}\n  Cantidad: ${item.cantidad} x $${fmt(item.precioUnitario)} = $${fmt(subtotal)}\n\n`;
+    });
+    mensaje += `Total del pedido: $${fmt(total)}`;
+
+    const numeroWhatsapp = "5492235923638";
+    const url = "https://wa.me/" + numeroWhatsapp + "?text=" + encodeURIComponent(mensaje);
+    window.open(url, "_blank");
+  }
+
   revisarSesionExistente();
+  actualizarContadorCarrito();
 </script>
 
 </body>
