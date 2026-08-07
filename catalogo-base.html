@@ -39,7 +39,13 @@
     flex-wrap: wrap;
     gap: 16px;
     position: relative;
+  }
+  .moto-fondo-wrap {
+    position: absolute;
+    inset: 0;
     overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
   }
   .moto-fondo {
     position: absolute;
@@ -49,8 +55,6 @@
     width: 260px;
     height: auto;
     opacity: 0.12;
-    z-index: 0;
-    pointer-events: none;
   }
   header > * { position: relative; z-index: 1; }
 
@@ -384,16 +388,16 @@
 
 <header>
   <!-- Silueta de moto dibujada en SVG, decorativa, de fondo -->
-  <svg class="moto-fondo" viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--amarillo);">
-    <path d="M480 256c-17.7 0-32 14.3-32 32c0 8.4 3.2 16 8.5 21.7L432 320h-45.3l-25.4-88.9c-3-10.5-12.6-17.7-23.5-17.7H272l-16-32h48c8.8 0 16-7.2 16-16s-7.2-16-16-16h-64c-6.1 0-11.6 3.4-14.3 8.9s-2.1 12 1.5 16.9l25.9 51.9L232 272h-72l-33.9-45.3c-9-12-23.1-19-38.1-19H64c-8.8 0-16 7.2-16 16s7.2 16 16 16h24c5 0 9.8 2.3 12.8 6.4L128 288H64c-35.3 0-64 28.7-64 64s28.7 64 64 64s64-28.7 64-64c0-6.7-1-13.1-2.9-19.2L160 304h56l64 64h72l16-32h64c17.7 0 32-14.3 32-32c0-8.4-3.2-16-8.5-21.7L480 288c17.7 0 32-14.3 32-32s-14.3-32-32-32zM64 384c-17.7 0-32-14.3-32-32s14.3-32 32-32s32 14.3 32 32s-14.3 32-32 32z"/>
-  </svg>
+  <div class="moto-fondo-wrap">
+    <svg class="moto-fondo" viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--amarillo);">
+      <path d="M480 256c-17.7 0-32 14.3-32 32c0 8.4 3.2 16 8.5 21.7L432 320h-45.3l-25.4-88.9c-3-10.5-12.6-17.7-23.5-17.7H272l-16-32h48c8.8 0 16-7.2 16-16s-7.2-16-16-16h-64c-6.1 0-11.6 3.4-14.3 8.9s-2.1 12 1.5 16.9l25.9 51.9L232 272h-72l-33.9-45.3c-9-12-23.1-19-38.1-19H64c-8.8 0-16 7.2-16 16s7.2 16 16 16h24c5 0 9.8 2.3 12.8 6.4L128 288H64c-35.3 0-64 28.7-64 64s28.7 64 64 64s64-28.7 64-64c0-6.7-1-13.1-2.9-19.2L160 304h56l64 64h72l16-32h64c17.7 0 32-14.3 32-32c0-8.4-3.2-16-8.5-21.7L480 288c17.7 0 32-14.3 32-32s-14.3-32-32-32zM64 384c-17.7 0-32-14.3-32-32s14.3-32 32-32s32 14.3 32 32s-14.3 32-32 32z"/>
+    </svg>
+  </div>
   <div class="logo">S-M <span>MOTOS</span><small>DISTRIBUIDORA MAYORISTA · VENTA DE REPUESTOS Y ACCESORIOS</small></div>
 
   <div id="login-box">
-    <input type="email" id="email" placeholder="Email mayorista">
-    <input type="password" id="password" placeholder="Contraseña">
+    <input type="password" id="password" placeholder="Contraseña mayorista">
     <button onclick="iniciarSesion()">Ingresar</button>
-    <button onclick="registrarse()" style="background:var(--metal-claro); color:var(--texto);">Registrarse</button>
     <button onclick="cerrarSesion()" id="btn-salir" style="display:none; background:var(--metal-claro); color:var(--texto);">Salir</button>
     <span id="estado-login">Sin sesión — precios ocultos</span>
 
@@ -408,7 +412,7 @@
     </div>
 
     <!-- Control del margen de ganancia -->
-    <div class="config-box">
+    <div class="config-box" id="caja-margen">
       <button class="abrir" onclick="togglePanel('panel-margen')">📈 <span id="valor-margen-actual">30</span>%</button>
       <div id="panel-margen" class="panel-config">
         <label for="input-margen">Margen de ganancia sobre costo+IVA (%)</label>
@@ -486,6 +490,7 @@
   function toggleMostrarCostos() {
     mostrarCostos = !mostrarCostos;
     document.getElementById("btn-ojo").textContent = mostrarCostos ? "👁️" : "🙈";
+    document.getElementById("caja-margen").style.display = mostrarCostos ? "inline-block" : "none";
     renderTabla();
   }
 
@@ -583,70 +588,30 @@
   }
 
   /* ============================================
-     LOGIN
+     LOGIN SIMPLE: una sola contraseña compartida,
+     sin cuentas individuales. Se guarda en localStorage
+     para no tener que reingresarla cada vez que se
+     vuelve a entrar a la página.
      ============================================ */
-  async function registrarse() {
-    const email = document.getElementById("email").value.trim();
+  const PASSWORD_MAYORISTA = "smmotos1234";
+
+  function iniciarSesion() {
     const password = document.getElementById("password").value;
-    mostrarDebug("Registrando...");
-
-    if (!email || !password) {
-      mostrarDebug("Completá email y contraseña para registrarte.");
-      return;
-    }
-    if (password.length < 6) {
-      mostrarDebug("La contraseña debe tener al menos 6 caracteres.");
-      return;
-    }
-
-    try {
-      const { data, error } = await db.auth.signUp({ email, password });
-      if (error) {
-        mostrarDebug("No se pudo registrar: " + error.message);
-        return;
-      }
-      if (data.session) {
-        logueado = true;
-        actualizarUI(email);
-        renderTabla();
-        mostrarDebug("Registrado y logueado correctamente.");
-      } else {
-        mostrarDebug("Usuario creado. Revisá el email " + email + " para confirmar la cuenta.");
-      }
-    } catch (e) {
-      mostrarDebug("Error de conexión: " + e.message);
-    }
-  }
-
-  async function iniciarSesion() {
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-    mostrarDebug("Iniciando sesión...");
-
-    if (!email || !password) {
-      mostrarDebug("Completá email y contraseña.");
-      return;
-    }
-
-    try {
-      const { data, error } = await db.auth.signInWithPassword({ email, password });
-      if (error) {
-        mostrarDebug("No se pudo iniciar sesión: " + error.message);
-        return;
-      }
+    if (password === PASSWORD_MAYORISTA) {
       logueado = true;
-      actualizarUI(email);
+      localStorage.setItem("sesionSMMotos", "true");
+      actualizarUI();
       renderTabla();
       mostrarDebug("Sesión iniciada correctamente.");
-    } catch (e) {
-      mostrarDebug("Error de conexión: " + e.message);
+    } else {
+      mostrarDebug("Contraseña incorrecta.");
     }
   }
 
-  async function cerrarSesion() {
-    await db.auth.signOut();
+  function cerrarSesion() {
     logueado = false;
-    actualizarUI(null);
+    localStorage.removeItem("sesionSMMotos");
+    actualizarUI();
     renderTabla();
   }
 
@@ -656,11 +621,11 @@
     if (caja) caja.textContent = msg;
   }
 
-  function actualizarUI(email) {
+  function actualizarUI() {
     const estado = document.getElementById("estado-login");
     const btnSalir = document.getElementById("btn-salir");
-    if (email) {
-      estado.textContent = "Sesión activa: " + email;
+    if (logueado) {
+      estado.textContent = "Sesión activa";
       estado.classList.add("activo");
       btnSalir.style.display = "inline-block";
     } else {
@@ -671,10 +636,9 @@
   }
 
   async function revisarSesionExistente() {
-    const { data } = await db.auth.getSession();
-    if (data.session) {
+    if (localStorage.getItem("sesionSMMotos") === "true") {
       logueado = true;
-      actualizarUI(data.session.user.email);
+      actualizarUI();
     }
     cargarConfigGuardada();
     await cargarProductos();
@@ -729,13 +693,14 @@
         const celdaCosto = mostrarCostos
           ? `$${fmt(costoArs)}<span class="usd">USD ${p.precio_usd.toFixed(2)}</span>`
           : `<span class="bloqueado">•••••</span>`;
-        const celdaCostoIva = mostrarCostos
-          ? `$${fmt(costoConIva)}`
+        const celdaCostoIva = `$${fmt(costoConIva)}`; // siempre visible: es lo que le cobrás al cliente
+        const celdaVenta = mostrarCostos
+          ? `$${fmt(ventaSugerido)}`
           : `<span class="bloqueado">•••••</span>`;
         celdasNumericas = `
           <td class="num">${celdaCosto}</td>
           <td class="num">${celdaCostoIva}</td>
-          <td class="num venta-sugerido">$${fmt(ventaSugerido)}</td>
+          <td class="num venta-sugerido">${celdaVenta}</td>
         `;
         celdaPedido = `
           <td>
@@ -801,7 +766,7 @@
         codigo: producto.codigo,
         descripcion: producto.descripcion || "",
         cantidad: cantidad,
-        precioUnitario: ventaSugerido
+        precioUnitario: costoConIva
       });
     }
     guardarCarrito();
