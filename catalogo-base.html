@@ -693,10 +693,10 @@
         const celdaCosto = mostrarCostos
           ? `$${fmt(costoArs)}<span class="usd">USD ${p.precio_usd.toFixed(2)}</span>`
           : `<span class="bloqueado">•••••</span>`;
-        const celdaCostoIva = `$${fmt(costoConIva)}`; // siempre visible: es lo que le cobrás al cliente
-        const celdaVenta = mostrarCostos
-          ? `$${fmt(ventaSugerido)}`
+        const celdaCostoIva = mostrarCostos
+          ? `$${fmt(costoConIva)}`
           : `<span class="bloqueado">•••••</span>`;
+        const celdaVenta = `$${fmt(ventaSugerido)}`; // siempre visible: es el precio sugerido al público
         celdasNumericas = `
           <td class="num">${celdaCosto}</td>
           <td class="num">${celdaCostoIva}</td>
