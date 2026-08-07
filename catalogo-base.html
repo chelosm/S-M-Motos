@@ -520,13 +520,18 @@
       );
     }
 
-    contador.textContent = lista.length + " productos" +
-      (busqueda || catElegida ? " (de " + PRODUCTOS.length + " en total)" : "");
+    contador.textContent = (busqueda || catElegida)
+      ? lista.length + " productos (de " + PRODUCTOS.length + " en total)"
+      : "Escribí algo en el buscador o elegí una categoría para ver productos";
 
     tbody.innerHTML = "";
 
-    const LIMITE_SIN_FILTROS = 300;
-    const paraMostrar = (busqueda || catElegida) ? lista : lista.slice(0, LIMITE_SIN_FILTROS);
+    if (!busqueda && !catElegida) {
+      return; // no mostramos nada hasta que busquen o filtren
+    }
+
+    const LIMITE = 300;
+    const paraMostrar = lista.slice(0, LIMITE);
 
     paraMostrar.forEach(p => {
       const tr = document.createElement("tr");
@@ -560,10 +565,10 @@
       tbody.appendChild(tr);
     });
 
-    if (!busqueda && !catElegida && lista.length > LIMITE_SIN_FILTROS) {
+    if (lista.length > LIMITE) {
       const trAviso = document.createElement("tr");
       trAviso.innerHTML = `<td colspan="5" style="text-align:center; color:var(--texto-tenue); font-style:italic;">
-        Mostrando los primeros ${LIMITE_SIN_FILTROS} de ${lista.length} — usá el buscador o el filtro de categoría para ver el resto.
+        Mostrando los primeros ${LIMITE} de ${lista.length} — afiná la búsqueda para acotar más.
       </td>`;
       tbody.appendChild(trAviso);
     }
