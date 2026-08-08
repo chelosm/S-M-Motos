@@ -452,6 +452,9 @@
 
   <div class="filtros">
     <input type="text" id="buscador" placeholder="Buscar por código o descripción..." oninput="renderTabla()">
+    <select id="filtro-proveedor" onchange="renderTabla()">
+      <option value="">Todos los proveedores</option>
+    </select>
     <select id="filtro-categoria" onchange="renderTabla()">
       <option value="">Todas las categorías</option>
     </select>
@@ -550,7 +553,7 @@
     while (true) {
       const { data, error } = await db
         .from("Productos")
-        .select("codigo, descripcion, categoria, precio_usd")
+        .select("id, codigo, proveedor, descripcion, categoria, precio_usd")
         .order("codigo", { ascending: true })
         .range(desde, desde + TANDA - 1);
 
@@ -570,13 +573,22 @@
   }
 
   function poblarFiltroCategorias() {
-    const select = document.getElementById("filtro-categoria");
+    const selectCat = document.getElementById("filtro-categoria");
     const categorias = [...new Set(PRODUCTOS.map(p => p.categoria).filter(Boolean))].sort();
     categorias.forEach(cat => {
       const opt = document.createElement("option");
       opt.value = cat;
       opt.textContent = cat;
-      select.appendChild(opt);
+      selectCat.appendChild(opt);
+    });
+
+    const selectProv = document.getElementById("filtro-proveedor");
+    const proveedores = [...new Set(PRODUCTOS.map(p => p.proveedor).filter(Boolean))].sort();
+    proveedores.forEach(prov => {
+      const opt = document.createElement("option");
+      opt.value = prov;
+      opt.textContent = prov;
+      selectProv.appendChild(opt);
     });
   }
 
@@ -726,10 +738,14 @@
     const contador = document.getElementById("contador");
     const busqueda = document.getElementById("buscador").value.trim().toLowerCase();
     const catElegida = document.getElementById("filtro-categoria").value;
+    const provElegido = document.getElementById("filtro-proveedor").value;
 
     let lista = PRODUCTOS;
     if (catElegida) {
       lista = lista.filter(p => p.categoria === catElegida);
+    }
+    if (provElegido) {
+      lista = lista.filter(p => p.proveedor === provElegido);
     }
     if (busqueda) {
       // Partimos la búsqueda en palabras sueltas: "estator rx" busca
@@ -741,13 +757,13 @@
       });
     }
 
-    contador.textContent = (busqueda || catElegida)
+    contador.textContent = (busqueda || catElegida || provElegido)
       ? lista.length + " productos (de " + PRODUCTOS.length + " en total)"
-      : "Escribí algo en el buscador o elegí una categoría para ver productos";
+      : "Escribí algo en el buscador o elegí un proveedor/categoría para ver productos";
 
     tbody.innerHTML = "";
 
-    if (!busqueda && !catElegida) {
+    if (!busqueda && !catElegida && !provElegido) {
       return; // no mostramos nada hasta que busquen o filtren
     }
 
@@ -783,8 +799,8 @@
         `;
         celdaPedido = `
           <td>
-            <input type="number" class="cant-input" id="cant-${p.codigo}" value="1" min="1">
-            <button class="btn-agregar" onclick="agregarAlCarrito('${p.codigo.replace(/'/g,"\\'")}')">+ Agregar</button>
+            <input type="number" class="cant-input" id="cant-${p.id}" value="1" min="1">
+            <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">+ Agregar</button>
           </td>
         `;
       } else {
@@ -798,7 +814,7 @@
 
       tr.innerHTML = `
         <td class="codigo">${p.codigo}</td>
-        <td>${p.descripcion || ""}${p.categoria ? `<span class="categoria-tag">${p.categoria}</span>` : ""}</td>
+        <td>${p.descripcion || ""}<span class="categoria-tag">${p.proveedor || ""}${p.categoria ? " · " + p.categoria : ""}</span></td>
         ${celdasNumericas}
         ${celdaPedido}
       `;
@@ -826,22 +842,22 @@
     actualizarContadorCarrito();
   }
 
-  function agregarAlCarrito(codigo) {
-    const producto = PRODUCTOS.find(p => p.codigo === codigo);
+  function agregarAlCarrito(id) {
+    const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const inputCant = document.getElementById("cant-" + codigo);
+    const inputCant = document.getElementById("cant-" + id);
     const cantidad = Math.max(1, parseInt(inputCant.value) || 1);
 
     const costoArs = producto.precio_usd * valorDolar;
     const costoConIva = costoArs * (1 + IVA);
-    const ventaSugerido = costoConIva * (1 + margenPct / 100);
 
-    const existente = CARRITO.find(item => item.codigo === codigo);
+    const existente = CARRITO.find(item => item.id === id);
     if (existente) {
       existente.cantidad += cantidad;
     } else {
       CARRITO.push({
+        id: producto.id,
         codigo: producto.codigo,
         descripcion: producto.descripcion || "",
         cantidad: cantidad,
@@ -851,8 +867,8 @@
     guardarCarrito();
   }
 
-  function quitarDelCarrito(codigo) {
-    CARRITO = CARRITO.filter(item => item.codigo !== codigo);
+  function quitarDelCarrito(id) {
+    CARRITO = CARRITO.filter(item => item.id !== id);
     guardarCarrito();
     renderCarrito();
   }
@@ -899,7 +915,7 @@
             <div class="desc">${item.descripcion}</div>
           </div>
           <div class="subtotal">$${fmt(subtotal)}</div>
-          <button class="btn-quitar" onclick="quitarDelCarrito('${item.codigo.replace(/'/g,"\\'")}')">✕</button>
+          <button class="btn-quitar" onclick="quitarDelCarrito('${item.id.replace(/'/g,"\\'")}')">✕</button>
         </div>
       `;
     }).join("");
