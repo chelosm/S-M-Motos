@@ -516,6 +516,11 @@
 
   const IVA = 0.21; // 21%, tasa general vigente en Argentina
 
+  // Redondea al múltiplo de 50 más cercano (505 -> 500, 525.01 -> 550, 576 -> 600)
+  function redondearA50(n) {
+    return Math.round(n / 50) * 50;
+  }
+
   let logueado = false;
   let PRODUCTOS = [];
   let valorDolar = 1;
@@ -763,7 +768,10 @@
         const celdaCostoIva = mostrarCostos
           ? `$${fmt(costoConIva)}`
           : `<span class="bloqueado">•••••</span>`;
-        const celdaVenta = `$${fmt(ventaSugerido)}`; // siempre visible: es el precio sugerido al público
+        const celdaVenta = `
+          <span style="display:block; font-size:0.7rem; font-weight:400; color:var(--texto-tenue);">$${fmt(ventaSugerido)}</span>
+          <span style="display:block; font-size:1.05rem; font-weight:800; color:var(--verde-stock);">$${fmt(redondearA50(ventaSugerido))}</span>
+        `; // arriba el precio exacto (chico), abajo redondeado al 50 (lo que se cobra)
         celdasNumericas = `
           <td class="num">${celdaCosto}</td>
           <td class="num">${celdaCostoIva}</td>
