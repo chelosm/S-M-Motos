@@ -506,6 +506,7 @@
       <option value="">Todas las categorías</option>
     </select>
   </div>
+  <button onclick="abrirPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:16px;">🧾 Hacer Presupuesto</button>
   <div id="contador"></div>
 
   <table>
@@ -1016,50 +1017,30 @@
     const cliente = document.getElementById("input-cliente-factura").value.trim() || "";
     const fecha = new Date().toLocaleString('es-AR');
 
-    // Hoja "Datos": la lista cruda de productos del pedido, sin tocar.
-    const filasDatos = [["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]];
+    const filas = [];
+    filas.push(["", "CLIENTE", cliente, fecha, ""]);
+    filas.push([]);
+    filas.push(["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]);
+
     let total = 0;
     CARRITO.forEach(item => {
       const subtotal = item.precioUnitario * item.cantidad;
       total += subtotal;
-      filasDatos.push([
-        item.cantidad,
-        item.codigo,
-        item.descripcion,
-        Math.round(item.precioUnitario * 100) / 100,
-        Math.round(subtotal * 100) / 100
-      ]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(subtotal*100)/100]);
     });
-    const hojaDatos = XLSX.utils.aoa_to_sheet(filasDatos);
+    const filaTotal = 3 + CARRITO.length + 2;
+    filas.push([]);
+    filas.push([]);
+    filas.push(["", "", "", "TOTAL =", Math.round(total*100)/100]);
 
-    // Hoja "Pedido": la que se ve al abrir el archivo, con el buscador.
-    // B3 es la celda donde se escribe para buscar; A6 es una fórmula
-    // FILTER que muestra solo las filas de Datos que coincidan.
-    const filasPedido = [
-      ["", "CLIENTE", cliente, fecha, ""],
-      [],
-      ["Buscar:", "", "", "", ""],
-      [],
-      ["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"],
-    ];
-    const hojaPedido = XLSX.utils.aoa_to_sheet(filasPedido);
-
-    const ultimaFila = 1 + CARRITO.length; // filas de datos en la hoja Datos
-    hojaPedido["A6"] = {
-      t: "n",
-      f: `IFERROR(FILTER(Datos!A2:E${ultimaFila}, (ISNUMBER(SEARCH($B$3,Datos!B2:B${ultimaFila}))+ISNUMBER(SEARCH($B$3,Datos!C2:C${ultimaFila}))+($B$3=""))>0), "")`
-    };
-
-    const filaTotal = 6 + CARRITO.length + 2;
-    hojaPedido[`D${filaTotal}`] = { t: "s", v: "TOTAL DEL PEDIDO =" };
-    hojaPedido[`E${filaTotal}`] = { t: "n", f: `SUM(Datos!E2:E${ultimaFila})` };
-
-    hojaPedido["!cols"] = [{wch:8}, {wch:14}, {wch:45}, {wch:12}, {wch:14}];
-    hojaPedido["!ref"] = `A1:E${filaTotal}`;
+    const hoja = XLSX.utils.aoa_to_sheet(filas);
+    hoja["!cols"] = [{wch:8}, {wch:14}, {wch:45}, {wch:12}, {wch:14}];
+    // Filtro clásico de Excel (flechitas en cada columna) sobre la
+    // fila de encabezados y los productos — funciona en cualquier app.
+    hoja["!autofilter"] = { ref: `A3:E${3 + CARRITO.length}` };
 
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hojaPedido, "Pedido");
-    XLSX.utils.book_append_sheet(libro, hojaDatos, "Datos");
+    XLSX.utils.book_append_sheet(libro, hoja, "Pedido");
 
     const nombreArchivo = "Pedido" + (cliente ? "_" + cliente.replace(/\s+/g, "_") : "") + ".xlsx";
     XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
@@ -1232,35 +1213,27 @@
     const cliente = document.getElementById("input-cliente-presupuesto").value.trim() || "";
     const fecha = new Date().toLocaleString('es-AR');
 
-    const filasDatos = [["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]];
+    const filas = [];
+    filas.push(["", "CLIENTE", cliente, fecha, ""]);
+    filas.push([]);
+    filas.push(["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]);
+
+    let total = 0;
     PRESUPUESTO.forEach(item => {
       const subtotal = item.precioUnitario * item.cantidad;
-      filasDatos.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(subtotal*100)/100]);
+      total += subtotal;
+      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(subtotal*100)/100]);
     });
-    const hojaDatos = XLSX.utils.aoa_to_sheet(filasDatos);
+    filas.push([]);
+    filas.push([]);
+    filas.push(["", "", "", "TOTAL PRESUPUESTO =", Math.round(total*100)/100]);
 
-    const filasPresu = [
-      ["", "CLIENTE", cliente, fecha, ""],
-      [],
-      ["Buscar:", "", "", "", ""],
-      [],
-      ["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"],
-    ];
-    const hojaPresu = XLSX.utils.aoa_to_sheet(filasPresu);
-    const ultimaFila = 1 + PRESUPUESTO.length;
-    hojaPresu["A6"] = {
-      t: "n",
-      f: `IFERROR(FILTER(Datos!A2:E${ultimaFila}, (ISNUMBER(SEARCH($B$3,Datos!B2:B${ultimaFila}))+ISNUMBER(SEARCH($B$3,Datos!C2:C${ultimaFila}))+($B$3=""))>0), "")`
-    };
-    const filaTotal = 6 + PRESUPUESTO.length + 2;
-    hojaPresu[`D${filaTotal}`] = { t: "s", v: "TOTAL PRESUPUESTO =" };
-    hojaPresu[`E${filaTotal}`] = { t: "n", f: `SUM(Datos!E2:E${ultimaFila})` };
-    hojaPresu["!cols"] = [{wch:8},{wch:14},{wch:45},{wch:12},{wch:14}];
-    hojaPresu["!ref"] = `A1:E${filaTotal}`;
+    const hoja = XLSX.utils.aoa_to_sheet(filas);
+    hoja["!cols"] = [{wch:8},{wch:14},{wch:45},{wch:12},{wch:14}];
+    hoja["!autofilter"] = { ref: `A3:E${3 + PRESUPUESTO.length}` };
 
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hojaPresu, "Presupuesto");
-    XLSX.utils.book_append_sheet(libro, hojaDatos, "Datos");
+    XLSX.utils.book_append_sheet(libro, hoja, "Presupuesto");
 
     const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + ".xlsx";
     XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
