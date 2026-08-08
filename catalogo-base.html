@@ -1155,6 +1155,12 @@
     renderPresupuesto();
   }
 
+  function vaciarPresupuesto() {
+    PRESUPUESTO = [];
+    guardarPresupuesto();
+    renderPresupuesto();
+  }
+
   function actualizarContadorPresupuesto() {
     const totalItems = PRESUPUESTO.reduce((sum, item) => sum + item.cantidad, 0);
     const contador = document.getElementById("contador-presupuesto");
@@ -1235,8 +1241,11 @@
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Presupuesto");
 
-    const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + ".xlsx";
+    const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
+    const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + "_" + sello + ".xlsx";
     XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
+
+    vaciarPresupuesto();
   }
 
   async function generarImagenPresupuesto() {
@@ -1292,7 +1301,8 @@
     try {
       const canvas = await html2canvas(plantilla, { backgroundColor: "#ffffff", scale: 2 });
       canvas.toBlob(async (blob) => {
-        const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + ".png";
+        const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
+        const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + "_" + sello + ".png";
         const archivo = new File([blob], nombreArchivo, { type: "image/png" });
 
         // Si el navegador soporta compartir archivos (celular), abrimos
@@ -1300,9 +1310,11 @@
         if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
           try {
             await navigator.share({ files: [archivo], title: "Presupuesto S-M Motos" });
+            vaciarPresupuesto();
             return;
           } catch (e) {
-            // si cancela el share, seguimos y ofrecemos descargar igual
+            // si cancela el share, no vaciamos: puede querer intentar de nuevo
+            return;
           }
         }
 
@@ -1313,6 +1325,7 @@
         a.download = nombreArchivo;
         a.click();
         URL.revokeObjectURL(url);
+        vaciarPresupuesto();
       }, "image/png");
     } catch (e) {
       mostrarDebug("No se pudo generar la imagen: " + e.message);
