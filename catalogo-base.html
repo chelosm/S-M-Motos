@@ -397,7 +397,6 @@
 <body>
 
 <header>
-  <div id="fondo-config" onclick="cerrarPaneles()"></div>
   <!-- Silueta de moto dibujada en SVG, decorativa, de fondo -->
   <div class="moto-fondo-wrap">
     <svg class="moto-fondo" viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--amarillo);">
@@ -415,23 +414,11 @@
     <!-- Control del dólar -->
     <div class="config-box">
       <button class="abrir" onclick="togglePanel('panel-dolar')">💲 <span id="valor-dolar-actual">1.00</span></button>
-      <div id="panel-dolar" class="panel-config">
-        <label for="input-dolar">Valor del dólar (1 USD = ? ARS)</label>
-        <input type="number" id="input-dolar" step="0.01" min="0" placeholder="Ej: 1250">
-        <button class="aplicar" onclick="guardarDolar()">Aplicar</button>
-        <button class="aplicar" style="background:var(--metal-claro); color:var(--texto); margin-top:8px;" onclick="usarDolarBlue()">🔄 Usar dólar blue (auto)</button>
-        <div id="msg-dolar-blue" style="font-size:0.72rem; color:var(--texto-tenue); margin-top:6px;"></div>
-      </div>
     </div>
 
     <!-- Control del margen de ganancia -->
     <div class="config-box" id="caja-margen">
       <button class="abrir" onclick="togglePanel('panel-margen')">📈 <span id="valor-margen-actual">30</span>%</button>
-      <div id="panel-margen" class="panel-config">
-        <label for="input-margen">Margen de ganancia sobre costo+IVA (%)</label>
-        <input type="number" id="input-margen" step="1" min="0" placeholder="Ej: 30">
-        <button class="aplicar" onclick="guardarMargen()">Aplicar</button>
-      </div>
     </div>
     <!-- Ojo para tapar costo/margen frente a un cliente -->
     <button id="btn-ojo" class="abrir" onclick="toggleMostrarCostos()" style="font-size:1.1rem;" title="Mostrar/ocultar costo y margen">👁️</button>
@@ -469,6 +456,23 @@
 </main>
 
 <footer>S-M Motos · Uso interno / demo de desarrollo</footer>
+
+<!-- Fondo oscuro y paneles de dólar/margen (a nivel de body para que no compitan con el header en capas) -->
+<div id="fondo-config" onclick="cerrarPaneles()"></div>
+
+<div id="panel-dolar" class="panel-config">
+  <label for="input-dolar">Valor del dólar (1 USD = ? ARS)</label>
+  <input type="number" id="input-dolar" step="0.01" min="0" placeholder="Ej: 1250">
+  <button class="aplicar" onclick="guardarDolar()">Aplicar</button>
+  <button class="aplicar" style="background:var(--metal-claro); color:var(--texto); margin-top:8px;" onclick="usarDolarBlue()">🔄 Usar dólar blue (auto)</button>
+  <div id="msg-dolar-blue" style="font-size:0.72rem; color:var(--texto-tenue); margin-top:6px;"></div>
+</div>
+
+<div id="panel-margen" class="panel-config">
+  <label for="input-margen">Margen de ganancia sobre costo+IVA (%)</label>
+  <input type="number" id="input-margen" step="1" min="0" placeholder="Ej: 30">
+  <button class="aplicar" onclick="guardarMargen()">Aplicar</button>
+</div>
 
 <!-- Botón flotante del carrito -->
 <button id="btn-carrito-flotante" onclick="abrirCarrito()">
