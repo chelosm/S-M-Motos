@@ -659,10 +659,13 @@
       lista = lista.filter(p => p.categoria === catElegida);
     }
     if (busqueda) {
-      lista = lista.filter(p =>
-        p.codigo.toLowerCase().includes(busqueda) ||
-        (p.descripcion || "").toLowerCase().includes(busqueda)
-      );
+      // Partimos la búsqueda en palabras sueltas: "estator rx" busca
+      // que el texto tenga "estator" Y "rx", sin importar el orden.
+      const palabras = busqueda.split(/\s+/).filter(Boolean);
+      lista = lista.filter(p => {
+        const texto = (p.codigo + " " + (p.descripcion || "")).toLowerCase();
+        return palabras.every(palabra => texto.includes(palabra));
+      });
     }
 
     contador.textContent = (busqueda || catElegida)
