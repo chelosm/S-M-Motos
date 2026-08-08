@@ -9,11 +9,11 @@
 <meta name="twitter:title" content="Catálogo S-M Motos">
 <style>
   :root {
-    --asfalto: #16181d;
-    --metal: #2a2e37;
+    --asfalto: #1a1c22;
+    --metal: #333846;
     --metal-claro: #3a3f4b;
-    --texto: #e8e6df;
-    --texto-tenue: #9a9fab;
+    --texto: #ffffff;
+    --texto-tenue: #b8bec9;
     --naranja: #ff6a1a;
     --amarillo: #ffb84d;
     --verde-stock: #4ade80;
@@ -199,9 +199,9 @@
     background: var(--metal);
     border: 1px solid var(--metal-claro);
     color: var(--texto);
-    padding: 12px 14px;
+    padding: 14px 16px;
     border-radius: 8px;
-    font-size: 0.95rem;
+    font-size: 1.02rem;
   }
   #filtro-categoria {
     flex: 1;
@@ -209,9 +209,9 @@
     background: var(--metal);
     border: 1px solid var(--metal-claro);
     color: var(--texto);
-    padding: 12px 14px;
+    padding: 14px 16px;
     border-radius: 8px;
-    font-size: 0.9rem;
+    font-size: 0.98rem;
   }
 
   #contador {
@@ -238,7 +238,7 @@
     padding: 12px 10px;
     text-align: left;
     border-bottom: 1px solid var(--metal-claro);
-    font-size: 0.85rem;
+    font-size: 0.92rem;
   }
   tbody tr:hover { background: #31363f; }
   .codigo { color: var(--amarillo); font-weight: 600; white-space: nowrap; }
@@ -250,7 +250,7 @@
   }
   .num { text-align: right; white-space: nowrap; }
   .num .usd { display: block; font-size: 0.68rem; font-weight: 400; color: var(--texto-tenue); }
-  .venta-sugerido { color: var(--verde-stock); font-weight: 700; }
+  .venta-sugerido { color: var(--verde-stock); font-weight: 800; }
   .bloqueado { color: var(--texto-tenue); font-weight: 400; font-style: italic; }
 
   footer {
@@ -258,6 +258,24 @@
     padding: 24px;
     color: var(--texto-tenue);
     font-size: 0.78rem;
+  }
+
+  /* ============================================
+     PANTALLAS GRANDES (compu)
+     En celular el espacio es limitado y hay que ser
+     compacto; en compu sobra lugar, así que agrandamos
+     letra y espaciado para que se lea más cómodo.
+     ============================================ */
+  @media (min-width: 900px) {
+    .logo { font-size: 2.6rem; }
+    .logo small { font-size: 0.8rem; }
+    .aviso { font-size: 0.95rem; }
+    th, td { font-size: 1rem; padding: 16px 14px; }
+    thead { font-size: 0.8rem; }
+    .num { font-size: 1.05rem; }
+    .venta-sugerido { font-size: 1.15rem; }
+    #buscador, #filtro-categoria { font-size: 1.05rem; padding: 14px 16px; }
+    .categoria-tag { font-size: 0.78rem; }
   }
 
   /* ============================================
@@ -895,6 +913,11 @@
     const numeroWhatsapp = "5492235923638";
     const url = "https://wa.me/" + numeroWhatsapp + "?text=" + encodeURIComponent(mensaje);
     window.open(url, "_blank");
+
+    // Vaciamos el carrito, ya que el pedido quedó armado y enviado
+    CARRITO = [];
+    guardarCarrito();
+    renderCarrito();
   }
 
   revisarSesionExistente();
