@@ -124,18 +124,28 @@
     cursor: pointer;
     font-size: 0.85rem;
   }
+  #fondo-config {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 45;
+  }
+  #fondo-config.abierto { display: block; }
   .panel-config {
     display: none;
-    position: absolute;
-    top: 110%;
-    right: 0;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     background: var(--metal);
     border: 1px solid var(--metal-claro);
     border-radius: 8px;
-    padding: 14px;
-    width: 220px;
-    z-index: 10;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    padding: 18px;
+    width: 85%;
+    max-width: 300px;
+    z-index: 50;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
   }
   .panel-config.abierto { display: block; }
   .panel-config label {
@@ -387,6 +397,7 @@
 <body>
 
 <header>
+  <div id="fondo-config" onclick="cerrarPaneles()"></div>
   <!-- Silueta de moto dibujada en SVG, decorativa, de fondo -->
   <div class="moto-fondo-wrap">
     <svg class="moto-fondo" viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--amarillo);">
@@ -408,6 +419,8 @@
         <label for="input-dolar">Valor del dólar (1 USD = ? ARS)</label>
         <input type="number" id="input-dolar" step="0.01" min="0" placeholder="Ej: 1250">
         <button class="aplicar" onclick="guardarDolar()">Aplicar</button>
+        <button class="aplicar" style="background:var(--metal-claro); color:var(--texto); margin-top:8px;" onclick="usarDolarBlue()">🔄 Usar dólar blue (auto)</button>
+        <div id="msg-dolar-blue" style="font-size:0.72rem; color:var(--texto-tenue); margin-top:6px;"></div>
       </div>
     </div>
 
@@ -541,7 +554,36 @@
      de abrir/cerrar
      ============================================ */
   function togglePanel(id) {
-    document.getElementById(id).classList.toggle("abierto");
+    const panel = document.getElementById(id);
+    const yaAbierto = panel.classList.contains("abierto");
+    cerrarPaneles();
+    if (!yaAbierto) {
+      panel.classList.add("abierto");
+      document.getElementById("fondo-config").classList.add("abierto");
+    }
+  }
+
+  function cerrarPaneles() {
+    document.getElementById("panel-dolar").classList.remove("abierto");
+    document.getElementById("panel-margen").classList.remove("abierto");
+    document.getElementById("fondo-config").classList.remove("abierto");
+  }
+
+  async function usarDolarBlue() {
+    const msg = document.getElementById("msg-dolar-blue");
+    msg.textContent = "Consultando cotización...";
+    try {
+      // API pública y gratuita de dolarapi.com, sin necesidad de clave
+      const resp = await fetch("https://dolarapi.com/v1/dolares/blue");
+      if (!resp.ok) throw new Error("respuesta no OK");
+      const data = await resp.json();
+      // Usamos "venta" (el más alto de los dos, compra/venta)
+      const valor = data.venta;
+      document.getElementById("input-dolar").value = valor;
+      msg.textContent = "Blue venta: $" + valor + " (" + (data.fechaActualizacion || "hoy") + ")";
+    } catch (e) {
+      msg.textContent = "No se pudo consultar automáticamente. Cargalo a mano.";
+    }
   }
 
   function guardarDolar() {
@@ -553,7 +595,7 @@
     valorDolar = valor;
     localStorage.setItem("valorDolarHada", valor);
     document.getElementById("valor-dolar-actual").textContent = valor.toFixed(2);
-    document.getElementById("panel-dolar").classList.remove("abierto");
+    cerrarPaneles();
     renderTabla();
   }
 
@@ -566,7 +608,7 @@
     margenPct = valor;
     localStorage.setItem("margenHada", valor);
     document.getElementById("valor-margen-actual").textContent = valor;
-    document.getElementById("panel-margen").classList.remove("abierto");
+    cerrarPaneles();
     renderTabla();
   }
 
