@@ -34,11 +34,12 @@
     border-bottom: 3px solid var(--amarillo);
     padding: 28px 24px;
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    justify-content: center;
     align-items: center;
-    flex-wrap: wrap;
     gap: 16px;
     position: relative;
+    text-align: center;
   }
   .moto-fondo-wrap {
     position: absolute;
@@ -83,6 +84,7 @@
     padding: 10px 14px;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
     flex-wrap: wrap;
   }
@@ -236,7 +238,7 @@
   }
   th, td {
     padding: 12px 10px;
-    text-align: left;
+    text-align: center;
     border-bottom: 1px solid var(--metal-claro);
     font-size: 0.92rem;
   }
@@ -259,7 +261,7 @@
     display: block;
     margin-top: 2px;
   }
-  .num { text-align: right; white-space: nowrap; }
+  .num { text-align: center; white-space: nowrap; }
   .num .usd { display: block; font-size: 0.68rem; font-weight: 400; color: var(--texto-tenue); }
   .venta-sugerido { color: var(--verde-stock); font-weight: 800; }
   .bloqueado { color: var(--texto-tenue); font-weight: 400; font-style: italic; }
