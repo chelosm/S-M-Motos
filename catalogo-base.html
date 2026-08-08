@@ -422,9 +422,42 @@
     text-align: center;
     padding: 20px 0;
   }
+
+  #overlay-presupuesto {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 30;
+    align-items: flex-end;
+  }
+  #overlay-presupuesto.abierto { display: flex; }
+  #panel-presupuesto {
+    background: var(--metal);
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+  }
+  #panel-presupuesto h2 {
+    font-size: 1.1rem;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel-presupuesto h2 button {
+    background: none;
+    border: none;
+    color: var(--texto-tenue);
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -519,6 +552,38 @@
   🛒
   <span id="contador-carrito" style="display:none;">0</span>
 </button>
+
+<!-- Botón flotante del presupuesto -->
+<button id="btn-presupuesto-flotante" onclick="abrirPresupuesto()" style="left:20px; right:auto; background:var(--amarillo);">
+  🧾
+  <span id="contador-presupuesto" style="display:none;">0</span>
+</button>
+
+<!-- Panel del presupuesto -->
+<div id="overlay-presupuesto" onclick="if(event.target===this) cerrarPresupuesto()">
+  <div id="panel-presupuesto">
+    <h2>Presupuesto <button onclick="cerrarPresupuesto()">✕</button></h2>
+    <div id="lista-presupuesto"></div>
+
+    <div style="background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:12px; margin:14px 0;">
+      <div style="font-size:0.85rem; color:var(--texto-tenue); margin-bottom:8px;">Agregar ítem que no está en el catálogo:</div>
+      <input type="text" id="manual-descripcion" placeholder="Descripción" style="width:100%; margin-bottom:8px; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="manual-cantidad" placeholder="Cant." value="1" min="1" style="width:70px; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+        <input type="number" id="manual-precio" placeholder="Precio $" min="0" style="flex:1; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+        <button onclick="agregarItemManual()" style="background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:8px 14px; border-radius:5px;">Agregar</button>
+      </div>
+    </div>
+
+    <div id="total-presupuesto"></div>
+    <input type="text" id="input-cliente-presupuesto" placeholder="Nombre del cliente (opcional)" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:10px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
+    <button onclick="exportarPresupuestoExcel()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">📊 Exportar a Excel</button>
+    <button onclick="generarImagenPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer;">🖼️ Generar imagen / Compartir</button>
+  </div>
+</div>
+
+<!-- Plantilla oculta para generar la imagen del presupuesto -->
+<div id="plantilla-presupuesto-img" style="position:fixed; left:-9999px; top:0; width:600px; background:#ffffff; color:#111; font-family:Arial, sans-serif; padding:24px;"></div>
 
 <!-- Panel del carrito -->
 <div id="overlay-carrito" onclick="if(event.target===this) cerrarCarrito()">
@@ -817,7 +882,8 @@
         celdaPedido = `
           <td>
             <input type="number" class="cant-input" id="cant-${p.id}" value="1" min="1">
-            <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">+ Agregar</button>
+            <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">+ Pedido</button>
+            <button class="btn-agregar" style="background:var(--amarillo); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}')">🧾 Presup.</button>
           </td>
         `;
       } else {
@@ -1026,6 +1092,261 @@
 
   revisarSesionExistente();
   actualizarContadorCarrito();
+
+  /* ============================================
+     PRESUPUESTO
+     Similar al carrito, pero acá también se pueden
+     agregar ítems "manuales" que no están en el catálogo,
+     con su propio precio puesto a mano. Se usa para armar
+     presupuestos para clientes, no pedidos a proveedores.
+     ============================================ */
+  let PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
+  let contadorManual = 0;
+
+  function guardarPresupuesto() {
+    localStorage.setItem("presupuestoSMMotos", JSON.stringify(PRESUPUESTO));
+    actualizarContadorPresupuesto();
+  }
+
+  function agregarAPresupuesto(id) {
+    const producto = PRODUCTOS.find(p => p.id === id);
+    if (!producto) return;
+
+    const inputCant = document.getElementById("cant-" + id);
+    const cantidad = Math.max(1, parseInt(inputCant.value) || 1);
+
+    const costoArs = producto.precio_usd * valorDolar;
+    const costoConIva = costoArs * (1 + IVA);
+    const ventaSugerido = redondearA50(costoConIva * (1 + margenPct / 100));
+
+    const existente = PRESUPUESTO.find(item => item.id === id);
+    if (existente) {
+      existente.cantidad += cantidad;
+    } else {
+      PRESUPUESTO.push({
+        id: producto.id,
+        codigo: producto.codigo,
+        descripcion: producto.descripcion || "",
+        cantidad: cantidad,
+        precioUnitario: ventaSugerido,
+        manual: false
+      });
+    }
+    guardarPresupuesto();
+    mostrarDebug("Agregado al presupuesto: " + producto.codigo);
+  }
+
+  function agregarItemManual() {
+    const desc = document.getElementById("manual-descripcion").value.trim();
+    const cant = Math.max(1, parseInt(document.getElementById("manual-cantidad").value) || 1);
+    const precio = parseFloat(document.getElementById("manual-precio").value);
+
+    if (!desc) {
+      alert("Escribí una descripción para el ítem.");
+      return;
+    }
+    if (isNaN(precio) || precio < 0) {
+      alert("Ingresá un precio válido.");
+      return;
+    }
+
+    contadorManual++;
+    PRESUPUESTO.push({
+      id: "manual-" + Date.now() + "-" + contadorManual,
+      codigo: "—",
+      descripcion: desc,
+      cantidad: cant,
+      precioUnitario: precio,
+      manual: true
+    });
+
+    document.getElementById("manual-descripcion").value = "";
+    document.getElementById("manual-cantidad").value = "1";
+    document.getElementById("manual-precio").value = "";
+
+    guardarPresupuesto();
+    renderPresupuesto();
+  }
+
+  function quitarDePresupuesto(id) {
+    PRESUPUESTO = PRESUPUESTO.filter(item => item.id !== id);
+    guardarPresupuesto();
+    renderPresupuesto();
+  }
+
+  function actualizarContadorPresupuesto() {
+    const totalItems = PRESUPUESTO.reduce((sum, item) => sum + item.cantidad, 0);
+    const contador = document.getElementById("contador-presupuesto");
+    if (totalItems > 0) {
+      contador.style.display = "flex";
+      contador.textContent = totalItems;
+    } else {
+      contador.style.display = "none";
+    }
+  }
+
+  function abrirPresupuesto() {
+    renderPresupuesto();
+    document.getElementById("overlay-presupuesto").classList.add("abierto");
+  }
+
+  function cerrarPresupuesto() {
+    document.getElementById("overlay-presupuesto").classList.remove("abierto");
+  }
+
+  function renderPresupuesto() {
+    const lista = document.getElementById("lista-presupuesto");
+    const totalDiv = document.getElementById("total-presupuesto");
+    const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    if (PRESUPUESTO.length === 0) {
+      lista.innerHTML = `<div id="carrito-vacio">Todavía no agregaste productos ni ítems al presupuesto.</div>`;
+      totalDiv.textContent = "";
+      return;
+    }
+
+    let total = 0;
+    lista.innerHTML = PRESUPUESTO.map(item => {
+      const subtotal = item.precioUnitario * item.cantidad;
+      total += subtotal;
+      return `
+        <div class="item-carrito">
+          <div class="info">
+            <div class="cod">${item.codigo} × ${item.cantidad} ${item.manual ? "(manual)" : ""}</div>
+            <div class="desc">${item.descripcion}</div>
+          </div>
+          <div class="subtotal">$${fmt(subtotal)}</div>
+          <button class="btn-quitar" onclick="quitarDePresupuesto('${item.id.replace(/'/g,"\\'")}')">✕</button>
+        </div>
+      `;
+    }).join("");
+
+    totalDiv.textContent = "Total: $" + fmt(total);
+  }
+
+  function exportarPresupuestoExcel() {
+    if (PRESUPUESTO.length === 0) {
+      alert("Todavía no agregaste nada al presupuesto.");
+      return;
+    }
+    const cliente = document.getElementById("input-cliente-presupuesto").value.trim() || "";
+    const fecha = new Date().toLocaleString('es-AR');
+
+    const filasDatos = [["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]];
+    PRESUPUESTO.forEach(item => {
+      const subtotal = item.precioUnitario * item.cantidad;
+      filasDatos.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(subtotal*100)/100]);
+    });
+    const hojaDatos = XLSX.utils.aoa_to_sheet(filasDatos);
+
+    const filasPresu = [
+      ["", "CLIENTE", cliente, fecha, ""],
+      [],
+      ["Buscar:", "", "", "", ""],
+      [],
+      ["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"],
+    ];
+    const hojaPresu = XLSX.utils.aoa_to_sheet(filasPresu);
+    const ultimaFila = 1 + PRESUPUESTO.length;
+    hojaPresu["A6"] = {
+      t: "n",
+      f: `IFERROR(FILTER(Datos!A2:E${ultimaFila}, (ISNUMBER(SEARCH($B$3,Datos!B2:B${ultimaFila}))+ISNUMBER(SEARCH($B$3,Datos!C2:C${ultimaFila}))+($B$3=""))>0), "")`
+    };
+    const filaTotal = 6 + PRESUPUESTO.length + 2;
+    hojaPresu[`D${filaTotal}`] = { t: "s", v: "TOTAL PRESUPUESTO =" };
+    hojaPresu[`E${filaTotal}`] = { t: "n", f: `SUM(Datos!E2:E${ultimaFila})` };
+    hojaPresu["!cols"] = [{wch:8},{wch:14},{wch:45},{wch:12},{wch:14}];
+    hojaPresu["!ref"] = `A1:E${filaTotal}`;
+
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hojaPresu, "Presupuesto");
+    XLSX.utils.book_append_sheet(libro, hojaDatos, "Datos");
+
+    const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + ".xlsx";
+    XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
+  }
+
+  async function generarImagenPresupuesto() {
+    if (PRESUPUESTO.length === 0) {
+      alert("Todavía no agregaste nada al presupuesto.");
+      return;
+    }
+    const cliente = document.getElementById("input-cliente-presupuesto").value.trim();
+    const fecha = new Date().toLocaleDateString('es-AR');
+    const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    let total = 0;
+    const filasHtml = PRESUPUESTO.map(item => {
+      const subtotal = item.precioUnitario * item.cantidad;
+      total += subtotal;
+      return `
+        <tr>
+          <td style="padding:6px; border-bottom:1px solid #ddd;">${item.cantidad}</td>
+          <td style="padding:6px; border-bottom:1px solid #ddd;">${item.descripcion}</td>
+          <td style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">$${fmt(item.precioUnitario)}</td>
+          <td style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">$${fmt(subtotal)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const plantilla = document.getElementById("plantilla-presupuesto-img");
+    plantilla.innerHTML = `
+      <div style="text-align:center; margin-bottom:16px;">
+        <div style="font-size:1.6rem; font-weight:900;">S-M <span style="color:#ff6a1a;">MOTOS</span></div>
+        <div style="font-size:0.8rem; color:#555;">DISTRIBUIDORA MAYORISTA · VENTA DE REPUESTOS Y ACCESORIOS</div>
+      </div>
+      <div style="margin-bottom:12px; font-size:0.9rem;">
+        <strong>PRESUPUESTO</strong><br>
+        ${cliente ? "Cliente: " + cliente + "<br>" : ""}
+        Fecha: ${fecha}
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+        <thead>
+          <tr style="background:#111; color:#fff;">
+            <th style="padding:8px; text-align:left;">Cant.</th>
+            <th style="padding:8px; text-align:left;">Descripción</th>
+            <th style="padding:8px; text-align:right;">P. Unit.</th>
+            <th style="padding:8px; text-align:right;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${filasHtml}</tbody>
+      </table>
+      <div style="text-align:right; font-size:1.1rem; font-weight:800; margin-top:14px;">
+        TOTAL: $${fmt(total)}
+      </div>
+    `;
+
+    try {
+      const canvas = await html2canvas(plantilla, { backgroundColor: "#ffffff", scale: 2 });
+      canvas.toBlob(async (blob) => {
+        const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + ".png";
+        const archivo = new File([blob], nombreArchivo, { type: "image/png" });
+
+        // Si el navegador soporta compartir archivos (celular), abrimos
+        // directo el menú para elegir WhatsApp u otra app.
+        if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+          try {
+            await navigator.share({ files: [archivo], title: "Presupuesto S-M Motos" });
+            return;
+          } catch (e) {
+            // si cancela el share, seguimos y ofrecemos descargar igual
+          }
+        }
+
+        // Si no se puede compartir directo, se descarga la imagen
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = nombreArchivo;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, "image/png");
+    } catch (e) {
+      mostrarDebug("No se pudo generar la imagen: " + e.message);
+    }
+  }
+
+  actualizarContadorPresupuesto();
 </script>
 
 </body>
