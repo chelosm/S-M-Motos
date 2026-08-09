@@ -564,12 +564,6 @@
 <div id="overlay-presupuesto" onclick="if(event.target===this) cerrarPresupuesto()">
   <div id="panel-presupuesto">
     <h2>Presupuesto <button onclick="cerrarPresupuesto()">✕</button></h2>
-
-    <label style="display:flex; align-items:center; gap:8px; background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:10px 12px; margin-bottom:12px; font-size:0.88rem; cursor:pointer;">
-      <input type="checkbox" id="switch-mayorista" onchange="toggleModoMayorista()" style="width:18px; height:18px;">
-      <span>Modo <strong>Mayorista</strong> (precio final: costo + IVA, sin margen)</span>
-    </label>
-
     <div id="lista-presupuesto"></div>
 
     <div style="background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:12px; margin:14px 0;">
@@ -1089,28 +1083,10 @@
      ============================================ */
   let PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
   let contadorManual = 0;
-  // false = minorista (precio con margen, como antes) · true = mayorista (costo + IVA, sin margen)
-  let modoMayorista = localStorage.getItem("modoMayoristaPresupuesto") === "true";
 
   function guardarPresupuesto() {
     localStorage.setItem("presupuestoSMMotos", JSON.stringify(PRESUPUESTO));
     actualizarContadorPresupuesto();
-  }
-
-  // Precio que se muestra/exporta para un ítem, según el modo elegido.
-  // Los ítems manuales no tienen costo/margen calculado, así que siempre
-  // usan el precio que se cargó a mano.
-  function precioEfectivo(item) {
-    if (modoMayorista && !item.manual && item.costoConIva != null) {
-      return item.costoConIva;
-    }
-    return item.precioUnitario;
-  }
-
-  function toggleModoMayorista() {
-    modoMayorista = document.getElementById("switch-mayorista").checked;
-    localStorage.setItem("modoMayoristaPresupuesto", modoMayorista);
-    renderPresupuesto();
   }
 
   function agregarAPresupuesto(id) {
@@ -1134,7 +1110,6 @@
         descripcion: producto.descripcion || "",
         cantidad: cantidad,
         precioUnitario: ventaSugerido,
-        costoConIva: costoConIva,
         manual: false
       });
     }
@@ -1198,7 +1173,6 @@
   }
 
   function abrirPresupuesto() {
-    document.getElementById("switch-mayorista").checked = modoMayorista;
     renderPresupuesto();
     document.getElementById("overlay-presupuesto").classList.add("abierto");
   }
@@ -1220,8 +1194,7 @@
 
     let total = 0;
     lista.innerHTML = PRESUPUESTO.map(item => {
-      const precio = precioEfectivo(item);
-      const subtotal = precio * item.cantidad;
+      const subtotal = item.precioUnitario * item.cantidad;
       total += subtotal;
       return `
         <div class="item-carrito">
@@ -1235,7 +1208,7 @@
       `;
     }).join("");
 
-    totalDiv.textContent = "Total: $" + fmt(total) + (modoMayorista ? "  (Mayorista)" : "");
+    totalDiv.textContent = "Total: $" + fmt(total);
   }
 
   function exportarPresupuestoExcel() {
@@ -1247,16 +1220,15 @@
     const fecha = new Date().toLocaleString('es-AR');
 
     const filas = [];
-    filas.push(["", "CLIENTE", cliente, fecha, modoMayorista ? "MAYORISTA" : "MINORISTA"]);
+    filas.push(["", "CLIENTE", cliente, fecha, ""]);
     filas.push([]);
     filas.push(["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]);
 
     let total = 0;
     PRESUPUESTO.forEach(item => {
-      const precio = precioEfectivo(item);
-      const subtotal = precio * item.cantidad;
+      const subtotal = item.precioUnitario * item.cantidad;
       total += subtotal;
-      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(precio*100)/100, Math.round(subtotal*100)/100]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(subtotal*100)/100]);
     });
     filas.push([]);
     filas.push([]);
@@ -1286,44 +1258,46 @@
     const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
     let total = 0;
-    const filasHtml = PRESUPUESTO.map(item => {
-      const precio = precioEfectivo(item);
-      const subtotal = precio * item.cantidad;
+    const filasHtml = PRESUPUESTO.map((item, i) => {
+      const subtotal = item.precioUnitario * item.cantidad;
       total += subtotal;
+      const fondoFila = i % 2 === 0 ? "#ffffff" : "#f5f5f5";
       return `
-        <tr>
-          <td style="padding:6px; border-bottom:1px solid #ddd;">${item.cantidad}</td>
-          <td style="padding:6px; border-bottom:1px solid #ddd;">${item.descripcion}</td>
-          <td style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">$${fmt(precio)}</td>
-          <td style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">$${fmt(subtotal)}</td>
+        <tr style="background:${fondoFila};">
+          <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.cantidad}</td>
+          <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.descripcion}</td>
+          <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111; text-align:right;">$${fmt(item.precioUnitario)}</td>
+          <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111; text-align:right;">$${fmt(subtotal)}</td>
         </tr>
       `;
     }).join("");
 
     const plantilla = document.getElementById("plantilla-presupuesto-img");
     plantilla.innerHTML = `
-      <div style="text-align:center; margin-bottom:16px;">
-        <div style="font-size:1.6rem; font-weight:900;">S-M <span style="color:#ff6a1a;">MOTOS</span></div>
-        <div style="font-size:0.8rem; color:#555;">DISTRIBUIDORA MAYORISTA · VENTA DE REPUESTOS Y ACCESORIOS</div>
-      </div>
-      <div style="margin-bottom:12px; font-size:0.9rem;">
-        <strong>PRESUPUESTO${modoMayorista ? " · MAYORISTA" : ""}</strong><br>
-        ${cliente ? "Cliente: " + cliente + "<br>" : ""}
-        Fecha: ${fecha}
-      </div>
-      <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-        <thead>
-          <tr style="background:#111; color:#fff;">
-            <th style="padding:8px; text-align:left;">Cant.</th>
-            <th style="padding:8px; text-align:left;">Descripción</th>
-            <th style="padding:8px; text-align:right;">P. Unit.</th>
-            <th style="padding:8px; text-align:right;">Subtotal</th>
-          </tr>
-        </thead>
-        <tbody>${filasHtml}</tbody>
-      </table>
-      <div style="text-align:right; font-size:1.1rem; font-weight:800; margin-top:14px;">
-        TOTAL: $${fmt(total)}
+      <div style="background:#ffffff; color:#111111;">
+        <div style="text-align:center; margin-bottom:16px;">
+          <div style="font-size:1.6rem; font-weight:900; color:#111;">S-M <span style="color:#ff6a1a;">MOTOS</span></div>
+          <div style="font-size:0.8rem; color:#555;">DISTRIBUIDORA MAYORISTA · VENTA DE REPUESTOS Y ACCESORIOS</div>
+        </div>
+        <div style="margin-bottom:12px; font-size:0.9rem; color:#111;">
+          <strong>PRESUPUESTO</strong><br>
+          ${cliente ? "Cliente: " + cliente + "<br>" : ""}
+          Fecha: ${fecha}
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.85rem; background:#ffffff;">
+          <thead>
+            <tr style="background:#111111;">
+              <th style="padding:8px; text-align:left; background:#111111; color:#ffffff;">Cant.</th>
+              <th style="padding:8px; text-align:left; background:#111111; color:#ffffff;">Descripción</th>
+              <th style="padding:8px; text-align:right; background:#111111; color:#ffffff;">P. Unit.</th>
+              <th style="padding:8px; text-align:right; background:#111111; color:#ffffff;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody style="background:#ffffff;">${filasHtml}</tbody>
+        </table>
+        <div style="text-align:right; font-size:1.1rem; font-weight:800; margin-top:14px; color:#111;">
+          TOTAL: $${fmt(total)}
+        </div>
       </div>
     `;
 
