@@ -564,6 +564,12 @@
 <div id="overlay-presupuesto" onclick="if(event.target===this) cerrarPresupuesto()">
   <div id="panel-presupuesto">
     <h2>Presupuesto <button onclick="cerrarPresupuesto()">✕</button></h2>
+
+    <label style="display:flex; align-items:center; gap:8px; background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:10px 12px; margin-bottom:12px; font-size:0.88rem; cursor:pointer;">
+      <input type="checkbox" id="switch-mayorista" onchange="toggleModoMayorista()" style="width:18px; height:18px;">
+      <span>Modo <strong>Mayorista</strong> (precio final: costo + IVA, sin margen)</span>
+    </label>
+
     <div id="lista-presupuesto"></div>
 
     <div style="background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:12px; margin:14px 0;">
@@ -1083,10 +1089,28 @@
      ============================================ */
   let PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
   let contadorManual = 0;
+  // false = minorista (precio con margen, como antes) · true = mayorista (costo + IVA, sin margen)
+  let modoMayorista = localStorage.getItem("modoMayoristaPresupuesto") === "true";
 
   function guardarPresupuesto() {
     localStorage.setItem("presupuestoSMMotos", JSON.stringify(PRESUPUESTO));
     actualizarContadorPresupuesto();
+  }
+
+  // Precio que se muestra/exporta para un ítem, según el modo elegido.
+  // Los ítems manuales no tienen costo/margen calculado, así que siempre
+  // usan el precio que se cargó a mano.
+  function precioEfectivo(item) {
+    if (modoMayorista && !item.manual && item.costoConIva != null) {
+      return item.costoConIva;
+    }
+    return item.precioUnitario;
+  }
+
+  function toggleModoMayorista() {
+    modoMayorista = document.getElementById("switch-mayorista").checked;
+    localStorage.setItem("modoMayoristaPresupuesto", modoMayorista);
+    renderPresupuesto();
   }
 
   function agregarAPresupuesto(id) {
@@ -1110,6 +1134,7 @@
         descripcion: producto.descripcion || "",
         cantidad: cantidad,
         precioUnitario: ventaSugerido,
+        costoConIva: costoConIva,
         manual: false
       });
     }
@@ -1173,6 +1198,7 @@
   }
 
   function abrirPresupuesto() {
+    document.getElementById("switch-mayorista").checked = modoMayorista;
     renderPresupuesto();
     document.getElementById("overlay-presupuesto").classList.add("abierto");
   }
@@ -1194,7 +1220,8 @@
 
     let total = 0;
     lista.innerHTML = PRESUPUESTO.map(item => {
-      const subtotal = item.precioUnitario * item.cantidad;
+      const precio = precioEfectivo(item);
+      const subtotal = precio * item.cantidad;
       total += subtotal;
       return `
         <div class="item-carrito">
@@ -1208,7 +1235,7 @@
       `;
     }).join("");
 
-    totalDiv.textContent = "Total: $" + fmt(total);
+    totalDiv.textContent = "Total: $" + fmt(total) + (modoMayorista ? "  (Mayorista)" : "");
   }
 
   function exportarPresupuestoExcel() {
@@ -1220,15 +1247,16 @@
     const fecha = new Date().toLocaleString('es-AR');
 
     const filas = [];
-    filas.push(["", "CLIENTE", cliente, fecha, ""]);
+    filas.push(["", "CLIENTE", cliente, fecha, modoMayorista ? "MAYORISTA" : "MINORISTA"]);
     filas.push([]);
     filas.push(["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]);
 
     let total = 0;
     PRESUPUESTO.forEach(item => {
-      const subtotal = item.precioUnitario * item.cantidad;
+      const precio = precioEfectivo(item);
+      const subtotal = precio * item.cantidad;
       total += subtotal;
-      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(subtotal*100)/100]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(precio*100)/100, Math.round(subtotal*100)/100]);
     });
     filas.push([]);
     filas.push([]);
@@ -1259,13 +1287,14 @@
 
     let total = 0;
     const filasHtml = PRESUPUESTO.map(item => {
-      const subtotal = item.precioUnitario * item.cantidad;
+      const precio = precioEfectivo(item);
+      const subtotal = precio * item.cantidad;
       total += subtotal;
       return `
         <tr>
           <td style="padding:6px; border-bottom:1px solid #ddd;">${item.cantidad}</td>
           <td style="padding:6px; border-bottom:1px solid #ddd;">${item.descripcion}</td>
-          <td style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">$${fmt(item.precioUnitario)}</td>
+          <td style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">$${fmt(precio)}</td>
           <td style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">$${fmt(subtotal)}</td>
         </tr>
       `;
@@ -1278,7 +1307,7 @@
         <div style="font-size:0.8rem; color:#555;">DISTRIBUIDORA MAYORISTA · VENTA DE REPUESTOS Y ACCESORIOS</div>
       </div>
       <div style="margin-bottom:12px; font-size:0.9rem;">
-        <strong>PRESUPUESTO</strong><br>
+        <strong>PRESUPUESTO${modoMayorista ? " · MAYORISTA" : ""}</strong><br>
         ${cliente ? "Cliente: " + cliente + "<br>" : ""}
         Fecha: ${fecha}
       </div>
