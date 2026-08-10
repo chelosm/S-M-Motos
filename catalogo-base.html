@@ -332,7 +332,37 @@
     cursor: pointer;
     z-index: 20;
   }
+  #btn-presupuesto-flotante {
+    position: fixed;
+    bottom: 88px;
+    right: 20px;
+    background: var(--amarillo);
+    color: #1a1a1a;
+    border: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    cursor: pointer;
+    z-index: 20;
+  }
   #contador-carrito {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--rojo-sinstock);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #contador-presupuesto {
     position: absolute;
     top: -4px;
     right: -4px;
@@ -555,7 +585,7 @@
 </button>
 
 <!-- Botón flotante del presupuesto -->
-<button id="btn-presupuesto-flotante" onclick="abrirPresupuesto()" style="left:20px; right:auto; background:var(--amarillo);">
+<button id="btn-presupuesto-flotante" onclick="abrirPresupuesto()">
   🧾
   <span id="contador-presupuesto" style="display:none;">0</span>
 </button>
@@ -882,8 +912,7 @@
         `;
         celdaPedido = `
           <td>
-            <input type="number" class="cant-input" id="cant-${p.id}" value="1" min="1">
-            <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">+ Pedido</button>
+            <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">🛒 Pedido</button>
             <button class="btn-agregar" style="background:var(--amarillo); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}')">🧾 Presup.</button>
           </td>
         `;
@@ -931,8 +960,10 @@
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const inputCant = document.getElementById("cant-" + id);
-    const cantidad = Math.max(1, parseInt(inputCant.value) || 1);
+    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al pedido?", "1");
+    if (respuesta === null) return; // canceló, no se agrega nada
+    const cantidad = Math.max(1, parseInt(respuesta) || 0);
+    if (cantidad <= 0) return;
 
     const costoArs = producto.precio_usd * valorDolar;
     const costoConIva = costoArs * (1 + IVA);
@@ -1093,8 +1124,10 @@
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const inputCant = document.getElementById("cant-" + id);
-    const cantidad = Math.max(1, parseInt(inputCant.value) || 1);
+    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al presupuesto?", "1");
+    if (respuesta === null) return; // canceló, no se agrega nada
+    const cantidad = Math.max(1, parseInt(respuesta) || 0);
+    if (cantidad <= 0) return;
 
     const costoArs = producto.precio_usd * valorDolar;
     const costoConIva = costoArs * (1 + IVA);
