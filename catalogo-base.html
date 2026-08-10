@@ -484,6 +484,38 @@
     font-size: 1.2rem;
     cursor: pointer;
   }
+
+  #overlay-planilla {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 30;
+    align-items: flex-end;
+  }
+  #overlay-planilla.abierto { display: flex; }
+  #panel-planilla {
+    background: var(--metal);
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+  }
+  #panel-planilla h2 {
+    font-size: 1.1rem;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel-planilla h2 button {
+    background: none;
+    border: none;
+    color: var(--texto-tenue);
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -536,7 +568,8 @@
       <option value="">Todas las categorías</option>
     </select>
   </div>
-  <button onclick="abrirPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:16px;">🧾 Hacer Presupuesto</button>
+  <button onclick="abrirPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:12px;">🧾 Hacer Presupuesto</button>
+  <button onclick="abrirPlanilla()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:1px solid var(--amarillo); font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:16px;">📋 Planilla de Venta Diaria</button>
   <div id="contador"></div>
 
   <table>
@@ -615,6 +648,55 @@
 
 <!-- Plantilla oculta para generar la imagen del presupuesto -->
 <div id="plantilla-presupuesto-img" style="position:fixed; left:-9999px; top:0; width:600px; background:#ffffff; color:#111; font-family:Arial, sans-serif; padding:24px;"></div>
+
+<!-- Panel de la Planilla de Venta Diaria (NO se guarda sola: vive solo
+     en la memoria de esta pestaña. Si cerrás sin exportar, se pierde.) -->
+<div id="overlay-planilla" onclick="if(event.target===this) cerrarPlanilla()">
+  <div id="panel-planilla">
+    <h2>Planilla de Venta Diaria <button onclick="cerrarPlanilla()">✕</button></h2>
+    <div style="font-size:0.78rem; color:var(--texto-tenue); margin-bottom:14px;">
+      ⚠️ Esto no se guarda solo. Si cerrás la página sin exportar el Excel, se pierde todo lo cargado.
+    </div>
+
+    <div style="font-weight:700; color:var(--amarillo); margin-bottom:8px;">Ventas del día</div>
+    <div id="lista-ventas-dia"></div>
+    <div style="background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:12px; margin:10px 0;">
+      <input type="text" id="venta-manual-descripcion" placeholder="Producto vendido (manual)" style="width:100%; margin-bottom:8px; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="venta-manual-cantidad" placeholder="Cant." value="1" min="1" style="width:70px; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+        <input type="number" id="venta-manual-precio" placeholder="Precio $" min="0" style="flex:1; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+        <button onclick="agregarVentaManual()" style="background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:8px 14px; border-radius:5px;">Agregar</button>
+      </div>
+    </div>
+    <div id="total-ventas-dia" style="text-align:right; font-weight:700; color:var(--verde-stock); margin-bottom:16px;"></div>
+
+    <div style="font-weight:700; color:var(--amarillo); margin-bottom:8px;">Gastos del día</div>
+    <div id="lista-gastos-dia"></div>
+    <div style="background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:12px; margin:10px 0;">
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="gasto-descripcion" placeholder="Descripción del gasto" style="flex:2; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+        <input type="number" id="gasto-monto" placeholder="Monto $" min="0" style="flex:1; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+        <button onclick="agregarGasto()" style="background:var(--rojo-sinstock); color:#fff; border:none; font-weight:700; padding:8px 14px; border-radius:5px;">Agregar</button>
+      </div>
+    </div>
+    <div id="total-gastos-dia" style="text-align:right; font-weight:700; color:var(--rojo-sinstock); margin-bottom:16px;"></div>
+
+    <div style="font-weight:700; color:var(--amarillo); margin-bottom:8px;">Formas de pago recibidas</div>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+      <label style="font-size:0.85rem;">Efectivo
+        <input type="number" id="pago-efectivo" min="0" value="0" oninput="guardarPlanillaLocal()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px; margin-top:4px;">
+      </label>
+      <label style="font-size:0.85rem;">Transferencia (MP)
+        <input type="number" id="pago-transferencia" min="0" value="0" oninput="guardarPlanillaLocal()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px; margin-top:4px;">
+      </label>
+      <label style="font-size:0.85rem;">Crédito / Débito
+        <input type="number" id="pago-tarjeta" min="0" value="0" oninput="guardarPlanillaLocal()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px; margin-top:4px;">
+      </label>
+    </div>
+
+    <button onclick="exportarPlanillaExcel()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:800; padding:14px; border-radius:8px; font-size:1rem; cursor:pointer;">📊 Cerrar día y descargar Excel</button>
+  </div>
+</div>
 
 <!-- Panel del carrito -->
 <div id="overlay-carrito" onclick="if(event.target===this) cerrarCarrito()">
@@ -914,6 +996,7 @@
           <td>
             <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">🛒 Pedido</button>
             <button class="btn-agregar" style="background:var(--amarillo); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}')">🧾 Presup.</button>
+            <button class="btn-agregar" style="background:var(--metal-claro); color:var(--texto); border:1px solid var(--amarillo);" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}')">📋 Venta</button>
           </td>
         `;
       } else {
@@ -1369,6 +1452,256 @@
   }
 
   actualizarContadorPresupuesto();
+
+  /* ============================================
+     PLANILLA DE VENTA DIARIA
+     Se guarda sola en este celular/compu cada vez que
+     agregás algo (para no perderla si se corta la luz,
+     se cierra el navegador sin querer, etc.). Se borra
+     recién cuando tocás "Cerrar día y descargar Excel".
+     ============================================ */
+  let VENTAS_DIA = [];
+  let GASTOS_DIA = [];
+
+  (function revisarSiEsOtroDia() {
+    const hoyStr = new Date().toDateString();
+    const fechaGuardada = localStorage.getItem("planillaFechaDia");
+    if (fechaGuardada === hoyStr) {
+      // Es el mismo día: recuperamos lo que estaba guardado
+      VENTAS_DIA = JSON.parse(localStorage.getItem("planillaVentasDia") || "[]");
+      GASTOS_DIA = JSON.parse(localStorage.getItem("planillaGastosDia") || "[]");
+    } else {
+      // Cambió el día y nadie cerró la caja: se descarta solo
+      localStorage.removeItem("planillaVentasDia");
+      localStorage.removeItem("planillaGastosDia");
+      localStorage.removeItem("planillaPagosDia");
+      localStorage.removeItem("planillaFechaDia");
+    }
+  })();
+
+  function guardarPlanillaLocal() {
+    localStorage.setItem("planillaFechaDia", new Date().toDateString());
+    localStorage.setItem("planillaVentasDia", JSON.stringify(VENTAS_DIA));
+    localStorage.setItem("planillaGastosDia", JSON.stringify(GASTOS_DIA));
+    const pagos = {
+      efectivo: document.getElementById("pago-efectivo") ? document.getElementById("pago-efectivo").value : "0",
+      transferencia: document.getElementById("pago-transferencia") ? document.getElementById("pago-transferencia").value : "0",
+      tarjeta: document.getElementById("pago-tarjeta") ? document.getElementById("pago-tarjeta").value : "0",
+    };
+    localStorage.setItem("planillaPagosDia", JSON.stringify(pagos));
+  }
+
+  function cargarPagosGuardados() {
+    const guardado = JSON.parse(localStorage.getItem("planillaPagosDia") || "null");
+    if (guardado) {
+      document.getElementById("pago-efectivo").value = guardado.efectivo || "0";
+      document.getElementById("pago-transferencia").value = guardado.transferencia || "0";
+      document.getElementById("pago-tarjeta").value = guardado.tarjeta || "0";
+    }
+  }
+
+  function agregarVentaDia(id) {
+    const producto = PRODUCTOS.find(p => p.id === id);
+    if (!producto) return;
+
+    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" se vendieron?", "1");
+    if (respuesta === null) return;
+    const cantidad = Math.max(1, parseInt(respuesta) || 0);
+    if (cantidad <= 0) return;
+
+    const costoArs = producto.precio_usd * valorDolar;
+    const costoConIva = costoArs * (1 + IVA);
+    const ventaSugerido = redondearA50(costoConIva * (1 + margenPct / 100));
+
+    VENTAS_DIA.push({
+      codigo: producto.codigo,
+      descripcion: producto.descripcion || "",
+      cantidad: cantidad,
+      precioUnitario: ventaSugerido
+    });
+    guardarPlanillaLocal();
+    renderPlanilla();
+    mostrarDebug("Venta registrada: " + producto.codigo);
+  }
+
+  function agregarVentaManual() {
+    const desc = document.getElementById("venta-manual-descripcion").value.trim();
+    const cant = Math.max(1, parseInt(document.getElementById("venta-manual-cantidad").value) || 1);
+    const precio = parseFloat(document.getElementById("venta-manual-precio").value);
+
+    if (!desc) { alert("Escribí una descripción para lo vendido."); return; }
+    if (isNaN(precio) || precio < 0) { alert("Ingresá un precio válido."); return; }
+
+    VENTAS_DIA.push({ codigo: "—", descripcion: desc, cantidad: cant, precioUnitario: precio });
+
+    document.getElementById("venta-manual-descripcion").value = "";
+    document.getElementById("venta-manual-cantidad").value = "1";
+    document.getElementById("venta-manual-precio").value = "";
+    guardarPlanillaLocal();
+    renderPlanilla();
+  }
+
+  function quitarVentaDia(indice) {
+    VENTAS_DIA.splice(indice, 1);
+    guardarPlanillaLocal();
+    renderPlanilla();
+  }
+
+  function agregarGasto() {
+    const desc = document.getElementById("gasto-descripcion").value.trim();
+    const monto = parseFloat(document.getElementById("gasto-monto").value);
+
+    if (!desc) { alert("Escribí una descripción para el gasto."); return; }
+    if (isNaN(monto) || monto < 0) { alert("Ingresá un monto válido."); return; }
+
+    GASTOS_DIA.push({ descripcion: desc, monto: monto });
+
+    document.getElementById("gasto-descripcion").value = "";
+    document.getElementById("gasto-monto").value = "";
+    guardarPlanillaLocal();
+    renderPlanilla();
+  }
+
+  function quitarGastoDia(indice) {
+    GASTOS_DIA.splice(indice, 1);
+    guardarPlanillaLocal();
+    renderPlanilla();
+  }
+
+  function abrirPlanilla() {
+    renderPlanilla();
+    cargarPagosGuardados();
+    document.getElementById("overlay-planilla").classList.add("abierto");
+  }
+
+  function cerrarPlanilla() {
+    document.getElementById("overlay-planilla").classList.remove("abierto");
+  }
+
+  function renderPlanilla() {
+    const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    const listaVentas = document.getElementById("lista-ventas-dia");
+    let totalVentas = 0;
+    if (VENTAS_DIA.length === 0) {
+      listaVentas.innerHTML = `<div id="carrito-vacio">Sin ventas cargadas todavía.</div>`;
+    } else {
+      listaVentas.innerHTML = VENTAS_DIA.map((item, i) => {
+        const subtotal = item.precioUnitario * item.cantidad;
+        totalVentas += subtotal;
+        return `
+          <div class="item-carrito">
+            <div class="info">
+              <div class="cod">${item.codigo} × ${item.cantidad}</div>
+              <div class="desc">${item.descripcion}</div>
+            </div>
+            <div class="subtotal">$${fmt(subtotal)}</div>
+            <button class="btn-quitar" onclick="quitarVentaDia(${i})">✕</button>
+          </div>
+        `;
+      }).join("");
+    }
+    document.getElementById("total-ventas-dia").textContent = "Total ventas: $" + fmt(totalVentas);
+
+    const listaGastos = document.getElementById("lista-gastos-dia");
+    let totalGastos = 0;
+    if (GASTOS_DIA.length === 0) {
+      listaGastos.innerHTML = `<div id="carrito-vacio">Sin gastos cargados todavía.</div>`;
+    } else {
+      listaGastos.innerHTML = GASTOS_DIA.map((g, i) => {
+        totalGastos += g.monto;
+        return `
+          <div class="item-carrito">
+            <div class="info"><div class="desc">${g.descripcion}</div></div>
+            <div class="subtotal" style="color:var(--rojo-sinstock);">$${fmt(g.monto)}</div>
+            <button class="btn-quitar" onclick="quitarGastoDia(${i})">✕</button>
+          </div>
+        `;
+      }).join("");
+    }
+    document.getElementById("total-gastos-dia").textContent = "Total gastos: $" + fmt(totalGastos);
+  }
+
+  function exportarPlanillaExcel() {
+    if (VENTAS_DIA.length === 0 && GASTOS_DIA.length === 0) {
+      alert("No cargaste ninguna venta ni gasto todavía.");
+      return;
+    }
+
+    const efectivo = parseFloat(document.getElementById("pago-efectivo").value) || 0;
+    const transferencia = parseFloat(document.getElementById("pago-transferencia").value) || 0;
+    const tarjeta = parseFloat(document.getElementById("pago-tarjeta").value) || 0;
+    const totalCobrado = efectivo + transferencia + tarjeta;
+
+    const totalVentas = VENTAS_DIA.reduce((s, i) => s + i.precioUnitario * i.cantidad, 0);
+    const totalGastos = GASTOS_DIA.reduce((s, g) => s + g.monto, 0);
+    const gananciaNeta = totalVentas - totalGastos;
+    const diferencia = totalCobrado - totalVentas;
+
+    const ahora = new Date();
+    const fecha = ahora.toLocaleDateString('es-AR');
+    const hora = ahora.toLocaleTimeString('es-AR');
+
+    const filas = [];
+    filas.push(["PLANILLA DE VENTA DIARIA - S-M MOTOS"]);
+    filas.push(["Fecha:", fecha, "Hora de cierre:", hora]);
+    filas.push([]);
+
+    filas.push(["VENTAS"]);
+    filas.push(["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]);
+    const filaInicioVentas = filas.length + 1;
+    VENTAS_DIA.forEach(item => {
+      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(item.precioUnitario*item.cantidad*100)/100]);
+    });
+    const filaFinVentas = filas.length;
+    filas.push(["", "", "", "TOTAL VENTAS =", Math.round(totalVentas*100)/100]);
+    filas.push([]);
+
+    filas.push(["GASTOS"]);
+    filas.push(["DESCRIPCION", "", "", "", "MONTO"]);
+    GASTOS_DIA.forEach(g => {
+      filas.push([g.descripcion, "", "", "", Math.round(g.monto*100)/100]);
+    });
+    filas.push(["", "", "", "TOTAL GASTOS =", Math.round(totalGastos*100)/100]);
+    filas.push([]);
+
+    filas.push(["FORMAS DE PAGO RECIBIDAS"]);
+    filas.push(["Efectivo", "", "", "", Math.round(efectivo*100)/100]);
+    filas.push(["Transferencia (MP)", "", "", "", Math.round(transferencia*100)/100]);
+    filas.push(["Crédito / Débito", "", "", "", Math.round(tarjeta*100)/100]);
+    filas.push(["", "", "", "TOTAL COBRADO =", Math.round(totalCobrado*100)/100]);
+    filas.push([]);
+
+    filas.push(["RESUMEN DEL DÍA"]);
+    filas.push(["Total Ventas", "", "", "", Math.round(totalVentas*100)/100]);
+    filas.push(["Total Gastos", "", "", "", Math.round(totalGastos*100)/100]);
+    filas.push(["Ganancia Neta (Ventas - Gastos)", "", "", "", Math.round(gananciaNeta*100)/100]);
+    filas.push(["Total Cobrado (formas de pago)", "", "", "", Math.round(totalCobrado*100)/100]);
+    filas.push(["Diferencia (Cobrado - Ventas)", "", "", "", Math.round(diferencia*100)/100]);
+
+    const hoja = XLSX.utils.aoa_to_sheet(filas);
+    hoja["!cols"] = [{wch:28},{wch:14},{wch:35},{wch:14},{wch:14}];
+    if (VENTAS_DIA.length > 0) {
+      hoja["!autofilter"] = { ref: `A${filaInicioVentas-1}:E${filaFinVentas}` };
+    }
+
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Cierre del dia");
+
+    const sello = ahora.toISOString().slice(0,10);
+    XLSX.writeFile(libro, "Cierre_" + sello + ".xlsx", { bookType: "xlsx" });
+
+    // Al "cerrar el día" se vacía todo, como corresponde a un cierre de caja
+    VENTAS_DIA = [];
+    GASTOS_DIA = [];
+    localStorage.removeItem("planillaVentasDia");
+    localStorage.removeItem("planillaGastosDia");
+    localStorage.removeItem("planillaPagosDia");
+    document.getElementById("pago-efectivo").value = "0";
+    document.getElementById("pago-transferencia").value = "0";
+    document.getElementById("pago-tarjeta").value = "0";
+    renderPlanilla();
+  }
 </script>
 
 </body>
