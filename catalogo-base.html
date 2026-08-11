@@ -655,7 +655,8 @@
     </label>
     <input type="text" id="input-cliente-presupuesto" placeholder="Nombre del cliente (opcional)" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:10px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
     <button onclick="exportarPresupuestoExcel()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">📊 Exportar a Excel</button>
-    <button onclick="generarImagenPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer;">🖼️ Generar imagen / Compartir</button>
+    <button onclick="generarImagenPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">🖼️ Generar imagen / Compartir</button>
+    <button onclick="confirmarVaciarPresupuesto()" style="width:100%; background:none; color:var(--rojo-sinstock); border:1px solid var(--rojo-sinstock); font-weight:700; padding:10px; border-radius:8px; font-size:0.9rem; cursor:pointer;">🗑️ Vaciar presupuesto</button>
   </div>
 </div>
 
@@ -1360,6 +1361,13 @@
     if (inputDescuento) inputDescuento.value = "0";
   }
 
+  function confirmarVaciarPresupuesto() {
+    if (PRESUPUESTO.length === 0) return;
+    if (confirm("¿Seguro que querés vaciar el presupuesto? Se van a borrar los " + PRESUPUESTO.length + " ítems cargados.")) {
+      vaciarPresupuesto();
+    }
+  }
+
   function actualizarContadorPresupuesto() {
     const totalItems = PRESUPUESTO.reduce((sum, item) => sum + item.cantidad, 0);
     const contador = document.getElementById("contador-presupuesto");
@@ -1466,8 +1474,6 @@
     const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
     const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + "_" + sello + ".xlsx";
     XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
-
-    vaciarPresupuesto();
   }
 
   async function generarImagenPresupuesto() {
@@ -1546,10 +1552,8 @@
         if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
           try {
             await navigator.share({ files: [archivo], title: "Presupuesto S-M Motos" });
-            vaciarPresupuesto();
             return;
           } catch (e) {
-            // si cancela el share, no vaciamos: puede querer intentar de nuevo
             return;
           }
         }
@@ -1561,7 +1565,6 @@
         a.download = nombreArchivo;
         a.click();
         URL.revokeObjectURL(url);
-        vaciarPresupuesto();
       }, "image/png");
     } catch (e) {
       mostrarDebug("No se pudo generar la imagen: " + e.message);
