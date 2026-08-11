@@ -627,7 +627,17 @@
 <div id="overlay-presupuesto" onclick="if(event.target===this) cerrarPresupuesto()">
   <div id="panel-presupuesto">
     <h2>Presupuesto <button onclick="cerrarPresupuesto()">✕</button></h2>
+
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button id="btn-modo-minorista" onclick="cambiarModoPresupuesto('minorista')" style="flex:1; padding:10px; border-radius:6px; border:1px solid var(--amarillo); font-weight:700; cursor:pointer;">Minorista</button>
+      <button id="btn-modo-mayorista" onclick="cambiarModoPresupuesto('mayorista')" style="flex:1; padding:10px; border-radius:6px; border:1px solid var(--amarillo); font-weight:700; cursor:pointer;">Mayorista</button>
+    </div>
+    <div style="font-size:0.75rem; color:var(--texto-tenue); margin-bottom:14px;">
+      Minorista = precio con tu margen de ganancia. Mayorista = solo costo + IVA, sin margen.
+    </div>
+
     <div id="lista-presupuesto"></div>
+    <button onclick="recalcularPreciosPresupuesto()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:1px dashed var(--texto-tenue); font-size:0.8rem; padding:8px; border-radius:6px; cursor:pointer; margin:8px 0;">🔄 Recalcular precios con el dólar/modo actual</button>
 
     <div style="background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:12px; margin:14px 0;">
       <div style="font-size:0.85rem; color:var(--texto-tenue); margin-bottom:8px;">Agregar ítem que no está en el catálogo:</div>
@@ -1214,6 +1224,33 @@
      ============================================ */
   let PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
   let contadorManual = 0;
+  let modoPresupuesto = localStorage.getItem("modoPresupuestoSMMotos") || "minorista";
+
+  function cambiarModoPresupuesto(modo) {
+    modoPresupuesto = modo;
+    localStorage.setItem("modoPresupuestoSMMotos", modo);
+    actualizarBotonesModo();
+  }
+
+  function actualizarBotonesModo() {
+    const btnMin = document.getElementById("btn-modo-minorista");
+    const btnMay = document.getElementById("btn-modo-mayorista");
+    if (!btnMin || !btnMay) return;
+    btnMin.style.background = modoPresupuesto === "minorista" ? "var(--amarillo)" : "transparent";
+    btnMin.style.color = modoPresupuesto === "minorista" ? "#1a1a1a" : "var(--texto)";
+    btnMay.style.background = modoPresupuesto === "mayorista" ? "var(--amarillo)" : "transparent";
+    btnMay.style.color = modoPresupuesto === "mayorista" ? "#1a1a1a" : "var(--texto)";
+  }
+
+  // Calcula el precio de un producto del catálogo según el modo actual
+  function precioSegunModo(producto) {
+    const costoArs = producto.precio_usd * valorDolar;
+    const costoConIva = costoArs * (1 + IVA);
+    if (modoPresupuesto === "mayorista") {
+      return Math.round(costoConIva * 100) / 100; // solo costo+IVA, sin margen
+    }
+    return redondearA50(costoConIva * (1 + margenPct / 100)); // con margen
+  }
 
   function guardarPresupuesto() {
     localStorage.setItem("presupuestoSMMotos", JSON.stringify(PRESUPUESTO));
@@ -1229,9 +1266,7 @@
     const cantidad = Math.max(1, parseInt(respuesta) || 0);
     if (cantidad <= 0) return;
 
-    const costoArs = producto.precio_usd * valorDolar;
-    const costoConIva = costoArs * (1 + IVA);
-    const ventaSugerido = redondearA50(costoConIva * (1 + margenPct / 100));
+    const precioFinal = precioSegunModo(producto);
 
     const existente = PRESUPUESTO.find(item => item.id === id);
     if (existente) {
@@ -1242,12 +1277,12 @@
         codigo: producto.codigo,
         descripcion: producto.descripcion || "",
         cantidad: cantidad,
-        precioUnitario: ventaSugerido,
+        precioUnitario: precioFinal,
         manual: false
       });
     }
     guardarPresupuesto();
-    mostrarDebug("Agregado al presupuesto: " + producto.codigo);
+    mostrarDebug("Agregado al presupuesto (" + modoPresupuesto + "): " + producto.codigo);
   }
 
   function agregarItemManual() {
@@ -1288,6 +1323,35 @@
     renderPresupuesto();
   }
 
+  function editarPrecioPresupuesto(id) {
+    const item = PRESUPUESTO.find(i => i.id === id);
+    if (!item) return;
+    const respuesta = prompt("Nuevo precio unitario para \"" + item.descripcion + "\":", item.precioUnitario.toFixed(2));
+    if (respuesta === null) return;
+    const nuevoPrecio = parseFloat(respuesta);
+    if (isNaN(nuevoPrecio) || nuevoPrecio < 0) {
+      alert("Precio inválido.");
+      return;
+    }
+    item.precioUnitario = nuevoPrecio;
+    guardarPresupuesto();
+    renderPresupuesto();
+  }
+
+  function recalcularPreciosPresupuesto() {
+    let recalculados = 0;
+    PRESUPUESTO.forEach(item => {
+      if (item.manual) return; // los ítems manuales no tienen fórmula, no se tocan
+      const producto = PRODUCTOS.find(p => p.id === item.id);
+      if (!producto) return;
+      item.precioUnitario = precioSegunModo(producto);
+      recalculados++;
+    });
+    guardarPresupuesto();
+    renderPresupuesto();
+    mostrarDebug(recalculados + " precio(s) recalculado(s) con el dólar y modo actual.");
+  }
+
   function vaciarPresupuesto() {
     PRESUPUESTO = [];
     guardarPresupuesto();
@@ -1309,6 +1373,7 @@
 
   function abrirPresupuesto() {
     renderPresupuesto();
+    actualizarBotonesModo();
     document.getElementById("overlay-presupuesto").classList.add("abierto");
   }
 
@@ -1338,6 +1403,7 @@
             <div class="desc">${item.descripcion}</div>
           </div>
           <div class="subtotal">$${fmt(sub)}</div>
+          <button class="btn-quitar" style="color:var(--amarillo);" onclick="editarPrecioPresupuesto('${item.id.replace(/'/g,"\\'")}')">✏️</button>
           <button class="btn-quitar" onclick="quitarDePresupuesto('${item.id.replace(/'/g,"\\'")}')">✕</button>
         </div>
       `;
