@@ -516,38 +516,6 @@
     font-size: 1.2rem;
     cursor: pointer;
   }
-
-  #overlay-stock {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 30;
-    align-items: flex-end;
-  }
-  #overlay-stock.abierto { display: flex; }
-  #panel-stock {
-    background: var(--metal);
-    width: 100%;
-    max-height: 85vh;
-    overflow-y: auto;
-    border-radius: 16px 16px 0 0;
-    padding: 20px;
-  }
-  #panel-stock h2 {
-    font-size: 1.1rem;
-    margin-bottom: 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  #panel-stock h2 button {
-    background: none;
-    border: none;
-    color: var(--texto-tenue);
-    font-size: 1.2rem;
-    cursor: pointer;
-  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -600,9 +568,8 @@
       <option value="">Todas las categorías</option>
     </select>
   </div>
-  <button id="btn-presupuesto-grande" onclick="abrirPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:12px;">🧾 Hacer Presupuesto</button>
-  <button id="btn-planilla-grande" onclick="abrirPlanilla()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:1px solid var(--amarillo); font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:12px;">📋 Planilla de Venta Diaria</button>
-  <button id="btn-stock-grande" onclick="abrirStock()" style="width:100%; background:var(--verde-stock); color:#0a0a0a; border:none; font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:16px;">📦 Ver Stock y su Valor</button>
+  <button onclick="abrirPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:12px;">🧾 Hacer Presupuesto</button>
+  <button onclick="abrirPlanilla()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:1px solid var(--amarillo); font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:16px;">📋 Planilla de Venta Diaria</button>
   <div id="contador"></div>
 
   <table>
@@ -693,17 +660,6 @@
   </div>
 </div>
 
-<!-- Mini modal para pedir un número (cantidad o precio) con teclado numérico -->
-<div id="fondo-prompt-numerico" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70;"></div>
-<div id="modal-prompt-numerico" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--metal); border:1px solid var(--metal-claro); border-radius:10px; padding:20px; width:85%; max-width:320px; z-index:71; text-align:center;">
-  <div id="texto-prompt-numerico" style="font-weight:700; margin-bottom:14px;"></div>
-  <input type="number" inputmode="numeric" id="input-prompt-numerico" style="width:100%; background:var(--asfalto); border:1px solid var(--amarillo); color:var(--texto); padding:12px; border-radius:6px; font-size:1.2rem; text-align:center; margin-bottom:14px;">
-  <div style="display:flex; gap:8px;">
-    <button onclick="resolverPromptNumerico(false)" style="flex:1; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">Cancelar</button>
-    <button onclick="resolverPromptNumerico(true)" style="flex:1; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">Aceptar</button>
-  </div>
-</div>
-
 <!-- Plantilla oculta para generar la imagen del presupuesto -->
 <div id="plantilla-presupuesto-img" style="position:fixed; left:-9999px; top:0; width:600px; background:#ffffff; color:#111; font-family:Arial, sans-serif; padding:24px;"></div>
 
@@ -770,16 +726,6 @@
   </div>
 </div>
 
-<!-- Panel de Stock y su Valor -->
-<div id="overlay-stock" onclick="if(event.target===this) cerrarStock()">
-  <div id="panel-stock">
-    <h2>Stock y su Valor <button onclick="cerrarStock()">✕</button></h2>
-    <input type="text" id="buscador-stock" placeholder="Buscar dentro del stock..." oninput="renderStock()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:10px; border-radius:6px; margin-bottom:14px; font-size:0.9rem;">
-    <div id="lista-stock"></div>
-    <div id="total-valor-stock" style="text-align:right; font-weight:800; color:var(--verde-stock); font-size:1.1rem; margin-top:14px; padding-top:14px; border-top:1px solid var(--metal-claro);"></div>
-  </div>
-</div>
-
 <!-- Panel del carrito -->
 <div id="overlay-carrito" onclick="if(event.target===this) cerrarCarrito()">
   <div id="panel-carrito">
@@ -803,12 +749,6 @@
   // Redondea al múltiplo de 50 más cercano (505 -> 500, 525.01 -> 550, 576 -> 600)
   function redondearA50(n) {
     return Math.round(n / 50) * 50;
-  }
-
-  // Formato "$1.234,56" para que los números en Excel/imagen se
-  // distingan bien (no queden como números pelados).
-  function fmtPesos(n) {
-    return "$" + n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   }
 
   let logueado = false;
@@ -836,7 +776,7 @@
     while (true) {
       const { data, error } = await db
         .from("Producto")
-        .select("id, codigo, proveedor, descripcion, categoria, precio_usd, stock")
+        .select("id, codigo, proveedor, descripcion, categoria, precio_usd")
         .order("codigo", { ascending: true })
         .range(desde, desde + TANDA - 1);
 
@@ -956,133 +896,31 @@
   }
 
   /* ============================================
-     LOGIN CON DOS ROLES: admin (vos) y cliente.
-     Según cuál contraseña se use, se guarda el rol y
-     se muestran/ocultan las herramientas de admin.
+     LOGIN SIMPLE: una sola contraseña compartida,
+     sin cuentas individuales. Se guarda en localStorage
+     para no tener que reingresarla cada vez que se
+     vuelve a entrar a la página.
      ============================================ */
-  const PASSWORD_ADMIN = "chelo1234";
-  const PASSWORD_CLIENTE = "Cliente1234";
-
-  let rolUsuario = null; // 'admin' | 'cliente' | null
+  const PASSWORD_MAYORISTA = "smmotos1234";
 
   function iniciarSesion() {
     const password = document.getElementById("password").value;
-    if (password === PASSWORD_ADMIN) {
+    if (password === PASSWORD_MAYORISTA) {
       logueado = true;
-      rolUsuario = "admin";
-    } else if (password === PASSWORD_CLIENTE) {
-      logueado = true;
-      rolUsuario = "cliente";
+      localStorage.setItem("sesionSMMotos", "true");
+      actualizarUI();
+      renderTabla();
+      mostrarDebug("Sesión iniciada correctamente.");
     } else {
       mostrarDebug("Contraseña incorrecta.");
-      return;
     }
-    localStorage.setItem("sesionSMMotos", rolUsuario);
-    if (rolUsuario === "cliente") mostrarCostos = false; // los clientes nunca ven el costo puro
-    actualizarUI();
-    aplicarPermisosPorRol();
-    renderTabla();
-    mostrarDebug("Sesión iniciada (" + rolUsuario + ").");
   }
 
   function cerrarSesion() {
     logueado = false;
-    rolUsuario = null;
     localStorage.removeItem("sesionSMMotos");
     actualizarUI();
-    aplicarPermisosPorRol();
     renderTabla();
-  }
-
-  // Muestra u oculta los botones/paneles que son solo para admin
-  function aplicarPermisosPorRol() {
-    const esAdmin = rolUsuario === "admin";
-    const idsSoloAdmin = [
-      "btn-ojo", "caja-margen",           // ojo y margen (arriba)
-      "btn-stock-grande"                  // solo el stock queda exclusivo del admin
-    ];
-    idsSoloAdmin.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = esAdmin ? "" : "none";
-    });
-  }
-
-  async function editarPrecioProducto(id) {
-    const producto = PRODUCTOS.find(p => p.id === id);
-    if (!producto) return;
-
-    const costoConIvaActual = producto.precio_usd * valorDolar * (1 + IVA);
-    const respuesta = await pedirNumero(
-      "Precio actual (costo+IVA) de \"" + producto.descripcion + "\": $" + costoConIvaActual.toFixed(2) + ". Nuevo precio en PESOS (con IVA):",
-      Math.round(costoConIvaActual)
-    );
-    if (respuesta === null) return;
-    const nuevoPrecioPesos = parseFloat(respuesta);
-    if (isNaN(nuevoPrecioPesos) || nuevoPrecioPesos <= 0) {
-      alert("Precio inválido.");
-      return;
-    }
-
-    const nuevoPrecioUsd = Math.round((nuevoPrecioPesos / (1 + IVA) / valorDolar) * 10000) / 10000;
-
-    try {
-      const { error } = await db.from("Producto").update({ precio_usd: nuevoPrecioUsd }).eq("id", id);
-      if (error) {
-        mostrarDebug("No se pudo actualizar el precio: " + error.message);
-        return;
-      }
-      producto.precio_usd = nuevoPrecioUsd;
-      renderTabla();
-      mostrarDebug("Precio actualizado: " + producto.codigo + " -> USD " + nuevoPrecioUsd);
-    } catch (e) {
-      mostrarDebug("Error de conexión al actualizar precio: " + e.message);
-    }
-  }
-
-  async function agregarStockProducto(id) {
-    const producto = PRODUCTOS.find(p => p.id === id);
-    if (!producto) return;
-
-    const stockActual = producto.stock || 0;
-    const respuesta = await pedirNumero(
-      "Stock actual de \"" + producto.descripcion + "\": " + stockActual + ". ¿Cuántas unidades ENTRARON?", "1"
-    );
-    if (respuesta === null) return;
-    const cantidad = parseInt(respuesta);
-    if (isNaN(cantidad) || cantidad <= 0) {
-      alert("Cantidad inválida.");
-      return;
-    }
-
-    const nuevoStock = stockActual + cantidad;
-
-    try {
-      const { error } = await db.from("Producto").update({ stock: nuevoStock }).eq("id", id);
-      if (error) {
-        mostrarDebug("No se pudo actualizar el stock: " + error.message);
-        return;
-      }
-      producto.stock = nuevoStock;
-      renderTabla();
-      mostrarDebug("Stock actualizado: " + producto.codigo + " -> " + nuevoStock + " unidades.");
-    } catch (e) {
-      mostrarDebug("Error de conexión al actualizar stock: " + e.message);
-    }
-  }
-
-  // Descuenta stock en Supabase cuando se vende un producto del catálogo
-  async function descontarStock(producto, cantidad) {
-    if (!producto || producto.stock === null || producto.stock === undefined) return;
-    const nuevoStock = producto.stock - cantidad;
-    try {
-      const { error } = await db.from("Producto").update({ stock: nuevoStock }).eq("id", producto.id);
-      if (!error) {
-        producto.stock = nuevoStock;
-      }
-    } catch (e) {
-      // si falla la conexión, no bloqueamos la venta; el stock se puede
-      // ajustar después a mano con el botón 📦 +Stock
-    }
   }
 
   function mostrarDebug(msg) {
@@ -1095,7 +933,7 @@
     const estado = document.getElementById("estado-login");
     const btnSalir = document.getElementById("btn-salir");
     if (logueado) {
-      estado.textContent = "Sesión activa (" + (rolUsuario === "admin" ? "Admin" : "Cliente") + ")";
+      estado.textContent = "Sesión activa";
       estado.classList.add("activo");
       btnSalir.style.display = "inline-block";
     } else {
@@ -1106,14 +944,10 @@
   }
 
   async function revisarSesionExistente() {
-    const rolGuardado = localStorage.getItem("sesionSMMotos");
-    if (rolGuardado === "admin" || rolGuardado === "cliente") {
+    if (localStorage.getItem("sesionSMMotos") === "true") {
       logueado = true;
-      rolUsuario = rolGuardado;
-      if (rolUsuario === "cliente") mostrarCostos = false;
       actualizarUI();
     }
-    aplicarPermisosPorRol();
     cargarConfigGuardada();
     await cargarProductos();
   }
@@ -1191,10 +1025,6 @@
             <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">🛒 Pedido</button>
             <button class="btn-agregar" style="background:var(--amarillo); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}')">🧾 Presup.</button>
             <button class="btn-agregar" style="background:var(--metal-claro); color:var(--texto); border:1px solid var(--amarillo);" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}')">📋 Venta</button>
-            ${rolUsuario === "admin" ? `
-              <button class="btn-agregar" style="background:none; color:var(--amarillo); border:1px solid var(--amarillo);" onclick="editarPrecioProducto('${p.id.replace(/'/g,"\\'")}')">✏️ Precio</button>
-              <button class="btn-agregar" style="background:var(--verde-stock); color:#0a0a0a;" onclick="agregarStockProducto('${p.id.replace(/'/g,"\\'")}')">📦 +Stock</button>
-            ` : ""}
           </td>
         `;
       } else {
@@ -1208,7 +1038,7 @@
 
       tr.innerHTML = `
         <td class="codigo">${p.codigo}</td>
-        <td>${p.descripcion || ""}${p.categoria ? `<span class="categoria-tag">${p.categoria}</span>` : ""}${(rolUsuario === "admin" && p.stock !== null && p.stock !== undefined) ? `<span class="categoria-tag" style="color:${p.stock > 0 ? 'var(--verde-stock)' : 'var(--rojo-sinstock)'};">Stock: ${p.stock}</span>` : ""}</td>
+        <td>${p.descripcion || ""}${p.categoria ? `<span class="categoria-tag">${p.categoria}</span>` : ""}</td>
         <td><span class="proveedor-badge">${p.proveedor || "—"}</span></td>
         ${celdasNumericas}
         ${celdaPedido}
@@ -1237,11 +1067,11 @@
     actualizarContadorCarrito();
   }
 
-  async function agregarAlCarrito(id) {
+  function agregarAlCarrito(id) {
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const respuesta = await pedirNumero("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al pedido?", "1");
+    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al pedido?", "1");
     if (respuesta === null) return; // canceló, no se agrega nada
     const cantidad = Math.max(1, parseInt(respuesta) || 0);
     if (cantidad <= 0) return;
@@ -1338,12 +1168,12 @@
     CARRITO.forEach(item => {
       const subtotal = item.precioUnitario * item.cantidad;
       total += subtotal;
-      filas.push([item.cantidad, item.codigo, item.descripcion, fmtPesos(item.precioUnitario), fmtPesos(subtotal)]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(subtotal*100)/100]);
     });
     const filaTotal = 3 + CARRITO.length + 2;
     filas.push([]);
     filas.push([]);
-    filas.push(["", "", "", "TOTAL =", fmtPesos(total)]);
+    filas.push(["", "", "", "TOTAL =", Math.round(total*100)/100]);
 
     const hoja = XLSX.utils.aoa_to_sheet(filas);
     hoja["!cols"] = [{wch:8}, {wch:14}, {wch:45}, {wch:12}, {wch:14}];
@@ -1428,11 +1258,11 @@
     actualizarContadorPresupuesto();
   }
 
-  async function agregarAPresupuesto(id) {
+  function agregarAPresupuesto(id) {
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const respuesta = await pedirNumero("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al presupuesto?", "1");
+    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al presupuesto?", "1");
     if (respuesta === null) return; // canceló, no se agrega nada
     const cantidad = Math.max(1, parseInt(respuesta) || 0);
     if (cantidad <= 0) return;
@@ -1494,10 +1324,10 @@
     renderPresupuesto();
   }
 
-  async function editarPrecioPresupuesto(id) {
+  function editarPrecioPresupuesto(id) {
     const item = PRESUPUESTO.find(i => i.id === id);
     if (!item) return;
-    const respuesta = await pedirNumero("Nuevo precio unitario para \"" + item.descripcion + "\":", item.precioUnitario.toFixed(2));
+    const respuesta = prompt("Nuevo precio unitario para \"" + item.descripcion + "\":", item.precioUnitario.toFixed(2));
     if (respuesta === null) return;
     const nuevoPrecio = parseFloat(respuesta);
     if (isNaN(nuevoPrecio) || nuevoPrecio < 0) {
@@ -1621,17 +1451,17 @@
     PRESUPUESTO.forEach(item => {
       const sub = item.precioUnitario * item.cantidad;
       subtotal += sub;
-      filas.push([item.cantidad, item.codigo, item.descripcion, fmtPesos(item.precioUnitario), fmtPesos(sub)]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(sub*100)/100]);
     });
     filas.push([]);
     const montoDescuento = subtotal * (descuentoPct / 100);
     const total = subtotal - montoDescuento;
     if (descuentoPct > 0) {
-      filas.push(["", "", "", "SUBTOTAL =", fmtPesos(subtotal)]);
-      filas.push(["", "", "", `DESCUENTO (${descuentoPct}%) =`, "-" + fmtPesos(montoDescuento)]);
-      filas.push(["", "", "", "TOTAL PRESUPUESTO =", fmtPesos(total)]);
+      filas.push(["", "", "", "SUBTOTAL =", Math.round(subtotal*100)/100]);
+      filas.push(["", "", "", `DESCUENTO (${descuentoPct}%) =`, -Math.round(montoDescuento*100)/100]);
+      filas.push(["", "", "", "TOTAL PRESUPUESTO =", Math.round(total*100)/100]);
     } else {
-      filas.push(["", "", "", "TOTAL PRESUPUESTO =", fmtPesos(total)]);
+      filas.push(["", "", "", "TOTAL PRESUPUESTO =", Math.round(total*100)/100]);
     }
 
     const hoja = XLSX.utils.aoa_to_sheet(filas);
@@ -1646,15 +1476,20 @@
     XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
   }
 
-  const ITEMS_POR_IMAGEN = 20;
-
-  // Arma el HTML de una "página" del presupuesto (un pedazo de hasta
-  // 20 productos) y lo mete en la plantilla oculta, lista para capturar.
-  function armarPaginaPresupuestoImg(itemsPagina, numeroPagina, totalPaginas, cliente, fecha, subtotalGeneral, descuentoPct, totalGeneral) {
+  async function generarImagenPresupuesto() {
+    if (PRESUPUESTO.length === 0) {
+      alert("Todavía no agregaste nada al presupuesto.");
+      return;
+    }
+    const cliente = document.getElementById("input-cliente-presupuesto").value.trim();
+    const fecha = new Date().toLocaleDateString('es-AR');
+    const descuentoPct = parseFloat(document.getElementById("input-descuento-presupuesto").value) || 0;
     const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-    const filasHtml = itemsPagina.map((item, i) => {
+    let subtotal = 0;
+    const filasHtml = PRESUPUESTO.map((item, i) => {
       const sub = item.precioUnitario * item.cantidad;
+      subtotal += sub;
       const fondoFila = i % 2 === 0 ? "#ffffff" : "#f5f5f5";
       return `
         <tr style="background:${fondoFila};">
@@ -1666,18 +1501,15 @@
       `;
     }).join("");
 
-    // Los totales generales (con descuento) solo se muestran en la
-    // última página, para no repetir/confundir en las anteriores.
-    let bloqueTotales = "";
-    if (numeroPagina === totalPaginas) {
-      bloqueTotales = descuentoPct > 0
-        ? `
-          <div style="text-align:right; font-size:0.9rem; color:#555; margin-top:14px;">Subtotal: $${fmt(subtotalGeneral)}</div>
-          <div style="text-align:right; font-size:0.9rem; color:#c0392b;">Descuento (${descuentoPct}%): -$${fmt(subtotalGeneral - totalGeneral)}</div>
-          <div style="text-align:right; font-size:1.1rem; font-weight:800; color:#111;">TOTAL: $${fmt(totalGeneral)}</div>
-        `
-        : `<div style="text-align:right; font-size:1.1rem; font-weight:800; margin-top:14px; color:#111;">TOTAL: $${fmt(totalGeneral)}</div>`;
-    }
+    const montoDescuento = subtotal * (descuentoPct / 100);
+    const total = subtotal - montoDescuento;
+    const bloqueTotales = descuentoPct > 0
+      ? `
+        <div style="text-align:right; font-size:0.9rem; color:#555; margin-top:14px;">Subtotal: $${fmt(subtotal)}</div>
+        <div style="text-align:right; font-size:0.9rem; color:#c0392b;">Descuento (${descuentoPct}%): -$${fmt(montoDescuento)}</div>
+        <div style="text-align:right; font-size:1.1rem; font-weight:800; color:#111;">TOTAL: $${fmt(total)}</div>
+      `
+      : `<div style="text-align:right; font-size:1.1rem; font-weight:800; margin-top:14px; color:#111;">TOTAL: $${fmt(total)}</div>`;
 
     const plantilla = document.getElementById("plantilla-presupuesto-img");
     plantilla.innerHTML = `
@@ -1687,7 +1519,7 @@
           <div style="font-size:0.8rem; color:#555;">DISTRIBUIDORA MAYORISTA · VENTA DE REPUESTOS Y ACCESORIOS</div>
         </div>
         <div style="margin-bottom:12px; font-size:0.9rem; color:#111;">
-          <strong>PRESUPUESTO</strong>${totalPaginas > 1 ? ` — Página ${numeroPagina} de ${totalPaginas}` : ""}<br>
+          <strong>PRESUPUESTO</strong><br>
           ${cliente ? "Cliente: " + cliente + "<br>" : ""}
           Fecha: ${fecha}
         </div>
@@ -1707,63 +1539,33 @@
         </div>
       </div>
     `;
-    return plantilla;
-  }
-
-  async function generarImagenPresupuesto() {
-    if (PRESUPUESTO.length === 0) {
-      alert("Todavía no agregaste nada al presupuesto.");
-      return;
-    }
-    const cliente = document.getElementById("input-cliente-presupuesto").value.trim();
-    const fecha = new Date().toLocaleDateString('es-AR');
-    const descuentoPct = parseFloat(document.getElementById("input-descuento-presupuesto").value) || 0;
-
-    const subtotalGeneral = PRESUPUESTO.reduce((s, it) => s + it.precioUnitario * it.cantidad, 0);
-    const totalGeneral = subtotalGeneral - subtotalGeneral * (descuentoPct / 100);
-
-    // Partimos el presupuesto en páginas de hasta 20 productos cada una
-    const paginas = [];
-    for (let i = 0; i < PRESUPUESTO.length; i += ITEMS_POR_IMAGEN) {
-      paginas.push(PRESUPUESTO.slice(i, i + ITEMS_POR_IMAGEN));
-    }
-
-    mostrarDebug("Generando " + paginas.length + " imagen(es)...");
 
     try {
-      const archivos = [];
-      for (let p = 0; p < paginas.length; p++) {
-        const plantilla = armarPaginaPresupuestoImg(
-          paginas[p], p + 1, paginas.length, cliente, fecha, subtotalGeneral, descuentoPct, totalGeneral
-        );
-        const canvas = await html2canvas(plantilla, { backgroundColor: "#ffffff", scale: 2 });
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+      const canvas = await html2canvas(plantilla, { backgroundColor: "#ffffff", scale: 2 });
+      canvas.toBlob(async (blob) => {
         const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
-        const sufijoPagina = paginas.length > 1 ? "_pag" + (p + 1) + "de" + paginas.length : "";
-        const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + sufijoPagina + "_" + sello + ".png";
-        archivos.push(new File([blob], nombreArchivo, { type: "image/png" }));
-      }
+        const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + "_" + sello + ".png";
+        const archivo = new File([blob], nombreArchivo, { type: "image/png" });
 
-      // Si el navegador soporta compartir archivos (celular), intentamos
-      // mandar todas las páginas juntas de una sola vez.
-      if (navigator.canShare && navigator.canShare({ files: archivos })) {
-        try {
-          await navigator.share({ files: archivos, title: "Presupuesto S-M Motos" });
-          return;
-        } catch (e) {
-          return;
+        // Si el navegador soporta compartir archivos (celular), abrimos
+        // directo el menú para elegir WhatsApp u otra app.
+        if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+          try {
+            await navigator.share({ files: [archivo], title: "Presupuesto S-M Motos" });
+            return;
+          } catch (e) {
+            return;
+          }
         }
-      }
 
-      // Si no se puede compartir directo, se descargan una por una
-      archivos.forEach(archivo => {
-        const url = URL.createObjectURL(archivo);
+        // Si no se puede compartir directo, se descarga la imagen
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = archivo.name;
+        a.download = nombreArchivo;
         a.click();
         URL.revokeObjectURL(url);
-      });
+      }, "image/png");
     } catch (e) {
       mostrarDebug("No se pudo generar la imagen: " + e.message);
     }
@@ -1795,28 +1597,6 @@
     if (_resolverFormaPagoPendiente) {
       _resolverFormaPagoPendiente(valor);
       _resolverFormaPagoPendiente = null;
-    }
-  }
-
-  // Pide un número (cantidad o precio) con teclado numérico, en vez del
-  // prompt() nativo del navegador que abre el teclado completo de letras.
-  let _resolverPromptNumericoPendiente = null;
-  function pedirNumero(mensaje, valorInicial) {
-    document.getElementById("texto-prompt-numerico").textContent = mensaje;
-    const input = document.getElementById("input-prompt-numerico");
-    input.value = valorInicial !== undefined ? valorInicial : "";
-    document.getElementById("fondo-prompt-numerico").style.display = "block";
-    document.getElementById("modal-prompt-numerico").style.display = "block";
-    setTimeout(() => input.focus(), 50);
-    return new Promise(resolve => { _resolverPromptNumericoPendiente = resolve; });
-  }
-  function resolverPromptNumerico(confirmar) {
-    document.getElementById("fondo-prompt-numerico").style.display = "none";
-    document.getElementById("modal-prompt-numerico").style.display = "none";
-    if (_resolverPromptNumericoPendiente) {
-      const valor = confirmar ? document.getElementById("input-prompt-numerico").value : null;
-      _resolverPromptNumericoPendiente(valor);
-      _resolverPromptNumericoPendiente = null;
     }
   }
 
@@ -1855,7 +1635,7 @@
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const respuesta = await pedirNumero("¿Cuántas unidades de \"" + producto.descripcion + "\" se vendieron?", "1");
+    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" se vendieron?", "1");
     if (respuesta === null) return;
     const cantidad = Math.max(1, parseInt(respuesta) || 0);
     if (cantidad <= 0) return;
@@ -1876,8 +1656,6 @@
     });
     guardarPlanillaLocal();
     renderPlanilla();
-    await descontarStock(producto, cantidad);
-    renderTabla();
     mostrarDebug("Venta registrada: " + producto.codigo);
   }
 
@@ -2017,7 +1795,7 @@
     const filas = [];
     filas.push(["PLANILLA DE VENTA DIARIA - S-M MOTOS"]);
     filas.push(["Fecha:", fecha, "Hora de cierre:", hora]);
-    filas.push(["Caja inicial (efectivo):", fmtPesos(cajaInicial)]);
+    filas.push(["Caja inicial (efectivo):", Math.round(cajaInicial*100)/100]);
     filas.push([]);
 
     filas.push(["VENTAS"]);
@@ -2025,34 +1803,34 @@
     const filaInicioVentas = filas.length + 1;
     VENTAS_DIA.forEach(item => {
       const etiquetaPago = item.formaPago === "efectivo" ? "Efectivo" : item.formaPago === "transferencia" ? "Transferencia" : "Tarjeta";
-      filas.push([item.cantidad, item.codigo, item.descripcion, etiquetaPago, fmtPesos(item.precioUnitario), fmtPesos(item.precioUnitario*item.cantidad)]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, etiquetaPago, Math.round(item.precioUnitario*100)/100, Math.round(item.precioUnitario*item.cantidad*100)/100]);
     });
     const filaFinVentas = filas.length;
-    filas.push(["", "", "", "", "TOTAL VENTAS =", fmtPesos(totalVentas)]);
+    filas.push(["", "", "", "", "TOTAL VENTAS =", Math.round(totalVentas*100)/100]);
     filas.push([]);
 
     filas.push(["GASTOS"]);
     filas.push(["DESCRIPCION", "", "", "", "", "MONTO"]);
     GASTOS_DIA.forEach(g => {
-      filas.push([g.descripcion, "", "", "", "", fmtPesos(g.monto)]);
+      filas.push([g.descripcion, "", "", "", "", Math.round(g.monto*100)/100]);
     });
-    filas.push(["", "", "", "", "TOTAL GASTOS =", fmtPesos(totalGastos)]);
+    filas.push(["", "", "", "", "TOTAL GASTOS =", Math.round(totalGastos*100)/100]);
     filas.push([]);
 
     filas.push(["FORMAS DE PAGO RECIBIDAS (según cada venta cargada)"]);
-    filas.push(["Efectivo", "", "", "", "", fmtPesos(efectivo)]);
-    filas.push(["Transferencia (MP)", "", "", "", "", fmtPesos(transferencia)]);
-    filas.push(["Crédito / Débito", "", "", "", "", fmtPesos(tarjeta)]);
-    filas.push(["", "", "", "", "TOTAL COBRADO =", fmtPesos(totalCobrado)]);
+    filas.push(["Efectivo", "", "", "", "", Math.round(efectivo*100)/100]);
+    filas.push(["Transferencia (MP)", "", "", "", "", Math.round(transferencia*100)/100]);
+    filas.push(["Crédito / Débito", "", "", "", "", Math.round(tarjeta*100)/100]);
+    filas.push(["", "", "", "", "TOTAL COBRADO =", Math.round(totalCobrado*100)/100]);
     filas.push([]);
 
     filas.push(["RESUMEN DEL DÍA"]);
-    filas.push(["Caja Inicial", "", "", "", "", fmtPesos(cajaInicial)]);
-    filas.push(["Total Ventas", "", "", "", "", fmtPesos(totalVentas)]);
-    filas.push(["Total Gastos", "", "", "", "", fmtPesos(totalGastos)]);
-    filas.push(["Ganancia Neta (Ventas - Gastos)", "", "", "", "", fmtPesos(gananciaNeta)]);
-    filas.push(["Total Cobrado (formas de pago)", "", "", "", "", fmtPesos(totalCobrado)]);
-    filas.push(["Caja Final Teórica (Inicial + Efectivo - Gastos)", "", "", "", "", fmtPesos(cajaFinalTeorica)]);
+    filas.push(["Caja Inicial", "", "", "", "", Math.round(cajaInicial*100)/100]);
+    filas.push(["Total Ventas", "", "", "", "", Math.round(totalVentas*100)/100]);
+    filas.push(["Total Gastos", "", "", "", "", Math.round(totalGastos*100)/100]);
+    filas.push(["Ganancia Neta (Ventas - Gastos)", "", "", "", "", Math.round(gananciaNeta*100)/100]);
+    filas.push(["Total Cobrado (formas de pago)", "", "", "", "", Math.round(totalCobrado*100)/100]);
+    filas.push(["Caja Final Teórica (Inicial + Efectivo - Gastos)", "", "", "", "", Math.round(cajaFinalTeorica*100)/100]);
 
     const hoja = XLSX.utils.aoa_to_sheet(filas);
     hoja["!cols"] = [{wch:28},{wch:14},{wch:35},{wch:16},{wch:14},{wch:14}];
@@ -2075,62 +1853,6 @@
     localStorage.removeItem("planillaFechaDia");
     document.getElementById("caja-inicial").value = "0";
     renderPlanilla();
-  }
-
-  /* ============================================
-     STOCK Y SU VALOR
-     Muestra los productos con stock cargado (>0), y
-     calcula cuánta plata representa a precio de costo
-     (lo que pagaste: costo + IVA), con el dólar actual.
-     ============================================ */
-  function abrirStock() {
-    renderStock();
-    document.getElementById("overlay-stock").classList.add("abierto");
-  }
-
-  function cerrarStock() {
-    document.getElementById("overlay-stock").classList.remove("abierto");
-  }
-
-  function renderStock() {
-    const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    const busqueda = document.getElementById("buscador-stock").value.trim().toLowerCase();
-
-    let conStock = PRODUCTOS.filter(p => p.stock !== null && p.stock !== undefined && p.stock > 0);
-    if (busqueda) {
-      conStock = conStock.filter(p =>
-        p.codigo.toLowerCase().includes(busqueda) ||
-        (p.descripcion || "").toLowerCase().includes(busqueda)
-      );
-    }
-    // Ordenamos por valor total (mayor a menor), para ver primero lo que más plata representa
-    conStock = conStock.map(p => {
-      const costoConIva = p.precio_usd * valorDolar * (1 + IVA);
-      return { producto: p, valorUnitario: costoConIva, valorTotal: costoConIva * p.stock };
-    }).sort((a, b) => b.valorTotal - a.valorTotal);
-
-    const lista = document.getElementById("lista-stock");
-    let totalGeneral = 0;
-    if (conStock.length === 0) {
-      lista.innerHTML = `<div id="carrito-vacio">${busqueda ? "Ningún producto con stock coincide con la búsqueda." : "Todavía no cargaste stock (usá el botón 📦 +Stock en cada producto)."}</div>`;
-    } else {
-      lista.innerHTML = conStock.map(item => {
-        totalGeneral += item.valorTotal;
-        return `
-          <div class="item-carrito">
-            <div class="info">
-              <div class="cod">${item.producto.codigo} <span class="proveedor-badge" style="margin-left:6px;">${item.producto.proveedor || "—"}</span></div>
-              <div class="desc">${item.producto.descripcion} — ${item.producto.stock} unidades × $${fmt(item.valorUnitario)}</div>
-            </div>
-            <div class="subtotal">$${fmt(item.valorTotal)}</div>
-          </div>
-        `;
-      }).join("");
-    }
-
-    // Si hay búsqueda, mostramos el total de lo filtrado; si no, el total general
-    document.getElementById("total-valor-stock").textContent =
-      "Valor total en stock: $" + fmt(totalGeneral) + (busqueda ? " (filtrado)" : "");
   }
 </script>
 
