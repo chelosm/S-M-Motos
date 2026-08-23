@@ -656,6 +656,7 @@
     <input type="text" id="input-cliente-presupuesto" placeholder="Nombre del cliente (opcional)" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:10px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
     <button onclick="exportarPresupuestoExcel()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">📊 Exportar a Excel</button>
     <button onclick="generarImagenPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">🖼️ Generar imagen / Compartir</button>
+    <div id="estado-generacion-img" style="text-align:center; font-size:0.85rem; color:var(--amarillo); margin-bottom:10px;"></div>
     <button onclick="confirmarVaciarPresupuesto()" style="width:100%; background:none; color:var(--rojo-sinstock); border:1px solid var(--rojo-sinstock); font-weight:700; padding:10px; border-radius:8px; font-size:0.9rem; cursor:pointer;">🗑️ Vaciar presupuesto</button>
   </div>
 </div>
@@ -1593,10 +1594,17 @@
     }
 
     mostrarDebug("Generando " + paginas.length + " imagen(es)...");
+    const estadoPanel = document.getElementById("estado-generacion-img");
+    const mostrarEstado = (msg) => {
+      mostrarDebug(msg);
+      if (estadoPanel) estadoPanel.textContent = msg;
+    };
+    mostrarEstado("Generando " + paginas.length + " imagen(es)...");
 
     try {
       const archivos = [];
       for (let p = 0; p < paginas.length; p++) {
+        mostrarEstado("⏳ Generando imagen " + (p + 1) + " de " + paginas.length + "...");
         const plantilla = armarPaginaPresupuestoImg(
           paginas[p], p + 1, paginas.length, cliente, fecha, subtotalGeneral, descuentoPct, totalGeneral
         );
@@ -1608,13 +1616,17 @@
         archivos.push(new File([blob], nombreArchivo, { type: "image/png" }));
       }
 
+      mostrarEstado("✅ Listo, preparando para compartir/descargar...");
+
       // Si el navegador soporta compartir archivos (celular), intentamos
       // mandar todas las páginas juntas de una sola vez.
       if (navigator.canShare && navigator.canShare({ files: archivos })) {
         try {
           await navigator.share({ files: archivos, title: "Presupuesto S-M Motos" });
+          if (estadoPanel) estadoPanel.textContent = "";
           return;
         } catch (e) {
+          if (estadoPanel) estadoPanel.textContent = "";
           return;
         }
       }
@@ -1628,8 +1640,9 @@
         a.click();
         URL.revokeObjectURL(url);
       });
+      if (estadoPanel) estadoPanel.textContent = "";
     } catch (e) {
-      mostrarDebug("No se pudo generar la imagen: " + e.message);
+      mostrarEstado("❌ No se pudo generar la imagen: " + e.message);
     }
   }
 
