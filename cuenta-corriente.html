@@ -200,23 +200,23 @@
         <label>Fecha</label>
         <input type="date" id="mFecha">
         <label>Venta</label>
-        <input type="text" inputmode="decimal" id="mVenta" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
+        <input type="text" inputmode="decimal" class="input-monto" id="mVenta" placeholder="$0" value="$0">
         <div class="row3">
           <div>
             <label>Depósito</label>
-            <input type="text" inputmode="decimal" id="mDeposito" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="input-monto" id="mDeposito" placeholder="$0" value="$0">
           </div>
           <div>
             <label>Cheque</label>
-            <input type="text" inputmode="decimal" id="mCheque" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="input-monto" id="mCheque" placeholder="$0" value="$0">
           </div>
           <div>
             <label>Echeq</label>
-            <input type="text" inputmode="decimal" id="mEcheq" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="input-monto" id="mEcheq" placeholder="$0" value="$0">
           </div>
         </div>
         <label>Pago (efectivo)</label>
-        <input type="text" inputmode="decimal" id="mPago" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
+        <input type="text" inputmode="decimal" class="input-monto" id="mPago" placeholder="$0" value="$0">
         <label>Observaciones</label>
         <input type="text" id="mObs" placeholder="(opcional)">
         <button class="btn" style="width:100%;margin-top:14px;" onclick="guardarMovimiento()">Guardar movimiento</button>
@@ -298,32 +298,66 @@ function formatoMoneda(n){
   return "$" + n.toLocaleString('es-AR', {minimumFractionDigits:0, maximumFractionDigits:0});
 }
 
-/* Formatea en vivo mientras el usuario escribe un monto: $1.234.567,89
-   Acepta tanto "," como "." como separador decimal (el teclado numérico del celu usa punto) */
-function formatearInputMoneda(input){
-  let val = input.value.replace(/[^\d.,]/g,'');
-  const sepIndex = Math.max(val.lastIndexOf(','), val.lastIndexOf('.'));
-  let entero, decimales;
-  if(sepIndex === -1){
-    entero = val;
-    decimales = undefined;
-  } else {
-    entero = val.slice(0, sepIndex).replace(/[.,]/g,'');
-    decimales = val.slice(sepIndex+1).replace(/[.,]/g,'').slice(0,2);
-  }
-  entero = entero.replace(/^0+(?=\d)/,'');
-  const enteroFormateado = entero.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  let resultado = '$' + (enteroFormateado || '0');
-  if(decimales !== undefined) resultado += ',' + decimales;
-  input.value = resultado;
-}
-
 /* Convierte "$1.234.567,89" -> 1234567.89 */
 function parsearMoneda(texto){
   if(!texto) return 0;
   const limpio = texto.replace(/\$/g,'').replace(/\./g,'').replace(',', '.');
   return parseFloat(limpio) || 0;
 }
+
+/* Campo de monto controlado tecla por tecla: sin ambigüedad entre punto de miles y coma decimal.
+   Los dígitos van a la parte entera hasta que se aprueta "," o "." (cualquiera de las dos),
+   momento en que arrancan los centavos (máx. 2 dígitos). */
+function attachMoneyInput(input){
+  input.dataset.intPart = '';
+  input.dataset.decPart = '';
+  input.dataset.hasDec = 'false';
+  input.value = '$0';
+  const render = () => {
+    const intFormateado = (input.dataset.intPart || '').replace(/\B(?=(\d{3})+(?!\d))/g, '.') || '0';
+    let display = '$' + intFormateado;
+    if(input.dataset.hasDec === 'true') display += ',' + (input.dataset.decPart || '');
+    input.value = display;
+  };
+  input.addEventListener('beforeinput', (e)=>{
+    e.preventDefault();
+    let intPart = input.dataset.intPart;
+    let decPart = input.dataset.decPart;
+    let hasDec = input.dataset.hasDec === 'true';
+    if(e.inputType === 'insertText' || e.inputType === 'insertFromPaste'){
+      for(const ch of (e.data || '')){
+        if(/\d/.test(ch)){
+          if(hasDec){ if(decPart.length < 2) decPart += ch; }
+          else { intPart += ch; }
+        } else if(ch === ',' || ch === '.'){
+          hasDec = true;
+        }
+      }
+    } else if(e.inputType === 'deleteContentBackward'){
+      if(hasDec){
+        if(decPart.length > 0) decPart = decPart.slice(0,-1);
+        else hasDec = false;
+      } else {
+        intPart = intPart.slice(0,-1);
+      }
+    }
+    intPart = intPart.replace(/^0+(?=\d)/,'');
+    input.dataset.intPart = intPart;
+    input.dataset.decPart = decPart;
+    input.dataset.hasDec = hasDec ? 'true' : 'false';
+    render();
+  });
+}
+
+function resetInputMonto(id){
+  const input = document.getElementById(id);
+  input.dataset.intPart = '';
+  input.dataset.decPart = '';
+  input.dataset.hasDec = 'false';
+  input.value = '$0';
+}
+
+document.querySelectorAll('.input-monto').forEach(attachMoneyInput);
 
 /* ---------- TABS ---------- */
 function mostrarTab(cual){
@@ -457,7 +491,7 @@ async function guardarMovimiento(){
   if(error){ msg.textContent = "Error: " + error.message; msg.className="msg err"; return; }
 
   msg.textContent = "Movimiento guardado"; msg.className = "msg ok";
-  ['mVenta','mDeposito','mCheque','mEcheq','mPago'].forEach(id=>document.getElementById(id).value = '$0');
+  ['mVenta','mDeposito','mCheque','mEcheq','mPago'].forEach(id=>resetInputMonto(id));
   document.getElementById('mObs').value = '';
   document.getElementById('mFecha').valueAsDate = new Date();
 
