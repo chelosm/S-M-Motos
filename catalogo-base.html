@@ -673,6 +673,17 @@
   <button onclick="resolverFormaPago(null)" style="width:100%; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:10px; border-radius:6px; cursor:pointer;">Cancelar</button>
 </div>
 
+<!-- Mini modal para pedir un número (cantidad o precio) con teclado numérico -->
+<div id="fondo-prompt-numerico" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70;"></div>
+<div id="modal-prompt-numerico" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--metal); border:1px solid var(--metal-claro); border-radius:10px; padding:20px; width:85%; max-width:320px; z-index:71; text-align:center;">
+  <div id="texto-prompt-numerico" style="font-weight:700; margin-bottom:14px;"></div>
+  <input type="number" inputmode="numeric" id="input-prompt-numerico" style="width:100%; background:var(--asfalto); border:1px solid var(--amarillo); color:var(--texto); padding:12px; border-radius:6px; font-size:1.2rem; text-align:center; margin-bottom:14px;">
+  <div style="display:flex; gap:8px;">
+    <button onclick="resolverPromptNumerico(false)" style="flex:1; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">Cancelar</button>
+    <button onclick="resolverPromptNumerico(true)" style="flex:1; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">Aceptar</button>
+  </div>
+</div>
+
 <!-- Panel de la Planilla de Venta Diaria (NO se guarda sola: vive solo
      en la memoria de esta pestaña. Si cerrás sin exportar, se pierde.) -->
 <div id="overlay-planilla" onclick="if(event.target===this) cerrarPlanilla()">
@@ -751,6 +762,12 @@
     return Math.round(n / 50) * 50;
   }
 
+  // Formato "$1.234,56" para que los números en Excel/imagen se
+  // distingan bien (no queden como números pelados).
+  function fmtPesos(n) {
+    return "$" + n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
   let logueado = false;
   let PRODUCTOS = [];
   let valorDolar = 1;
@@ -767,11 +784,13 @@
   /* ============================================
      PRODUCTOS desde Supabase (de a tandas de 1000)
      ============================================ */
-  async function cargarProductos() {
-    mostrarDebug("Cargando catálogo...");
+  async function cargarProductos(esReintento) {
+    mostrarDebug(esReintento ? "Reintentando cargar catálogo..." : "Cargando catálogo...");
     let todos = [];
     let desde = 0;
     const TANDA = 1000;
+    let huboError = false;
+    let mensajeError = "";
 
     while (true) {
       const { data, error } = await db
@@ -781,12 +800,27 @@
         .range(desde, desde + TANDA - 1);
 
       if (error) {
-        mostrarDebug("Error cargando catálogo: " + error.message);
+        huboError = true;
+        mensajeError = error.message;
         break;
       }
       todos = todos.concat(data);
       if (data.length < TANDA) break;
       desde += TANDA;
+    }
+
+    // Si falló Y todavía no habíamos reintentado, probamos una vez más
+    // después de 2 segundos: suele pasar cuando el proyecto de Supabase
+    // estuvo inactivo y el primer pedido lo "despierta" pero falla.
+    if (huboError && !esReintento) {
+      mostrarDebug("Error de conexión, reintentando en 2 segundos...");
+      setTimeout(() => cargarProductos(true), 2000);
+      return;
+    }
+
+    if (huboError) {
+      mostrarDebug("No se pudo cargar el catálogo: " + mensajeError + " — probá refrescar la página.");
+      return;
     }
 
     PRODUCTOS = todos;
@@ -1067,11 +1101,11 @@
     actualizarContadorCarrito();
   }
 
-  function agregarAlCarrito(id) {
+  async function agregarAlCarrito(id) {
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al pedido?", "1");
+    const respuesta = await pedirNumero("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al pedido?", "1");
     if (respuesta === null) return; // canceló, no se agrega nada
     const cantidad = Math.max(1, parseInt(respuesta) || 0);
     if (cantidad <= 0) return;
@@ -1168,12 +1202,12 @@
     CARRITO.forEach(item => {
       const subtotal = item.precioUnitario * item.cantidad;
       total += subtotal;
-      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(subtotal*100)/100]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, fmtPesos(item.precioUnitario), fmtPesos(subtotal)]);
     });
     const filaTotal = 3 + CARRITO.length + 2;
     filas.push([]);
     filas.push([]);
-    filas.push(["", "", "", "TOTAL =", Math.round(total*100)/100]);
+    filas.push(["", "", "", "TOTAL =", fmtPesos(total)]);
 
     const hoja = XLSX.utils.aoa_to_sheet(filas);
     hoja["!cols"] = [{wch:8}, {wch:14}, {wch:45}, {wch:12}, {wch:14}];
@@ -1258,11 +1292,11 @@
     actualizarContadorPresupuesto();
   }
 
-  function agregarAPresupuesto(id) {
+  async function agregarAPresupuesto(id) {
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al presupuesto?", "1");
+    const respuesta = await pedirNumero("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al presupuesto?", "1");
     if (respuesta === null) return; // canceló, no se agrega nada
     const cantidad = Math.max(1, parseInt(respuesta) || 0);
     if (cantidad <= 0) return;
@@ -1324,10 +1358,10 @@
     renderPresupuesto();
   }
 
-  function editarPrecioPresupuesto(id) {
+  async function editarPrecioPresupuesto(id) {
     const item = PRESUPUESTO.find(i => i.id === id);
     if (!item) return;
-    const respuesta = prompt("Nuevo precio unitario para \"" + item.descripcion + "\":", item.precioUnitario.toFixed(2));
+    const respuesta = await pedirNumero("Nuevo precio unitario para \"" + item.descripcion + "\":", item.precioUnitario.toFixed(2));
     if (respuesta === null) return;
     const nuevoPrecio = parseFloat(respuesta);
     if (isNaN(nuevoPrecio) || nuevoPrecio < 0) {
@@ -1451,17 +1485,17 @@
     PRESUPUESTO.forEach(item => {
       const sub = item.precioUnitario * item.cantidad;
       subtotal += sub;
-      filas.push([item.cantidad, item.codigo, item.descripcion, Math.round(item.precioUnitario*100)/100, Math.round(sub*100)/100]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, fmtPesos(item.precioUnitario), fmtPesos(sub)]);
     });
     filas.push([]);
     const montoDescuento = subtotal * (descuentoPct / 100);
     const total = subtotal - montoDescuento;
     if (descuentoPct > 0) {
-      filas.push(["", "", "", "SUBTOTAL =", Math.round(subtotal*100)/100]);
-      filas.push(["", "", "", `DESCUENTO (${descuentoPct}%) =`, -Math.round(montoDescuento*100)/100]);
-      filas.push(["", "", "", "TOTAL PRESUPUESTO =", Math.round(total*100)/100]);
+      filas.push(["", "", "", "SUBTOTAL =", fmtPesos(subtotal)]);
+      filas.push(["", "", "", `DESCUENTO (${descuentoPct}%) =`, "-" + fmtPesos(montoDescuento)]);
+      filas.push(["", "", "", "TOTAL PRESUPUESTO =", fmtPesos(total)]);
     } else {
-      filas.push(["", "", "", "TOTAL PRESUPUESTO =", Math.round(total*100)/100]);
+      filas.push(["", "", "", "TOTAL PRESUPUESTO =", fmtPesos(total)]);
     }
 
     const hoja = XLSX.utils.aoa_to_sheet(filas);
@@ -1476,20 +1510,15 @@
     XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
   }
 
-  async function generarImagenPresupuesto() {
-    if (PRESUPUESTO.length === 0) {
-      alert("Todavía no agregaste nada al presupuesto.");
-      return;
-    }
-    const cliente = document.getElementById("input-cliente-presupuesto").value.trim();
-    const fecha = new Date().toLocaleDateString('es-AR');
-    const descuentoPct = parseFloat(document.getElementById("input-descuento-presupuesto").value) || 0;
+  const ITEMS_POR_IMAGEN = 20;
+
+  // Arma el HTML de una "página" del presupuesto (un pedazo de hasta
+  // 20 productos) y lo mete en la plantilla oculta, lista para capturar.
+  function armarPaginaPresupuestoImg(itemsPagina, numeroPagina, totalPaginas, cliente, fecha, subtotalGeneral, descuentoPct, totalGeneral) {
     const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-    let subtotal = 0;
-    const filasHtml = PRESUPUESTO.map((item, i) => {
+    const filasHtml = itemsPagina.map((item, i) => {
       const sub = item.precioUnitario * item.cantidad;
-      subtotal += sub;
       const fondoFila = i % 2 === 0 ? "#ffffff" : "#f5f5f5";
       return `
         <tr style="background:${fondoFila};">
@@ -1501,15 +1530,18 @@
       `;
     }).join("");
 
-    const montoDescuento = subtotal * (descuentoPct / 100);
-    const total = subtotal - montoDescuento;
-    const bloqueTotales = descuentoPct > 0
-      ? `
-        <div style="text-align:right; font-size:0.9rem; color:#555; margin-top:14px;">Subtotal: $${fmt(subtotal)}</div>
-        <div style="text-align:right; font-size:0.9rem; color:#c0392b;">Descuento (${descuentoPct}%): -$${fmt(montoDescuento)}</div>
-        <div style="text-align:right; font-size:1.1rem; font-weight:800; color:#111;">TOTAL: $${fmt(total)}</div>
-      `
-      : `<div style="text-align:right; font-size:1.1rem; font-weight:800; margin-top:14px; color:#111;">TOTAL: $${fmt(total)}</div>`;
+    // Los totales generales (con descuento) solo se muestran en la
+    // última página, para no repetir/confundir en las anteriores.
+    let bloqueTotales = "";
+    if (numeroPagina === totalPaginas) {
+      bloqueTotales = descuentoPct > 0
+        ? `
+          <div style="text-align:right; font-size:0.9rem; color:#555; margin-top:14px;">Subtotal: $${fmt(subtotalGeneral)}</div>
+          <div style="text-align:right; font-size:0.9rem; color:#c0392b;">Descuento (${descuentoPct}%): -$${fmt(subtotalGeneral - totalGeneral)}</div>
+          <div style="text-align:right; font-size:1.1rem; font-weight:800; color:#111;">TOTAL: $${fmt(totalGeneral)}</div>
+        `
+        : `<div style="text-align:right; font-size:1.1rem; font-weight:800; margin-top:14px; color:#111;">TOTAL: $${fmt(totalGeneral)}</div>`;
+    }
 
     const plantilla = document.getElementById("plantilla-presupuesto-img");
     plantilla.innerHTML = `
@@ -1519,7 +1551,7 @@
           <div style="font-size:0.8rem; color:#555;">DISTRIBUIDORA MAYORISTA · VENTA DE REPUESTOS Y ACCESORIOS</div>
         </div>
         <div style="margin-bottom:12px; font-size:0.9rem; color:#111;">
-          <strong>PRESUPUESTO</strong><br>
+          <strong>PRESUPUESTO</strong>${totalPaginas > 1 ? ` — Página ${numeroPagina} de ${totalPaginas}` : ""}<br>
           ${cliente ? "Cliente: " + cliente + "<br>" : ""}
           Fecha: ${fecha}
         </div>
@@ -1539,33 +1571,63 @@
         </div>
       </div>
     `;
+    return plantilla;
+  }
+
+  async function generarImagenPresupuesto() {
+    if (PRESUPUESTO.length === 0) {
+      alert("Todavía no agregaste nada al presupuesto.");
+      return;
+    }
+    const cliente = document.getElementById("input-cliente-presupuesto").value.trim();
+    const fecha = new Date().toLocaleDateString('es-AR');
+    const descuentoPct = parseFloat(document.getElementById("input-descuento-presupuesto").value) || 0;
+
+    const subtotalGeneral = PRESUPUESTO.reduce((s, it) => s + it.precioUnitario * it.cantidad, 0);
+    const totalGeneral = subtotalGeneral - subtotalGeneral * (descuentoPct / 100);
+
+    // Partimos el presupuesto en páginas de hasta 20 productos cada una
+    const paginas = [];
+    for (let i = 0; i < PRESUPUESTO.length; i += ITEMS_POR_IMAGEN) {
+      paginas.push(PRESUPUESTO.slice(i, i + ITEMS_POR_IMAGEN));
+    }
+
+    mostrarDebug("Generando " + paginas.length + " imagen(es)...");
 
     try {
-      const canvas = await html2canvas(plantilla, { backgroundColor: "#ffffff", scale: 2 });
-      canvas.toBlob(async (blob) => {
+      const archivos = [];
+      for (let p = 0; p < paginas.length; p++) {
+        const plantilla = armarPaginaPresupuestoImg(
+          paginas[p], p + 1, paginas.length, cliente, fecha, subtotalGeneral, descuentoPct, totalGeneral
+        );
+        const canvas = await html2canvas(plantilla, { backgroundColor: "#ffffff", scale: 2 });
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
         const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
-        const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + "_" + sello + ".png";
-        const archivo = new File([blob], nombreArchivo, { type: "image/png" });
+        const sufijoPagina = paginas.length > 1 ? "_pag" + (p + 1) + "de" + paginas.length : "";
+        const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + sufijoPagina + "_" + sello + ".png";
+        archivos.push(new File([blob], nombreArchivo, { type: "image/png" }));
+      }
 
-        // Si el navegador soporta compartir archivos (celular), abrimos
-        // directo el menú para elegir WhatsApp u otra app.
-        if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
-          try {
-            await navigator.share({ files: [archivo], title: "Presupuesto S-M Motos" });
-            return;
-          } catch (e) {
-            return;
-          }
+      // Si el navegador soporta compartir archivos (celular), intentamos
+      // mandar todas las páginas juntas de una sola vez.
+      if (navigator.canShare && navigator.canShare({ files: archivos })) {
+        try {
+          await navigator.share({ files: archivos, title: "Presupuesto S-M Motos" });
+          return;
+        } catch (e) {
+          return;
         }
+      }
 
-        // Si no se puede compartir directo, se descarga la imagen
-        const url = URL.createObjectURL(blob);
+      // Si no se puede compartir directo, se descargan una por una
+      archivos.forEach(archivo => {
+        const url = URL.createObjectURL(archivo);
         const a = document.createElement("a");
         a.href = url;
-        a.download = nombreArchivo;
+        a.download = archivo.name;
         a.click();
         URL.revokeObjectURL(url);
-      }, "image/png");
+      });
     } catch (e) {
       mostrarDebug("No se pudo generar la imagen: " + e.message);
     }
@@ -1597,6 +1659,28 @@
     if (_resolverFormaPagoPendiente) {
       _resolverFormaPagoPendiente(valor);
       _resolverFormaPagoPendiente = null;
+    }
+  }
+
+  // Pide un número (cantidad o precio) con teclado numérico, en vez del
+  // prompt() nativo del navegador que abre el teclado completo de letras.
+  let _resolverPromptNumericoPendiente = null;
+  function pedirNumero(mensaje, valorInicial) {
+    document.getElementById("texto-prompt-numerico").textContent = mensaje;
+    const input = document.getElementById("input-prompt-numerico");
+    input.value = valorInicial !== undefined ? valorInicial : "";
+    document.getElementById("fondo-prompt-numerico").style.display = "block";
+    document.getElementById("modal-prompt-numerico").style.display = "block";
+    setTimeout(() => input.focus(), 50);
+    return new Promise(resolve => { _resolverPromptNumericoPendiente = resolve; });
+  }
+  function resolverPromptNumerico(confirmar) {
+    document.getElementById("fondo-prompt-numerico").style.display = "none";
+    document.getElementById("modal-prompt-numerico").style.display = "none";
+    if (_resolverPromptNumericoPendiente) {
+      const valor = confirmar ? document.getElementById("input-prompt-numerico").value : null;
+      _resolverPromptNumericoPendiente(valor);
+      _resolverPromptNumericoPendiente = null;
     }
   }
 
@@ -1635,7 +1719,7 @@
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
-    const respuesta = prompt("¿Cuántas unidades de \"" + producto.descripcion + "\" se vendieron?", "1");
+    const respuesta = await pedirNumero("¿Cuántas unidades de \"" + producto.descripcion + "\" se vendieron?", "1");
     if (respuesta === null) return;
     const cantidad = Math.max(1, parseInt(respuesta) || 0);
     if (cantidad <= 0) return;
@@ -1795,7 +1879,7 @@
     const filas = [];
     filas.push(["PLANILLA DE VENTA DIARIA - S-M MOTOS"]);
     filas.push(["Fecha:", fecha, "Hora de cierre:", hora]);
-    filas.push(["Caja inicial (efectivo):", Math.round(cajaInicial*100)/100]);
+    filas.push(["Caja inicial (efectivo):", fmtPesos(cajaInicial)]);
     filas.push([]);
 
     filas.push(["VENTAS"]);
@@ -1803,34 +1887,34 @@
     const filaInicioVentas = filas.length + 1;
     VENTAS_DIA.forEach(item => {
       const etiquetaPago = item.formaPago === "efectivo" ? "Efectivo" : item.formaPago === "transferencia" ? "Transferencia" : "Tarjeta";
-      filas.push([item.cantidad, item.codigo, item.descripcion, etiquetaPago, Math.round(item.precioUnitario*100)/100, Math.round(item.precioUnitario*item.cantidad*100)/100]);
+      filas.push([item.cantidad, item.codigo, item.descripcion, etiquetaPago, fmtPesos(item.precioUnitario), fmtPesos(item.precioUnitario*item.cantidad)]);
     });
     const filaFinVentas = filas.length;
-    filas.push(["", "", "", "", "TOTAL VENTAS =", Math.round(totalVentas*100)/100]);
+    filas.push(["", "", "", "", "TOTAL VENTAS =", fmtPesos(totalVentas)]);
     filas.push([]);
 
     filas.push(["GASTOS"]);
     filas.push(["DESCRIPCION", "", "", "", "", "MONTO"]);
     GASTOS_DIA.forEach(g => {
-      filas.push([g.descripcion, "", "", "", "", Math.round(g.monto*100)/100]);
+      filas.push([g.descripcion, "", "", "", "", fmtPesos(g.monto)]);
     });
-    filas.push(["", "", "", "", "TOTAL GASTOS =", Math.round(totalGastos*100)/100]);
+    filas.push(["", "", "", "", "TOTAL GASTOS =", fmtPesos(totalGastos)]);
     filas.push([]);
 
     filas.push(["FORMAS DE PAGO RECIBIDAS (según cada venta cargada)"]);
-    filas.push(["Efectivo", "", "", "", "", Math.round(efectivo*100)/100]);
-    filas.push(["Transferencia (MP)", "", "", "", "", Math.round(transferencia*100)/100]);
-    filas.push(["Crédito / Débito", "", "", "", "", Math.round(tarjeta*100)/100]);
-    filas.push(["", "", "", "", "TOTAL COBRADO =", Math.round(totalCobrado*100)/100]);
+    filas.push(["Efectivo", "", "", "", "", fmtPesos(efectivo)]);
+    filas.push(["Transferencia (MP)", "", "", "", "", fmtPesos(transferencia)]);
+    filas.push(["Crédito / Débito", "", "", "", "", fmtPesos(tarjeta)]);
+    filas.push(["", "", "", "", "TOTAL COBRADO =", fmtPesos(totalCobrado)]);
     filas.push([]);
 
     filas.push(["RESUMEN DEL DÍA"]);
-    filas.push(["Caja Inicial", "", "", "", "", Math.round(cajaInicial*100)/100]);
-    filas.push(["Total Ventas", "", "", "", "", Math.round(totalVentas*100)/100]);
-    filas.push(["Total Gastos", "", "", "", "", Math.round(totalGastos*100)/100]);
-    filas.push(["Ganancia Neta (Ventas - Gastos)", "", "", "", "", Math.round(gananciaNeta*100)/100]);
-    filas.push(["Total Cobrado (formas de pago)", "", "", "", "", Math.round(totalCobrado*100)/100]);
-    filas.push(["Caja Final Teórica (Inicial + Efectivo - Gastos)", "", "", "", "", Math.round(cajaFinalTeorica*100)/100]);
+    filas.push(["Caja Inicial", "", "", "", "", fmtPesos(cajaInicial)]);
+    filas.push(["Total Ventas", "", "", "", "", fmtPesos(totalVentas)]);
+    filas.push(["Total Gastos", "", "", "", "", fmtPesos(totalGastos)]);
+    filas.push(["Ganancia Neta (Ventas - Gastos)", "", "", "", "", fmtPesos(gananciaNeta)]);
+    filas.push(["Total Cobrado (formas de pago)", "", "", "", "", fmtPesos(totalCobrado)]);
+    filas.push(["Caja Final Teórica (Inicial + Efectivo - Gastos)", "", "", "", "", fmtPesos(cajaFinalTeorica)]);
 
     const hoja = XLSX.utils.aoa_to_sheet(filas);
     hoja["!cols"] = [{wch:28},{wch:14},{wch:35},{wch:16},{wch:14},{wch:14}];
