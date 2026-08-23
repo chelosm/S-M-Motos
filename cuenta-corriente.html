@@ -199,6 +199,7 @@
           <div class="monto" id="saldoActualMonto">$0</div>
         </div>
         <button class="btn" style="width:100%;" onclick="exportarImagen()">📤 Compartir resumen (imagen)</button>
+        <button class="btn" style="width:100%;margin-top:8px;background:#fff;color:var(--negro);border:1px solid var(--gris-borde);" onclick="ajustarSaldoCliente()">⚙️ Ajustar saldo</button>
         <button class="btn" style="width:100%;margin-top:8px;background:#fff;color:var(--rojo);border:1px solid var(--rojo);" onclick="borrarCliente()">🗑 Eliminar cliente</button>
       </div>
 
@@ -279,6 +280,7 @@
             <div class="monto" id="saldoActualMontoProv">$0</div>
           </div>
           <button class="btn" style="width:100%;" onclick="exportarImagenProveedor()">📤 Compartir resumen (imagen)</button>
+          <button class="btn" style="width:100%;margin-top:8px;background:#fff;color:var(--negro);border:1px solid var(--gris-borde);" onclick="ajustarSaldoProveedor()">⚙️ Ajustar saldo</button>
           <button class="btn" style="width:100%;margin-top:8px;background:#fff;color:var(--rojo);border:1px solid var(--rojo);" onclick="borrarProveedor()">🗑 Eliminar proveedor</button>
         </div>
 
@@ -329,6 +331,42 @@
     </div>
     <!-- FIN seccionProveedores -->
   </main>
+</div>
+
+<!-- MODAL EDITAR MOVIMIENTO (clientes y proveedores) -->
+<div id="modalEditar" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;">
+  <div class="card" style="max-width:420px;width:100%;max-height:90vh;overflow:auto;">
+    <h3 id="modalEditarTitulo" style="margin-top:0;">Editar movimiento</h3>
+    <label>Fecha</label>
+    <input type="date" id="eFecha">
+    <label id="eNumeroFacturaLabel" class="hidden">N° de factura</label>
+    <input type="text" id="eNumeroFactura" class="hidden" placeholder="Ej: 0001-00012345">
+    <label id="eMontoPrincipalLabel">Venta</label>
+    <input type="text" inputmode="decimal" class="input-monto" id="eMontoPrincipal" value="$0">
+    <div class="row3">
+      <div>
+        <label>Depósito</label>
+        <input type="text" inputmode="decimal" class="input-monto" id="eDeposito" value="$0">
+      </div>
+      <div>
+        <label>Cheque</label>
+        <input type="text" inputmode="decimal" class="input-monto" id="eCheque" value="$0">
+      </div>
+      <div>
+        <label>Echeq</label>
+        <input type="text" inputmode="decimal" class="input-monto" id="eEcheq" value="$0">
+      </div>
+    </div>
+    <label>Pago (efectivo)</label>
+    <input type="text" inputmode="decimal" class="input-monto" id="ePago" value="$0">
+    <label>Observaciones</label>
+    <textarea id="eObs" rows="3" style="width:100%;padding:10px;border:1px solid var(--gris-borde);border-radius:6px;font-size:1rem;font-family:inherit;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn" style="flex:1;" onclick="guardarEdicionMovimiento()">Guardar cambios</button>
+      <button class="btn" style="flex:1;background:#fff;color:#555;border:1px solid var(--gris-borde);" onclick="cerrarModalEditar()">Cancelar</button>
+    </div>
+    <div id="msgEdicion" class="msg"></div>
+  </div>
 </div>
 
 <!-- Plantilla oculta usada solo para generar la imagen -->
@@ -390,6 +428,8 @@ let movimientosCliente = [];
 let proveedores = [];
 let proveedorActualId = null;
 let movimientosProveedor = [];
+
+let edicionActual = {id:null, tipo:null}; // tipo: 'cliente' | 'proveedor'
 
 /* ---------- CAMBIO DE MODO (Clientes / Proveedores) ---------- */
 function cambiarModo(modo){
@@ -578,6 +618,7 @@ function renderHistorial(){
   tbody.innerHTML = '';
   movimientosCliente.forEach(m=>{
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
     const fechaFmt = new Date(m.fecha+'T00:00:00').toLocaleDateString('es-AR');
     tr.innerHTML = `
       <td>${fechaFmt}</td>
@@ -588,8 +629,9 @@ function renderHistorial(){
       <td>${formatoMoneda(m.pago)}</td>
       <td>${formatoMoneda(m.saldo)}</td>
       <td class="obs">${m.observaciones||''}</td>
-      <td><button class="miniBtn del" onclick="borrarMovimiento('${m.id}')">🗑</button></td>
+      <td><button class="miniBtn del" onclick="event.stopPropagation(); borrarMovimiento('${m.id}')">🗑</button></td>
     `;
+    tr.onclick = () => abrirEdicionCliente(m.id);
     tbody.appendChild(tr);
   });
 }
@@ -815,6 +857,7 @@ function renderHistorialProveedor(){
   tbody.innerHTML = '';
   movimientosProveedor.forEach(m=>{
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
     const fechaFmt = new Date(m.fecha_factura+'T00:00:00').toLocaleDateString('es-AR');
     tr.innerHTML = `
       <td>${fechaFmt}</td>
@@ -826,8 +869,9 @@ function renderHistorialProveedor(){
       <td>${formatoMoneda(m.pago)}</td>
       <td>${formatoMoneda(m.saldo)}</td>
       <td class="obs">${m.observaciones||''}</td>
-      <td><button class="miniBtn del" onclick="borrarMovimientoProveedor('${m.id}')">🗑</button></td>
+      <td><button class="miniBtn del" onclick="event.stopPropagation(); borrarMovimientoProveedor('${m.id}')">🗑</button></td>
     `;
+    tr.onclick = () => abrirEdicionProveedor(m.id);
     tbody.appendChild(tr);
   });
 }
@@ -957,6 +1001,153 @@ async function exportarImagenProveedor(){
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 'image/png');
+}
+
+/* ================= EDITAR MOVIMIENTO (clientes y proveedores) ================= */
+
+/* Precarga un valor numérico en un campo de monto ya inicializado por attachMoneyInput */
+function setMoneyInputValue(id, numero){
+  const input = document.getElementById(id);
+  numero = Number(numero) || 0;
+  const negativo = numero < 0;
+  const abs = Math.abs(numero);
+  const partes = abs.toFixed(2).split('.');
+  const intPart = partes[0];
+  const decPart = partes[1];
+  const hasDec = decPart !== '00';
+  input.dataset.intPart = intPart;
+  input.dataset.decPart = hasDec ? decPart : '';
+  input.dataset.hasDec = hasDec ? 'true' : 'false';
+  const intFormateado = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') || '0';
+  let display = (negativo ? '-' : '') + '$' + intFormateado;
+  if(hasDec) display += ',' + decPart;
+  input.value = display;
+}
+
+function abrirEdicionCliente(id){
+  const m = movimientosCliente.find(x=>x.id===id);
+  if(!m) return;
+  edicionActual = {id, tipo:'cliente'};
+  document.getElementById('modalEditarTitulo').textContent = 'Editar movimiento';
+  document.getElementById('eNumeroFacturaLabel').classList.add('hidden');
+  document.getElementById('eNumeroFactura').classList.add('hidden');
+  document.getElementById('eMontoPrincipalLabel').textContent = 'Venta';
+  document.getElementById('eFecha').value = m.fecha;
+  setMoneyInputValue('eMontoPrincipal', m.venta);
+  setMoneyInputValue('eDeposito', m.deposito);
+  setMoneyInputValue('eCheque', m.cheque);
+  setMoneyInputValue('eEcheq', m.echeq);
+  setMoneyInputValue('ePago', m.pago);
+  document.getElementById('eObs').value = m.observaciones || '';
+  document.getElementById('msgEdicion').textContent = '';
+  document.getElementById('modalEditar').classList.remove('hidden');
+}
+
+function abrirEdicionProveedor(id){
+  const m = movimientosProveedor.find(x=>x.id===id);
+  if(!m) return;
+  edicionActual = {id, tipo:'proveedor'};
+  document.getElementById('modalEditarTitulo').textContent = 'Editar movimiento';
+  document.getElementById('eNumeroFacturaLabel').classList.remove('hidden');
+  document.getElementById('eNumeroFactura').classList.remove('hidden');
+  document.getElementById('eNumeroFactura').value = m.numero_factura || '';
+  document.getElementById('eMontoPrincipalLabel').textContent = 'Compra';
+  document.getElementById('eFecha').value = m.fecha_factura;
+  setMoneyInputValue('eMontoPrincipal', m.compra);
+  setMoneyInputValue('eDeposito', m.deposito);
+  setMoneyInputValue('eCheque', m.cheque);
+  setMoneyInputValue('eEcheq', m.echeq);
+  setMoneyInputValue('ePago', m.pago);
+  document.getElementById('eObs').value = m.observaciones || '';
+  document.getElementById('msgEdicion').textContent = '';
+  document.getElementById('modalEditar').classList.remove('hidden');
+}
+
+function cerrarModalEditar(){
+  document.getElementById('modalEditar').classList.add('hidden');
+  edicionActual = {id:null, tipo:null};
+}
+
+async function guardarEdicionMovimiento(){
+  const msg = document.getElementById('msgEdicion');
+  const fecha = document.getElementById('eFecha').value;
+  const montoPrincipal = parsearMoneda(document.getElementById('eMontoPrincipal').value);
+  const deposito = parsearMoneda(document.getElementById('eDeposito').value);
+  const cheque = parsearMoneda(document.getElementById('eCheque').value);
+  const echeq = parsearMoneda(document.getElementById('eEcheq').value);
+  const pago = parsearMoneda(document.getElementById('ePago').value);
+  const observaciones = document.getElementById('eObs').value.trim();
+  if(!fecha){ msg.textContent='Elegí una fecha'; msg.className='msg err'; return; }
+
+  if(edicionActual.tipo === 'cliente'){
+    const {error} = await sb.from('movimientos').update({
+      fecha, venta: montoPrincipal, deposito, cheque, echeq, pago, observaciones
+    }).eq('id', edicionActual.id);
+    if(error){ msg.textContent = 'Error: ' + error.message; msg.className = 'msg err'; return; }
+    await recalcularSaldos(clienteActualId);
+    await cargarMovimientosCliente(clienteActualId);
+    await cargarClientes();
+  } else if(edicionActual.tipo === 'proveedor'){
+    const numero_factura = document.getElementById('eNumeroFactura').value.trim();
+    const {error} = await sb.from('movimientos_proveedores').update({
+      fecha_factura: fecha, numero_factura, compra: montoPrincipal, deposito, cheque, echeq, pago, observaciones
+    }).eq('id', edicionActual.id);
+    if(error){ msg.textContent = 'Error: ' + error.message; msg.className = 'msg err'; return; }
+    await recalcularSaldosProveedor(proveedorActualId);
+    await cargarMovimientosProveedor(proveedorActualId);
+    await cargarProveedores();
+  }
+  cerrarModalEditar();
+}
+
+/* ================= AJUSTE MANUAL DE SALDO ================= */
+/* Para casos como "compré $10.000, pagué $9.800 y quedamos así": en vez de
+   editar el movimiento original, se carga un ajuste chico que cierra la diferencia. */
+
+async function ajustarSaldoCliente(){
+  if(!clienteActualId) return;
+  const saldoActual = movimientosCliente.length ? movimientosCliente[0].saldo : 0;
+  const respuesta = prompt(`Saldo actual: ${formatoMoneda(saldoActual)}\n\nEscribí el saldo correcto (ej: 9800 o 9800,50):`);
+  if(respuesta === null || respuesta.trim() === '') return;
+  const nuevoSaldo = parsearMoneda(respuesta);
+  const diferencia = Math.round((nuevoSaldo - saldoActual) * 100) / 100;
+  if(diferencia === 0){ alert('Ese ya es el saldo actual, no se cargó ningún ajuste.'); return; }
+
+  const motivo = prompt('Motivo del ajuste (opcional):', 'Ajuste manual de saldo') || 'Ajuste manual de saldo';
+  const venta = diferencia > 0 ? diferencia : 0;
+  const pago = diferencia < 0 ? Math.abs(diferencia) : 0;
+
+  const {error} = await sb.from('movimientos').insert({
+    cliente_id: clienteActualId, fecha: new Date().toISOString().slice(0,10),
+    venta, deposito:0, cheque:0, echeq:0, pago,
+    observaciones: motivo, saldo: nuevoSaldo
+  });
+  if(error){ alert('Error: ' + error.message); return; }
+  await cargarMovimientosCliente(clienteActualId);
+  await cargarClientes();
+}
+
+async function ajustarSaldoProveedor(){
+  if(!proveedorActualId) return;
+  const saldoActual = movimientosProveedor.length ? movimientosProveedor[0].saldo : 0;
+  const respuesta = prompt(`Saldo actual: ${formatoMoneda(saldoActual)}\n\nEscribí el saldo correcto (ej: 9800 o 9800,50):`);
+  if(respuesta === null || respuesta.trim() === '') return;
+  const nuevoSaldo = parsearMoneda(respuesta);
+  const diferencia = Math.round((nuevoSaldo - saldoActual) * 100) / 100;
+  if(diferencia === 0){ alert('Ese ya es el saldo actual, no se cargó ningún ajuste.'); return; }
+
+  const motivo = prompt('Motivo del ajuste (opcional):', 'Ajuste manual de saldo') || 'Ajuste manual de saldo';
+  const compra = diferencia > 0 ? diferencia : 0;
+  const pago = diferencia < 0 ? Math.abs(diferencia) : 0;
+
+  const {error} = await sb.from('movimientos_proveedores').insert({
+    proveedor_id: proveedorActualId, fecha_factura: new Date().toISOString().slice(0,10),
+    numero_factura: '', compra, deposito:0, cheque:0, echeq:0, pago,
+    observaciones: motivo, saldo: nuevoSaldo
+  });
+  if(error){ alert('Error: ' + error.message); return; }
+  await cargarMovimientosProveedor(proveedorActualId);
+  await cargarProveedores();
 }
 
 </script>
