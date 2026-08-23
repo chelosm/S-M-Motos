@@ -666,13 +666,33 @@
 <!-- Plantilla oculta para generar la imagen del presupuesto -->
 <div id="plantilla-presupuesto-img" style="position:fixed; left:-9999px; top:0; width:600px; background:#ffffff; color:#111; font-family:Arial, sans-serif; padding:24px;"></div>
 
-<!-- Mini modal para elegir la forma de pago de una venta -->
+<!-- Mini modal para elegir la forma de pago de una venta (permite combinar métodos) -->
 <div id="fondo-forma-pago" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60;" onclick="if(event.target===this) resolverFormaPago(null)"></div>
-<div id="modal-forma-pago" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--metal); border:1px solid var(--metal-claro); border-radius:10px; padding:20px; width:85%; max-width:320px; z-index:61; text-align:center;">
-  <div style="font-weight:700; margin-bottom:14px;">¿Cómo pagó?</div>
-  <button onclick="resolverFormaPago('efectivo')" style="width:100%; margin-bottom:8px; background:var(--verde-stock); color:#0a0a0a; border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">💵 Efectivo</button>
-  <button onclick="resolverFormaPago('transferencia')" style="width:100%; margin-bottom:8px; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">📲 Transferencia (MP)</button>
-  <button onclick="resolverFormaPago('tarjeta')" style="width:100%; margin-bottom:8px; background:var(--naranja); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">💳 Crédito / Débito</button>
+<div id="modal-forma-pago" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--metal); border:1px solid var(--metal-claro); border-radius:10px; padding:20px; width:90%; max-width:340px; z-index:61; text-align:center; max-height:85vh; overflow-y:auto;">
+  <div style="font-weight:700; margin-bottom:4px;">¿Cómo pagó?</div>
+  <div id="total-forma-pago" style="font-size:0.85rem; color:var(--texto-tenue); margin-bottom:14px;"></div>
+
+  <div style="display:flex; gap:6px; margin-bottom:14px;">
+    <button onclick="llenarFormaPago('efectivo')" style="flex:1; background:var(--verde-stock); color:#0a0a0a; border:none; font-weight:700; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:0.82rem;">💵 Todo<br>efectivo</button>
+    <button onclick="llenarFormaPago('transferencia')" style="flex:1; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:0.82rem;">📲 Todo<br>transf.</button>
+    <button onclick="llenarFormaPago('tarjeta')" style="flex:1; background:var(--naranja); color:#1a1a1a; border:none; font-weight:700; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:0.82rem;">💳 Todo<br>tarjeta</button>
+  </div>
+
+  <div style="font-size:0.78rem; color:var(--texto-tenue); text-align:left; margin-bottom:8px;">O combiná varios métodos (la suma debe dar el total):</div>
+  <div style="text-align:left; margin-bottom:6px;">
+    <label style="font-size:0.85rem; display:block; margin-bottom:8px;">💵 Efectivo
+      <input type="number" inputmode="numeric" id="pago-split-efectivo" min="0" placeholder="0" oninput="actualizarRestoFormaPago()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px; margin-top:4px;">
+    </label>
+    <label style="font-size:0.85rem; display:block; margin-bottom:8px;">📲 Transferencia (MP)
+      <input type="number" inputmode="numeric" id="pago-split-transferencia" min="0" placeholder="0" oninput="actualizarRestoFormaPago()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px; margin-top:4px;">
+    </label>
+    <label style="font-size:0.85rem; display:block; margin-bottom:8px;">💳 Crédito / Débito
+      <input type="number" inputmode="numeric" id="pago-split-tarjeta" min="0" placeholder="0" oninput="actualizarRestoFormaPago()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px; margin-top:4px;">
+    </label>
+  </div>
+  <div id="resto-forma-pago" style="font-size:0.85rem; font-weight:700; margin-bottom:14px;"></div>
+
+  <button onclick="confirmarFormaPagoSplit()" style="width:100%; margin-bottom:8px; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:800; padding:12px; border-radius:6px; cursor:pointer;">Confirmar</button>
   <button onclick="resolverFormaPago(null)" style="width:100%; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:10px; border-radius:6px; cursor:pointer;">Cancelar</button>
 </div>
 
@@ -1661,12 +1681,55 @@
   let GASTOS_DIA = [];
 
   // El modal de forma de pago se resuelve como una Promesa: mostramos
-  // los botones y esperamos a que el usuario toque uno (o cancele).
+  // el modal (con opción de combinar métodos) y esperamos a que el
+  // usuario confirme (o cancele). Devuelve un objeto { efectivo, transferencia, tarjeta }.
   let _resolverFormaPagoPendiente = null;
-  function pedirFormaPago() {
+  let _totalFormaPagoActual = 0;
+  function pedirFormaPago(total) {
+    _totalFormaPagoActual = total;
+    const fmtTotal = total.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById("total-forma-pago").textContent = "Total a cobrar: $" + fmtTotal;
+    document.getElementById("pago-split-efectivo").value = "";
+    document.getElementById("pago-split-transferencia").value = "";
+    document.getElementById("pago-split-tarjeta").value = "";
+    actualizarRestoFormaPago();
     document.getElementById("fondo-forma-pago").style.display = "block";
     document.getElementById("modal-forma-pago").style.display = "block";
     return new Promise(resolve => { _resolverFormaPagoPendiente = resolve; });
+  }
+  function llenarFormaPago(metodo) {
+    document.getElementById("pago-split-efectivo").value = metodo === "efectivo" ? _totalFormaPagoActual.toFixed(2) : "0";
+    document.getElementById("pago-split-transferencia").value = metodo === "transferencia" ? _totalFormaPagoActual.toFixed(2) : "0";
+    document.getElementById("pago-split-tarjeta").value = metodo === "tarjeta" ? _totalFormaPagoActual.toFixed(2) : "0";
+    actualizarRestoFormaPago();
+  }
+  function actualizarRestoFormaPago() {
+    const e = parseFloat(document.getElementById("pago-split-efectivo").value) || 0;
+    const t = parseFloat(document.getElementById("pago-split-transferencia").value) || 0;
+    const c = parseFloat(document.getElementById("pago-split-tarjeta").value) || 0;
+    const resto = _totalFormaPagoActual - (e + t + c);
+    const el = document.getElementById("resto-forma-pago");
+    if (Math.abs(resto) < 0.5) {
+      el.textContent = "✅ Cuadra con el total";
+      el.style.color = "var(--verde-stock)";
+    } else if (resto > 0) {
+      el.textContent = "Falta cargar: $" + resto.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+      el.style.color = "var(--rojo-sinstock)";
+    } else {
+      el.textContent = "Sobra: $" + Math.abs(resto).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+      el.style.color = "var(--rojo-sinstock)";
+    }
+  }
+  function confirmarFormaPagoSplit() {
+    const e = parseFloat(document.getElementById("pago-split-efectivo").value) || 0;
+    const t = parseFloat(document.getElementById("pago-split-transferencia").value) || 0;
+    const c = parseFloat(document.getElementById("pago-split-tarjeta").value) || 0;
+    const resto = _totalFormaPagoActual - (e + t + c);
+    if (Math.abs(resto) >= 0.5) {
+      alert("Los montos cargados no coinciden con el total de la venta ($" + _totalFormaPagoActual.toFixed(2) + "). Revisá antes de confirmar.");
+      return;
+    }
+    resolverFormaPago({ efectivo: e, transferencia: t, tarjeta: c });
   }
   function resolverFormaPago(valor) {
     document.getElementById("fondo-forma-pago").style.display = "none";
@@ -1675,6 +1738,18 @@
       _resolverFormaPagoPendiente(valor);
       _resolverFormaPagoPendiente = null;
     }
+  }
+
+  // Convierte un objeto de pagos { efectivo, transferencia, tarjeta } en
+  // texto legible, ej: "💵 $5.000 + 📲 $5.000"
+  function resumenPagoTexto(pagos, conEmoji) {
+    if (!pagos) return "";
+    const partes = [];
+    const fmtCorto = n => Math.round(n).toLocaleString('es-AR');
+    if (pagos.efectivo > 0) partes.push((conEmoji ? "💵 " : "Efectivo ") + "$" + fmtCorto(pagos.efectivo));
+    if (pagos.transferencia > 0) partes.push((conEmoji ? "📲 " : "Transferencia ") + "$" + fmtCorto(pagos.transferencia));
+    if (pagos.tarjeta > 0) partes.push((conEmoji ? "💳 " : "Tarjeta ") + "$" + fmtCorto(pagos.tarjeta));
+    return partes.join(" + ");
   }
 
   // Pide un número (cantidad o precio) con teclado numérico, en vez del
@@ -1706,6 +1781,17 @@
       // Es el mismo día: recuperamos lo que estaba guardado
       VENTAS_DIA = JSON.parse(localStorage.getItem("planillaVentasDia") || "[]");
       GASTOS_DIA = JSON.parse(localStorage.getItem("planillaGastosDia") || "[]");
+      // Compatibilidad: ventas guardadas con el formato viejo (formaPago
+      // como texto único) se convierten al nuevo formato de pagos combinados
+      VENTAS_DIA.forEach(item => {
+        if (!item.pagos) {
+          const subtotal = item.precioUnitario * item.cantidad;
+          item.pagos = { efectivo: 0, transferencia: 0, tarjeta: 0 };
+          if (item.formaPago === "efectivo") item.pagos.efectivo = subtotal;
+          else if (item.formaPago === "transferencia") item.pagos.transferencia = subtotal;
+          else if (item.formaPago === "tarjeta") item.pagos.tarjeta = subtotal;
+        }
+      });
     } else {
       // Cambió el día y nadie cerró la caja: se descarta solo
       localStorage.removeItem("planillaVentasDia");
@@ -1739,19 +1825,19 @@
     const cantidad = Math.max(1, parseInt(respuesta) || 0);
     if (cantidad <= 0) return;
 
-    const formaPago = await pedirFormaPago();
-    if (!formaPago) return; // canceló la elección de pago: no se registra la venta
-
     const costoArs = producto.precio_usd * valorDolar;
     const costoConIva = costoArs * (1 + IVA);
     const ventaSugerido = redondearA50(costoConIva * (1 + margenPct / 100));
+
+    const pagos = await pedirFormaPago(ventaSugerido * cantidad);
+    if (!pagos) return; // canceló la elección de pago: no se registra la venta
 
     VENTAS_DIA.push({
       codigo: producto.codigo,
       descripcion: producto.descripcion || "",
       cantidad: cantidad,
       precioUnitario: ventaSugerido,
-      formaPago: formaPago
+      pagos: pagos
     });
     guardarPlanillaLocal();
     renderPlanilla();
@@ -1766,10 +1852,10 @@
     if (!desc) { alert("Escribí una descripción para lo vendido."); return; }
     if (isNaN(precio) || precio < 0) { alert("Ingresá un precio válido."); return; }
 
-    const formaPago = await pedirFormaPago();
-    if (!formaPago) return;
+    const pagos = await pedirFormaPago(precio * cant);
+    if (!pagos) return;
 
-    VENTAS_DIA.push({ codigo: "—", descripcion: desc, cantidad: cant, precioUnitario: precio, formaPago: formaPago });
+    VENTAS_DIA.push({ codigo: "—", descripcion: desc, cantidad: cant, precioUnitario: precio, pagos: pagos });
 
     document.getElementById("venta-manual-descripcion").value = "";
     document.getElementById("venta-manual-cantidad").value = "1";
@@ -1817,7 +1903,6 @@
 
   function renderPlanilla() {
     const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    const iconoPago = { efectivo: "💵", transferencia: "📲", tarjeta: "💳" };
 
     const listaVentas = document.getElementById("lista-ventas-dia");
     let totalVentas = 0;
@@ -1828,13 +1913,14 @@
       listaVentas.innerHTML = VENTAS_DIA.map((item, i) => {
         const subtotal = item.precioUnitario * item.cantidad;
         totalVentas += subtotal;
-        if (item.formaPago === "efectivo") totalEfectivo += subtotal;
-        else if (item.formaPago === "transferencia") totalTransferencia += subtotal;
-        else if (item.formaPago === "tarjeta") totalTarjeta += subtotal;
+        const pagos = item.pagos || { efectivo: 0, transferencia: 0, tarjeta: 0 };
+        totalEfectivo += pagos.efectivo || 0;
+        totalTransferencia += pagos.transferencia || 0;
+        totalTarjeta += pagos.tarjeta || 0;
         return `
           <div class="item-carrito">
             <div class="info">
-              <div class="cod">${item.codigo} × ${item.cantidad} ${iconoPago[item.formaPago] || ""}</div>
+              <div class="cod">${item.codigo} × ${item.cantidad} — ${resumenPagoTexto(pagos, true)}</div>
               <div class="desc">${item.descripcion}</div>
             </div>
             <div class="subtotal">$${fmt(subtotal)}</div>
@@ -1901,7 +1987,7 @@
     filas.push(["CANT", "CODIGO", "DESCRIPCION", "FORMA DE PAGO", "P.UNIT", "P.PARCIAL"]);
     const filaInicioVentas = filas.length + 1;
     VENTAS_DIA.forEach(item => {
-      const etiquetaPago = item.formaPago === "efectivo" ? "Efectivo" : item.formaPago === "transferencia" ? "Transferencia" : "Tarjeta";
+      const etiquetaPago = resumenPagoTexto(item.pagos, false) || "—";
       filas.push([item.cantidad, item.codigo, item.descripcion, etiquetaPago, fmtPesos(item.precioUnitario), fmtPesos(item.precioUnitario*item.cantidad)]);
     });
     const filaFinVentas = filas.length;
