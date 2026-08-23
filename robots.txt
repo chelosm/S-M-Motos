@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://chelosm.github.io/S-M-Motos/sitemap.xml
