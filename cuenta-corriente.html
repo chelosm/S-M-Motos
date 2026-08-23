@@ -193,6 +193,7 @@
           <div class="monto" id="saldoActualMonto">$0</div>
         </div>
         <button class="btn" style="width:100%;" onclick="exportarImagen()">📤 Compartir resumen (imagen)</button>
+        <button class="btn" style="width:100%;margin-top:8px;background:#fff;color:var(--rojo);border:1px solid var(--rojo);" onclick="borrarCliente()">🗑 Eliminar cliente</button>
       </div>
 
       <div class="card">
@@ -506,6 +507,23 @@ async function borrarMovimiento(id){
   await recalcularSaldos(clienteActualId);
   await cargarMovimientosCliente(clienteActualId);
   await cargarClientes();
+}
+
+/* ---------- BORRAR CLIENTE (y todo su historial) ---------- */
+async function borrarCliente(){
+  const c = clientes.find(x=>x.id===clienteActualId);
+  if(!c) return;
+  if(!confirm(`¿Eliminar a "${c.nombre}" y todo su historial de movimientos? Esto no se puede deshacer.`)) return;
+
+  const {error: e1} = await sb.from('movimientos').delete().eq('cliente_id', clienteActualId);
+  if(e1){ alert('Error al borrar movimientos: ' + e1.message); return; }
+
+  const {error: e2} = await sb.from('clientes').delete().eq('id', clienteActualId);
+  if(e2){ alert('Error al borrar cliente: ' + e2.message); return; }
+
+  clienteActualId = null;
+  await cargarClientes();
+  mostrarTab('resumen');
 }
 
 /* ---------- EXPORTAR / COMPARTIR IMAGEN ---------- */
