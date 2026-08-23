@@ -664,7 +664,9 @@ async function guardarMovimiento(){
   document.getElementById('mObs').value = '';
   document.getElementById('mFecha').valueAsDate = new Date();
 
+  await recalcularSaldos(clienteActualId);
   await cargarMovimientosCliente(clienteActualId);
+  await cargarClientes();
 }
 
 /* ---------- BORRAR MOVIMIENTO (y recalcular saldos posteriores) ---------- */
@@ -905,7 +907,9 @@ async function guardarMovimientoProveedor(){
   document.getElementById('pNumeroFactura').value = '';
   document.getElementById('pFecha').valueAsDate = new Date();
 
+  await recalcularSaldosProveedor(proveedorActualId);
   await cargarMovimientosProveedor(proveedorActualId);
+  await cargarProveedores();
 }
 
 async function borrarMovimientoProveedor(id){
