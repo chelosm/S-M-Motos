@@ -164,6 +164,12 @@
 
   <main>
     <div class="tabs">
+      <div class="tab active" id="modoClientesBtn" onclick="cambiarModo('clientes')">👥 Clientes</div>
+      <div class="tab" id="modoProveedoresBtn" onclick="cambiarModo('proveedores')">🏭 Proveedores</div>
+    </div>
+
+    <div id="seccionClientes">
+    <div class="tabs">
       <div class="tab active" id="tabResumen" onclick="mostrarTab('resumen')">Clientes</div>
       <div class="tab" id="tabCliente" onclick="mostrarTab('cliente')">Movimiento</div>
     </div>
@@ -238,6 +244,90 @@
         </div>
       </div>
     </div>
+    </div>
+    <!-- FIN seccionClientes -->
+
+    <!-- ================= SECCIÓN PROVEEDORES ================= -->
+    <div id="seccionProveedores" class="hidden">
+      <div class="tabs">
+        <div class="tab active" id="tabResumenProv" onclick="mostrarTabProv('resumen')">Proveedores</div>
+        <div class="tab" id="tabProveedorProv" onclick="mostrarTabProv('proveedor')">Movimiento</div>
+      </div>
+
+      <!-- RESUMEN GENERAL PROVEEDORES -->
+      <div id="vistaResumenProv">
+        <div class="card">
+          <input type="text" id="buscadorProveedores" placeholder="Buscar proveedor..." oninput="renderListaProveedores()">
+          <button class="btn" style="width:100%;margin-bottom:10px;" onclick="mostrarFormNuevoProveedor()">+ Nuevo proveedor</button>
+          <div id="formNuevoProveedor" class="hidden">
+            <input type="text" id="nombreNuevoProveedor" placeholder="Nombre del proveedor">
+            <button class="btn" style="margin-top:8px;" onclick="crearProveedor()">Guardar proveedor</button>
+            <div id="msgNuevoProveedor" class="msg"></div>
+          </div>
+          <div id="listaProveedores"></div>
+          <div class="totalGeneral" id="totalGeneralProv"></div>
+        </div>
+      </div>
+
+      <!-- FICHA DE UN PROVEEDOR -->
+      <div id="vistaProveedor" class="hidden">
+        <button id="volverBtnProv" onclick="mostrarTabProv('resumen')">&larr; Volver a proveedores</button>
+        <div class="card">
+          <h2 id="nombreProveedorActual" style="margin:0 0 6px;"></h2>
+          <div class="saldoBox" id="saldoActualBoxProv">
+            <div style="font-size:.8rem;color:#666;">Le debo (saldo actual)</div>
+            <div class="monto" id="saldoActualMontoProv">$0</div>
+          </div>
+          <button class="btn" style="width:100%;" onclick="exportarImagenProveedor()">📤 Compartir resumen (imagen)</button>
+          <button class="btn" style="width:100%;margin-top:8px;background:#fff;color:var(--rojo);border:1px solid var(--rojo);" onclick="borrarProveedor()">🗑 Eliminar proveedor</button>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0;">Cargar factura / movimiento</h3>
+          <label>Fecha de factura</label>
+          <input type="date" id="pFecha">
+          <label>N° de factura (opcional)</label>
+          <input type="text" id="pNumeroFactura" placeholder="Ej: 0001-00012345">
+          <label>Compra (monto de la factura)</label>
+          <input type="text" inputmode="decimal" class="input-monto" id="pCompra" placeholder="$0" value="$0">
+          <div class="row3">
+            <div>
+              <label>Depósito</label>
+              <input type="text" inputmode="decimal" class="input-monto" id="pDeposito" placeholder="$0" value="$0">
+            </div>
+            <div>
+              <label>Cheque</label>
+              <input type="text" inputmode="decimal" class="input-monto" id="pCheque" placeholder="$0" value="$0">
+            </div>
+            <div>
+              <label>Echeq</label>
+              <input type="text" inputmode="decimal" class="input-monto" id="pEcheq" placeholder="$0" value="$0">
+            </div>
+          </div>
+          <label>Pago (efectivo)</label>
+          <input type="text" inputmode="decimal" class="input-monto" id="pPago" placeholder="$0" value="$0">
+          <label>Observaciones</label>
+          <input type="text" id="pObs" placeholder="(opcional)">
+          <button class="btn" style="width:100%;margin-top:14px;" onclick="guardarMovimientoProveedor()">Guardar movimiento</button>
+          <div id="msgMovimientoProv" class="msg"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0;">Historial</h3>
+          <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th><th>N° Fact.</th><th>Compra</th><th>Dep.</th><th>Cheque</th><th>Echeq</th><th>Pago</th><th>Saldo</th><th>Obs.</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="tablaHistorialProv"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- FIN seccionProveedores -->
   </main>
 </div>
 
@@ -263,6 +353,28 @@
   </div>
 </div>
 
+<!-- Plantilla oculta para exportar resumen de proveedor -->
+<div id="plantillaExportProv" style="position:fixed;left:-9999px;top:0;width:680px;background:#fff;font-family:'Segoe UI', Arial, sans-serif;padding:24px;">
+  <div class="encabezado" style="background:var(--negro);color:var(--amarillo);padding:16px 20px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center;">
+    <span class="marca" style="font-size:1.1rem;font-weight:700;">S-M MOTOS</span>
+    <span class="fecha" id="expFechaProv" style="color:#ccc;font-size:.8rem;"></span>
+  </div>
+  <div class="cuerpo" style="border:1px solid var(--gris-borde);border-top:none;padding:20px;border-radius:0 0 8px 8px;">
+    <div class="nombreCliente" id="expNombreProv" style="font-size:1.3rem;font-weight:700;margin-bottom:4px;"></div>
+    <div class="saldoResumen" style="text-align:center;padding:16px;background:var(--gris-claro);border-radius:8px;margin:14px 0 18px;">
+      <div style="font-size:.8rem;color:#666;">Saldo (le debo)</div>
+      <div class="monto" id="expSaldoProv" style="font-size:2rem;font-weight:700;">$0</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+      <thead>
+        <tr><th style="padding:8px 6px;text-align:left;background:var(--gris-claro);font-size:.72rem;">Fecha</th><th style="padding:8px 6px;text-align:right;background:var(--gris-claro);font-size:.72rem;">N° Fact.</th><th style="padding:8px 6px;text-align:right;background:var(--gris-claro);font-size:.72rem;">Compra</th><th style="padding:8px 6px;text-align:right;background:var(--gris-claro);font-size:.72rem;">Dep.</th><th style="padding:8px 6px;text-align:right;background:var(--gris-claro);font-size:.72rem;">Cheque</th><th style="padding:8px 6px;text-align:right;background:var(--gris-claro);font-size:.72rem;">Echeq</th><th style="padding:8px 6px;text-align:right;background:var(--gris-claro);font-size:.72rem;">Pago</th><th style="padding:8px 6px;text-align:right;background:var(--gris-claro);font-size:.72rem;">Saldo</th></tr>
+      </thead>
+      <tbody id="expTablaProv"></tbody>
+    </table>
+    <div style="margin-top:16px;text-align:center;color:#999;font-size:.72rem;">Resumen generado desde el sistema de cuenta corriente de S-M Motos</div>
+  </div>
+</div>
+
 <script>
 /* ---------- CONFIG ---------- */
 const SUPABASE_URL = "https://lzozlxxcnkqznnuueuxd.supabase.co";
@@ -275,6 +387,19 @@ let clientes = [];       // [{id, nombre, saldo}]
 let clienteActualId = null;
 let movimientosCliente = [];
 
+let proveedores = [];
+let proveedorActualId = null;
+let movimientosProveedor = [];
+
+/* ---------- CAMBIO DE MODO (Clientes / Proveedores) ---------- */
+function cambiarModo(modo){
+  document.getElementById('seccionClientes').classList.toggle('hidden', modo !== 'clientes');
+  document.getElementById('seccionProveedores').classList.toggle('hidden', modo !== 'proveedores');
+  document.getElementById('modoClientesBtn').classList.toggle('active', modo === 'clientes');
+  document.getElementById('modoProveedoresBtn').classList.toggle('active', modo === 'proveedores');
+  if(modo === 'proveedores') cargarProveedores();
+}
+
 /* ---------- LOGIN ---------- */
 function intentarLogin(){
   const val = document.getElementById('passInput').value;
@@ -282,6 +407,7 @@ function intentarLogin(){
     document.getElementById('loginBox').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     document.getElementById('mFecha').valueAsDate = new Date();
+    document.getElementById('pFecha').valueAsDate = new Date();
     cargarClientes();
   } else {
     document.getElementById('loginError').textContent = "Contraseña incorrecta";
@@ -598,6 +724,241 @@ async function recalcularSaldos(clienteId){
     }
   }
 }
+
+/* ================= PROVEEDORES ================= */
+
+function mostrarTabProv(cual){
+  document.getElementById('tabResumenProv').classList.toggle('active', cual==='resumen');
+  document.getElementById('tabProveedorProv').classList.toggle('active', cual==='proveedor');
+  document.getElementById('vistaResumenProv').classList.toggle('hidden', cual!=='resumen');
+  document.getElementById('vistaProveedor').classList.toggle('hidden', cual!=='proveedor');
+  if(cual==='resumen') cargarProveedores();
+}
+
+async function cargarProveedores(){
+  const {data: listaProveedores, error: e1} = await sb.from('proveedores').select('id,nombre').order('nombre');
+  if(e1){ console.error(e1); return; }
+
+  const {data: movs, error: e2} = await sb.from('movimientos_proveedores').select('proveedor_id,fecha_factura,created_at,saldo').order('fecha_factura',{ascending:true}).order('created_at',{ascending:true});
+  if(e2){ console.error(e2); return; }
+
+  const ultimoSaldo = {};
+  (movs||[]).forEach(m=>{ ultimoSaldo[m.proveedor_id] = m.saldo; });
+
+  proveedores = (listaProveedores||[]).map(p=>({
+    id:p.id, nombre:p.nombre, saldo: ultimoSaldo[p.id] ?? 0
+  }));
+
+  renderListaProveedores();
+}
+
+function renderListaProveedores(){
+  const filtro = (document.getElementById('buscadorProveedores').value||'').toLowerCase();
+  const cont = document.getElementById('listaProveedores');
+  cont.innerHTML = '';
+  let total = 0;
+  proveedores
+    .filter(p=>p.nombre.toLowerCase().includes(filtro))
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre))
+    .forEach(p=>{
+      total += Number(p.saldo)||0;
+      const div = document.createElement('div');
+      div.className = 'clienteItem';
+      const claseSaldo = p.saldo > 0 ? 'deudor' : (p.saldo < 0 ? 'favor' : '');
+      div.innerHTML = `<span class="nombre">${p.nombre}</span><span class="saldo ${claseSaldo}">${formatoMoneda(p.saldo)}</span>`;
+      div.onclick = () => abrirProveedor(p.id);
+      cont.appendChild(div);
+    });
+  document.getElementById('totalGeneralProv').textContent = "Total que debo: " + formatoMoneda(total);
+}
+
+function mostrarFormNuevoProveedor(){
+  document.getElementById('formNuevoProveedor').classList.toggle('hidden');
+}
+async function crearProveedor(){
+  const nombre = document.getElementById('nombreNuevoProveedor').value.trim();
+  const msg = document.getElementById('msgNuevoProveedor');
+  if(!nombre){ msg.textContent="Escribí un nombre"; msg.className="msg err"; return; }
+  const {data, error} = await sb.from('proveedores').insert({nombre}).select().single();
+  if(error){ msg.textContent = "Error: " + error.message; msg.className="msg err"; return; }
+  msg.textContent = "Proveedor creado"; msg.className="msg ok";
+  document.getElementById('nombreNuevoProveedor').value='';
+  await cargarProveedores();
+  abrirProveedor(data.id);
+}
+
+async function abrirProveedor(id){
+  proveedorActualId = id;
+  const p = proveedores.find(x=>x.id===id);
+  document.getElementById('nombreProveedorActual').textContent = p ? p.nombre : '';
+  mostrarTabProv('proveedor');
+  await cargarMovimientosProveedor(id);
+}
+
+async function cargarMovimientosProveedor(id){
+  const {data, error} = await sb.from('movimientos_proveedores')
+    .select('*')
+    .eq('proveedor_id', id)
+    .order('fecha_factura',{ascending:false})
+    .order('created_at',{ascending:false});
+  if(error){ console.error(error); return; }
+  movimientosProveedor = data || [];
+  renderHistorialProveedor();
+  const saldoActual = movimientosProveedor.length ? movimientosProveedor[0].saldo : 0;
+  const box = document.getElementById('saldoActualBoxProv');
+  box.className = 'saldoBox ' + (saldoActual>0?'deudor':(saldoActual<0?'favor':''));
+  document.getElementById('saldoActualMontoProv').textContent = formatoMoneda(saldoActual);
+}
+
+function renderHistorialProveedor(){
+  const tbody = document.getElementById('tablaHistorialProv');
+  tbody.innerHTML = '';
+  movimientosProveedor.forEach(m=>{
+    const tr = document.createElement('tr');
+    const fechaFmt = new Date(m.fecha_factura+'T00:00:00').toLocaleDateString('es-AR');
+    tr.innerHTML = `
+      <td>${fechaFmt}</td>
+      <td>${m.numero_factura||''}</td>
+      <td>${formatoMoneda(m.compra)}</td>
+      <td>${formatoMoneda(m.deposito)}</td>
+      <td>${formatoMoneda(m.cheque)}</td>
+      <td>${formatoMoneda(m.echeq)}</td>
+      <td>${formatoMoneda(m.pago)}</td>
+      <td>${formatoMoneda(m.saldo)}</td>
+      <td class="obs">${m.observaciones||''}</td>
+      <td><button class="miniBtn del" onclick="borrarMovimientoProveedor('${m.id}')">🗑</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function guardarMovimientoProveedor(){
+  const msg = document.getElementById('msgMovimientoProv');
+  if(!proveedorActualId){ return; }
+  const fecha_factura = document.getElementById('pFecha').value;
+  const numero_factura = document.getElementById('pNumeroFactura').value.trim();
+  const compra = parsearMoneda(document.getElementById('pCompra').value);
+  const deposito = parsearMoneda(document.getElementById('pDeposito').value);
+  const cheque = parsearMoneda(document.getElementById('pCheque').value);
+  const echeq = parsearMoneda(document.getElementById('pEcheq').value);
+  const pago = parsearMoneda(document.getElementById('pPago').value);
+  const observaciones = document.getElementById('pObs').value.trim();
+
+  if(!fecha_factura){ msg.textContent="Elegí una fecha"; msg.className="msg err"; return; }
+
+  const saldoAnterior = movimientosProveedor.length ? movimientosProveedor[0].saldo : 0;
+  const saldoNuevo = saldoAnterior + compra - (deposito + cheque + echeq + pago);
+
+  const {error} = await sb.from('movimientos_proveedores').insert({
+    proveedor_id: proveedorActualId, fecha_factura, numero_factura, compra, deposito, cheque, echeq, pago,
+    observaciones, saldo: saldoNuevo
+  });
+  if(error){ msg.textContent = "Error: " + error.message; msg.className="msg err"; return; }
+
+  msg.textContent = "Movimiento guardado"; msg.className = "msg ok";
+  ['pCompra','pDeposito','pCheque','pEcheq','pPago'].forEach(id=>resetInputMonto(id));
+  document.getElementById('pObs').value = '';
+  document.getElementById('pNumeroFactura').value = '';
+  document.getElementById('pFecha').valueAsDate = new Date();
+
+  await cargarMovimientosProveedor(proveedorActualId);
+}
+
+async function borrarMovimientoProveedor(id){
+  if(!confirm('¿Borrar este movimiento? Los saldos posteriores del proveedor se recalculan automáticamente.')) return;
+  const {error} = await sb.from('movimientos_proveedores').delete().eq('id', id);
+  if(error){ alert('Error al borrar: ' + error.message); return; }
+  await recalcularSaldosProveedor(proveedorActualId);
+  await cargarMovimientosProveedor(proveedorActualId);
+  await cargarProveedores();
+}
+
+async function borrarProveedor(){
+  const p = proveedores.find(x=>x.id===proveedorActualId);
+  if(!p) return;
+  if(!confirm(`¿Eliminar a "${p.nombre}" y todo su historial de movimientos? Esto no se puede deshacer.`)) return;
+
+  const {error: e1} = await sb.from('movimientos_proveedores').delete().eq('proveedor_id', proveedorActualId);
+  if(e1){ alert('Error al borrar movimientos: ' + e1.message); return; }
+
+  const {error: e2} = await sb.from('proveedores').delete().eq('id', proveedorActualId);
+  if(e2){ alert('Error al borrar proveedor: ' + e2.message); return; }
+
+  proveedorActualId = null;
+  await cargarProveedores();
+  mostrarTabProv('resumen');
+}
+
+async function recalcularSaldosProveedor(proveedorId){
+  const {data, error} = await sb.from('movimientos_proveedores')
+    .select('*')
+    .eq('proveedor_id', proveedorId)
+    .order('fecha_factura',{ascending:true})
+    .order('created_at',{ascending:true});
+  if(error || !data) return;
+  let saldo = 0;
+  for(const m of data){
+    saldo = saldo + Number(m.compra) - (Number(m.deposito)+Number(m.cheque)+Number(m.echeq)+Number(m.pago));
+    if(saldo !== m.saldo){
+      await sb.from('movimientos_proveedores').update({saldo}).eq('id', m.id);
+    }
+  }
+}
+
+async function exportarImagenProveedor(){
+  const p = proveedores.find(x=>x.id===proveedorActualId);
+  if(!p || !movimientosProveedor.length){
+    alert('Este proveedor todavía no tiene movimientos cargados.');
+    return;
+  }
+
+  document.getElementById('expFechaProv').textContent = new Date().toLocaleDateString('es-AR');
+  document.getElementById('expNombreProv').textContent = p.nombre;
+  const saldoActual = movimientosProveedor[0].saldo;
+  const expSaldoEl = document.getElementById('expSaldoProv');
+  expSaldoEl.textContent = formatoMoneda(saldoActual);
+  expSaldoEl.style.color = saldoActual > 0 ? '#c0392b' : (saldoActual < 0 ? '#1e7e34' : '#161616');
+
+  const tbody = document.getElementById('expTablaProv');
+  tbody.innerHTML = '';
+  [...movimientosProveedor].reverse().forEach(m=>{
+    const fechaFmt = new Date(m.fecha_factura+'T00:00:00').toLocaleDateString('es-AR');
+    const tr = document.createElement('tr');
+    const celda = (contenido, alinear) => `<td style="padding:8px 6px;text-align:${alinear};border-bottom:1px solid #dcdcdc;">${contenido}</td>`;
+    tr.innerHTML =
+      celda(fechaFmt,'left') +
+      celda(m.numero_factura||'','right') +
+      celda(formatoMoneda(m.compra),'right') +
+      celda(formatoMoneda(m.deposito),'right') +
+      celda(formatoMoneda(m.cheque),'right') +
+      celda(formatoMoneda(m.echeq),'right') +
+      celda(formatoMoneda(m.pago),'right') +
+      celda(formatoMoneda(m.saldo),'right');
+    tbody.appendChild(tr);
+  });
+
+  const plantilla = document.getElementById('plantillaExportProv');
+  const canvas = await html2canvas(plantilla, {scale:2, backgroundColor:'#ffffff'});
+
+  canvas.toBlob(async (blob)=>{
+    const nombreArchivo = `cuenta_proveedor_${p.nombre.replace(/\s+/g,'_')}.png`;
+    const file = new File([blob], nombreArchivo, {type:'image/png'});
+
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({files:[file], title:'Cuenta proveedor - '+p.nombre});
+        return;
+      }catch(e){ return; }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nombreArchivo;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
 </script>
 </body>
 </html>
