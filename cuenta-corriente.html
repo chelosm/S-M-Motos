@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>S-M Motos | Cuenta Corriente de Clientes</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
     --negro:#161616;
@@ -115,6 +116,30 @@
   }
   #volverBtn{background:none;border:none;color:var(--negro);font-weight:600;cursor:pointer;padding:0 0 10px;font-size:.9rem;}
   .hidden{display:none !important;}
+
+  /* PLANTILLA PARA EXPORTAR IMAGEN */
+  #plantillaExport{
+    position:fixed;left:-9999px;top:0;
+    width:680px;background:#fff;font-family:'Segoe UI', Arial, sans-serif;
+    padding:24px;
+  }
+  #plantillaExport .encabezado{
+    background:var(--negro);color:var(--amarillo);padding:16px 20px;border-radius:8px 8px 0 0;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  #plantillaExport .encabezado .marca{font-size:1.1rem;font-weight:700;}
+  #plantillaExport .encabezado .fecha{color:#ccc;font-size:.8rem;}
+  #plantillaExport .cuerpo{border:1px solid var(--gris-borde);border-top:none;padding:20px;border-radius:0 0 8px 8px;}
+  #plantillaExport .nombreCliente{font-size:1.3rem;font-weight:700;margin-bottom:4px;}
+  #plantillaExport .saldoResumen{
+    text-align:center;padding:16px;background:var(--gris-claro);border-radius:8px;margin:14px 0 18px;
+  }
+  #plantillaExport .saldoResumen .monto{font-size:2rem;font-weight:700;}
+  #plantillaExport table{width:100%;border-collapse:collapse;font-size:.82rem;}
+  #plantillaExport th,#plantillaExport td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--gris-borde);}
+  #plantillaExport th:first-child,#plantillaExport td:first-child{text-align:left;}
+  #plantillaExport th{background:var(--gris-claro);font-size:.72rem;}
+  #plantillaExport .piePagina{margin-top:16px;text-align:center;color:#999;font-size:.72rem;}
   .msg{font-size:.85rem;margin-top:6px;min-height:18px;}
   .msg.ok{color:var(--verde);}
   .msg.err{color:var(--rojo);}
@@ -167,6 +192,7 @@
           <div style="font-size:.8rem;color:#666;">Saldo actual</div>
           <div class="monto" id="saldoActualMonto">$0</div>
         </div>
+        <button class="btn" style="width:100%;" onclick="exportarImagen()">📤 Compartir resumen (imagen)</button>
       </div>
 
       <div class="card">
@@ -212,6 +238,28 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- Plantilla oculta usada solo para generar la imagen -->
+<div id="plantillaExport">
+  <div class="encabezado">
+    <span class="marca">S-M MOTOS</span>
+    <span class="fecha" id="expFecha"></span>
+  </div>
+  <div class="cuerpo">
+    <div class="nombreCliente" id="expNombre"></div>
+    <div class="saldoResumen">
+      <div style="font-size:.8rem;color:#666;">Saldo actual</div>
+      <div class="monto" id="expSaldo">$0</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Fecha</th><th>Venta</th><th>Dep.</th><th>Cheque</th><th>Echeq</th><th>Pago</th><th>Saldo</th></tr>
+      </thead>
+      <tbody id="expTabla"></tbody>
+    </table>
+    <div class="piePagina">Resumen generado desde el sistema de cuenta corriente de S-M Motos</div>
+  </div>
 </div>
 
 <script>
@@ -396,6 +444,63 @@ async function borrarMovimiento(id){
   await recalcularSaldos(clienteActualId);
   await cargarMovimientosCliente(clienteActualId);
   await cargarClientes();
+}
+
+/* ---------- EXPORTAR / COMPARTIR IMAGEN ---------- */
+async function exportarImagen(){
+  const c = clientes.find(x=>x.id===clienteActualId);
+  if(!c || !movimientosCliente.length){
+    alert('Este cliente todavía no tiene movimientos cargados.');
+    return;
+  }
+
+  document.getElementById('expFecha').textContent = new Date().toLocaleDateString('es-AR');
+  document.getElementById('expNombre').textContent = c.nombre;
+  const saldoActual = movimientosCliente[0].saldo;
+  const expSaldoEl = document.getElementById('expSaldo');
+  expSaldoEl.textContent = formatoMoneda(saldoActual);
+  expSaldoEl.style.color = saldoActual > 0 ? '#c0392b' : (saldoActual < 0 ? '#1e7e34' : '#161616');
+
+  const tbody = document.getElementById('expTabla');
+  tbody.innerHTML = '';
+  // orden cronológico (más viejo arriba) para que se lea como un extracto
+  [...movimientosCliente].reverse().forEach(m=>{
+    const fechaFmt = new Date(m.fecha+'T00:00:00').toLocaleDateString('es-AR');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${fechaFmt}</td>
+      <td>${formatoMoneda(m.venta)}</td>
+      <td>${formatoMoneda(m.deposito)}</td>
+      <td>${formatoMoneda(m.cheque)}</td>
+      <td>${formatoMoneda(m.echeq)}</td>
+      <td>${formatoMoneda(m.pago)}</td>
+      <td>${formatoMoneda(m.saldo)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const plantilla = document.getElementById('plantillaExport');
+  const canvas = await html2canvas(plantilla, {scale:2, backgroundColor:'#ffffff'});
+
+  canvas.toBlob(async (blob)=>{
+    const nombreArchivo = `cuenta_corriente_${c.nombre.replace(/\s+/g,'_')}.png`;
+    const file = new File([blob], nombreArchivo, {type:'image/png'});
+
+    // En el celu, intenta abrir directamente el menú de compartir (WhatsApp, etc.)
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({files:[file], title:'Cuenta corriente - '+c.nombre});
+        return;
+      }catch(e){ /* si cancela el share, no hacemos nada más */ return; }
+    }
+
+    // Si no soporta compartir (ej. en PC), descarga la imagen normal
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nombreArchivo;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 'image/png');
 }
 
 async function recalcularSaldos(clienteId){
