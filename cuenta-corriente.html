@@ -200,23 +200,23 @@
         <label>Fecha</label>
         <input type="date" id="mFecha">
         <label>Venta</label>
-        <input type="number" inputmode="decimal" id="mVenta" placeholder="0" value="0">
+        <input type="text" inputmode="decimal" id="mVenta" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
         <div class="row3">
           <div>
             <label>Depósito</label>
-            <input type="number" inputmode="decimal" id="mDeposito" placeholder="0" value="0">
+            <input type="text" inputmode="decimal" id="mDeposito" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
           </div>
           <div>
             <label>Cheque</label>
-            <input type="number" inputmode="decimal" id="mCheque" placeholder="0" value="0">
+            <input type="text" inputmode="decimal" id="mCheque" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
           </div>
           <div>
             <label>Echeq</label>
-            <input type="number" inputmode="decimal" id="mEcheq" placeholder="0" value="0">
+            <input type="text" inputmode="decimal" id="mEcheq" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
           </div>
         </div>
         <label>Pago (efectivo)</label>
-        <input type="number" inputmode="decimal" id="mPago" placeholder="0" value="0">
+        <input type="text" inputmode="decimal" id="mPago" placeholder="$0" value="$0" oninput="formatearInputMoneda(this)" onfocus="this.select()">
         <label>Observaciones</label>
         <input type="text" id="mObs" placeholder="(opcional)">
         <button class="btn" style="width:100%;margin-top:14px;" onclick="guardarMovimiento()">Guardar movimiento</button>
@@ -296,6 +296,26 @@ function cerrarSesion(){
 function formatoMoneda(n){
   n = Number(n) || 0;
   return "$" + n.toLocaleString('es-AR', {minimumFractionDigits:0, maximumFractionDigits:0});
+}
+
+/* Formatea en vivo mientras el usuario escribe un monto: $1.234.567,89 */
+function formatearInputMoneda(input){
+  let val = input.value.replace(/[^\d,]/g,''); // solo dígitos y una coma
+  const partes = val.split(',');
+  let entero = (partes[0] || '').replace(/^0+(?=\d)/,'');
+  let decimales = partes.length > 1 ? partes.slice(1).join('').slice(0,2) : undefined;
+  const enteroFormateado = entero.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  let resultado = '$' + (enteroFormateado || '0');
+  if(decimales !== undefined) resultado += ',' + decimales;
+  else if(val.endsWith(',')) resultado += ',';
+  input.value = resultado;
+}
+
+/* Convierte "$1.234.567,89" -> 1234567.89 */
+function parsearMoneda(texto){
+  if(!texto) return 0;
+  const limpio = texto.replace(/\$/g,'').replace(/\./g,'').replace(',', '.');
+  return parseFloat(limpio) || 0;
 }
 
 /* ---------- TABS ---------- */
@@ -411,11 +431,11 @@ async function guardarMovimiento(){
   const msg = document.getElementById('msgMovimiento');
   if(!clienteActualId){ return; }
   const fecha = document.getElementById('mFecha').value;
-  const venta = Number(document.getElementById('mVenta').value)||0;
-  const deposito = Number(document.getElementById('mDeposito').value)||0;
-  const cheque = Number(document.getElementById('mCheque').value)||0;
-  const echeq = Number(document.getElementById('mEcheq').value)||0;
-  const pago = Number(document.getElementById('mPago').value)||0;
+  const venta = parsearMoneda(document.getElementById('mVenta').value);
+  const deposito = parsearMoneda(document.getElementById('mDeposito').value);
+  const cheque = parsearMoneda(document.getElementById('mCheque').value);
+  const echeq = parsearMoneda(document.getElementById('mEcheq').value);
+  const pago = parsearMoneda(document.getElementById('mPago').value);
   const observaciones = document.getElementById('mObs').value.trim();
 
   if(!fecha){ msg.textContent="Elegí una fecha"; msg.className="msg err"; return; }
@@ -430,7 +450,8 @@ async function guardarMovimiento(){
   if(error){ msg.textContent = "Error: " + error.message; msg.className="msg err"; return; }
 
   msg.textContent = "Movimiento guardado"; msg.className = "msg ok";
-  ['mVenta','mDeposito','mCheque','mEcheq','mPago','mObs'].forEach(id=>document.getElementById(id).value = id==='mObs' ? '' : '0');
+  ['mVenta','mDeposito','mCheque','mEcheq','mPago'].forEach(id=>document.getElementById(id).value = '$0');
+  document.getElementById('mObs').value = '';
   document.getElementById('mFecha').valueAsDate = new Date();
 
   await cargarMovimientosCliente(clienteActualId);
