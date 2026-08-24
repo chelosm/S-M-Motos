@@ -270,6 +270,8 @@
           <div style="border-top:1px solid var(--gris-borde);margin-top:14px;padding-top:12px;">
             <label style="margin-bottom:4px;">Valor dólar hoy (para ver deuda USD en pesos)</label>
             <input type="text" inputmode="decimal" class="input-monto" id="valorDolarDisplay" value="$0">
+            <button class="btn" style="width:100%;margin-top:8px;" onclick="guardarValorDolar()">💾 Guardar este valor</button>
+            <small class="hint" id="valorDolarGuardadoInfo"></small>
           </div>
         </div>
       </div>
@@ -468,6 +470,7 @@ function intentarLogin(){
     document.getElementById('app').classList.remove('hidden');
     document.getElementById('mFecha').valueAsDate = new Date();
     document.getElementById('pFecha').valueAsDate = new Date();
+    cargarValorDolarGuardado();
     cargarClientes();
   } else {
     document.getElementById('loginError').textContent = "Contraseña incorrecta";
@@ -554,6 +557,31 @@ document.getElementById('valorDolarDisplay').addEventListener('input', ()=>{
   renderListaProveedores();
   if(proveedorActualId) cargarMovimientosProveedor(proveedorActualId);
 });
+
+/* ---------- VALOR DÓLAR GUARDADO (para no tener que escribirlo cada vez) ---------- */
+function cargarValorDolarGuardado(){
+  const guardado = localStorage.getItem('smmotos_valorDolar');
+  const info = document.getElementById('valorDolarGuardadoInfo');
+  if(guardado){
+    setMoneyInputValue('valorDolarDisplay', parseFloat(guardado));
+    info.textContent = 'Guardado: ' + formatoMoneda(parseFloat(guardado));
+  } else {
+    info.textContent = 'Todavía no guardaste ningún valor.';
+  }
+}
+
+function guardarValorDolar(){
+  const nuevo = parsearMoneda(document.getElementById('valorDolarDisplay').value);
+  const guardadoAntes = localStorage.getItem('smmotos_valorDolar');
+  if(guardadoAntes && parseFloat(guardadoAntes) !== nuevo){
+    const ok = confirm(`Ya tenías guardado ${formatoMoneda(parseFloat(guardadoAntes))}.\n¿Reemplazarlo por ${formatoMoneda(nuevo)}?`);
+    if(!ok) return;
+  }
+  localStorage.setItem('smmotos_valorDolar', String(nuevo));
+  document.getElementById('valorDolarGuardadoInfo').textContent = 'Guardado: ' + formatoMoneda(nuevo);
+  renderListaProveedores();
+  if(proveedorActualId) cargarMovimientosProveedor(proveedorActualId);
+}
 
 /* ---------- TABS ---------- */
 function mostrarTab(cual){
