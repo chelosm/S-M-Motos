@@ -847,10 +847,14 @@ function renderListaProveedores(){
       div.onclick = () => abrirProveedor(p.id);
       cont.appendChild(div);
     });
-  let textoTotal = "Total que debo: " + formatoMoneda(totalArs);
-  if(totalUsd !== 0){
-    textoTotal += " + " + formatoDolar(totalUsd);
-    if(valorDolar > 0) textoTotal += ` (≈ ${formatoMoneda(totalArs + totalUsd*valorDolar)} en total)`;
+  let textoTotal;
+  if(valorDolar > 0){
+    const totalPesosConvertido = totalArs + totalUsd*valorDolar;
+    textoTotal = "Total que debo: " + formatoMoneda(totalPesosConvertido);
+  } else if(totalUsd !== 0){
+    textoTotal = "Total en pesos: " + formatoMoneda(totalArs) + " (cargá el valor del dólar para sumar la deuda en USD)";
+  } else {
+    textoTotal = "Total que debo: " + formatoMoneda(totalArs);
   }
   document.getElementById('totalGeneralProv').textContent = textoTotal;
 }
