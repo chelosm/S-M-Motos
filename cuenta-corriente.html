@@ -842,10 +842,11 @@ function renderListaProveedores(){
       const div = document.createElement('div');
       div.className = 'clienteItem';
       const claseSaldo = (p.saldoArs > 0 || p.saldoUsd > 0) ? 'deudor' : ((p.saldoArs < 0 || p.saldoUsd < 0) ? 'favor' : '');
-      let textoSaldo = formatoMoneda(p.saldoArs);
-      if(p.saldoUsd !== 0){
-        textoSaldo += ' + ' + formatoDolar(p.saldoUsd);
-        if(valorDolar > 0) textoSaldo += ` (${formatoMoneda(p.saldoUsd * valorDolar)})`;
+      let textoSaldo;
+      if(p.saldoUsd !== 0 && valorDolar > 0){
+        textoSaldo = formatoMoneda(p.saldoArs + p.saldoUsd * valorDolar);
+      } else {
+        textoSaldo = formatoMoneda(p.saldoArs);
       }
       div.innerHTML = `<span class="nombre">${p.nombre}</span><span class="saldo ${claseSaldo}">${textoSaldo}</span>`;
       div.onclick = () => abrirProveedor(p.id);
