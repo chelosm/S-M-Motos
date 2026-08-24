@@ -670,7 +670,15 @@
 <div id="fondo-forma-pago" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60;" onclick="if(event.target===this) resolverFormaPago(null)"></div>
 <div id="modal-forma-pago" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--metal); border:1px solid var(--metal-claro); border-radius:10px; padding:20px; width:90%; max-width:340px; z-index:61; text-align:center; max-height:85vh; overflow-y:auto;">
   <div style="font-weight:700; margin-bottom:4px;">¿Cómo pagó?</div>
-  <div id="total-forma-pago" style="font-size:0.85rem; color:var(--texto-tenue); margin-bottom:14px;"></div>
+  <div id="cantidad-forma-pago" style="font-size:0.78rem; color:var(--texto-tenue); margin-bottom:8px;"></div>
+
+  <div style="text-align:left; margin-bottom:12px;">
+    <label style="font-size:0.85rem; display:block;">Precio unitario (podés bajarlo si vendiste más barato)
+      <input type="number" inputmode="decimal" id="precio-unitario-forma-pago" min="0" step="0.01" oninput="actualizarTotalDesdePrecio()" style="width:100%; background:var(--asfalto); border:1px solid var(--amarillo); color:var(--texto); padding:8px; border-radius:5px; margin-top:4px; font-weight:700;">
+    </label>
+  </div>
+
+  <div id="total-forma-pago" style="font-size:0.85rem; color:var(--texto-tenue); margin-bottom:14px; font-weight:700;"></div>
 
   <div style="display:flex; gap:6px; margin-bottom:14px;">
     <button onclick="llenarFormaPago('efectivo')" style="flex:1; background:var(--verde-stock); color:#0a0a0a; border:none; font-weight:700; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:0.82rem;">💵 Todo<br>efectivo</button>
@@ -1681,21 +1689,30 @@
   let GASTOS_DIA = [];
 
   // El modal de forma de pago se resuelve como una Promesa: mostramos
-  // el modal (con opción de combinar métodos) y esperamos a que el
-  // usuario confirme (o cancele). Devuelve un objeto { efectivo, transferencia, tarjeta }.
+  // el modal (con opción de combinar métodos y editar el precio unitario
+  // por si se vendió más barato) y esperamos a que el usuario confirme
+  // (o cancele). Devuelve { pagos: {efectivo, transferencia, tarjeta}, precioUnitario }.
   let _resolverFormaPagoPendiente = null;
   let _totalFormaPagoActual = 0;
-  function pedirFormaPago(total) {
-    _totalFormaPagoActual = total;
-    const fmtTotal = total.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
-    document.getElementById("total-forma-pago").textContent = "Total a cobrar: $" + fmtTotal;
+  let _cantidadFormaPagoActual = 1;
+  function pedirFormaPago(cantidad, precioUnitarioSugerido) {
+    _cantidadFormaPagoActual = cantidad;
+    document.getElementById("cantidad-forma-pago").textContent = "Cantidad: " + cantidad;
+    document.getElementById("precio-unitario-forma-pago").value = precioUnitarioSugerido.toFixed(2);
     document.getElementById("pago-split-efectivo").value = "";
     document.getElementById("pago-split-transferencia").value = "";
     document.getElementById("pago-split-tarjeta").value = "";
-    actualizarRestoFormaPago();
+    actualizarTotalDesdePrecio();
     document.getElementById("fondo-forma-pago").style.display = "block";
     document.getElementById("modal-forma-pago").style.display = "block";
     return new Promise(resolve => { _resolverFormaPagoPendiente = resolve; });
+  }
+  function actualizarTotalDesdePrecio() {
+    const precio = parseFloat(document.getElementById("precio-unitario-forma-pago").value) || 0;
+    _totalFormaPagoActual = precio * _cantidadFormaPagoActual;
+    const fmtTotal = _totalFormaPagoActual.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById("total-forma-pago").textContent = "Total a cobrar: $" + fmtTotal;
+    actualizarRestoFormaPago();
   }
   function llenarFormaPago(metodo) {
     document.getElementById("pago-split-efectivo").value = metodo === "efectivo" ? _totalFormaPagoActual.toFixed(2) : "0";
@@ -1729,7 +1746,8 @@
       alert("Los montos cargados no coinciden con el total de la venta ($" + _totalFormaPagoActual.toFixed(2) + "). Revisá antes de confirmar.");
       return;
     }
-    resolverFormaPago({ efectivo: e, transferencia: t, tarjeta: c });
+    const precioUnitario = parseFloat(document.getElementById("precio-unitario-forma-pago").value) || 0;
+    resolverFormaPago({ pagos: { efectivo: e, transferencia: t, tarjeta: c }, precioUnitario: precioUnitario });
   }
   function resolverFormaPago(valor) {
     document.getElementById("fondo-forma-pago").style.display = "none";
@@ -1829,15 +1847,15 @@
     const costoConIva = costoArs * (1 + IVA);
     const ventaSugerido = redondearA50(costoConIva * (1 + margenPct / 100));
 
-    const pagos = await pedirFormaPago(ventaSugerido * cantidad);
-    if (!pagos) return; // canceló la elección de pago: no se registra la venta
+    const resultado = await pedirFormaPago(cantidad, ventaSugerido);
+    if (!resultado) return; // canceló la elección de pago: no se registra la venta
 
     VENTAS_DIA.push({
       codigo: producto.codigo,
       descripcion: producto.descripcion || "",
       cantidad: cantidad,
-      precioUnitario: ventaSugerido,
-      pagos: pagos
+      precioUnitario: resultado.precioUnitario,
+      pagos: resultado.pagos
     });
     guardarPlanillaLocal();
     renderPlanilla();
@@ -1852,10 +1870,10 @@
     if (!desc) { alert("Escribí una descripción para lo vendido."); return; }
     if (isNaN(precio) || precio < 0) { alert("Ingresá un precio válido."); return; }
 
-    const pagos = await pedirFormaPago(precio * cant);
-    if (!pagos) return;
+    const resultado = await pedirFormaPago(cant, precio);
+    if (!resultado) return;
 
-    VENTAS_DIA.push({ codigo: "—", descripcion: desc, cantidad: cant, precioUnitario: precio, pagos: pagos });
+    VENTAS_DIA.push({ codigo: "—", descripcion: desc, cantidad: cant, precioUnitario: resultado.precioUnitario, pagos: resultado.pagos });
 
     document.getElementById("venta-manual-descripcion").value = "";
     document.getElementById("venta-manual-cantidad").value = "1";
