@@ -550,6 +550,10 @@ function resetInputMonto(id){
 }
 
 document.querySelectorAll('.input-monto').forEach(attachMoneyInput);
+document.getElementById('valorDolarDisplay').addEventListener('input', ()=>{
+  renderListaProveedores();
+  if(proveedorActualId) cargarMovimientosProveedor(proveedorActualId);
+});
 
 /* ---------- TABS ---------- */
 function mostrarTab(cual){
@@ -907,17 +911,23 @@ async function cargarMovimientosProveedor(id){
   renderHistorialProveedor();
   const saldoArs = movimientosProveedor.length ? (movimientosProveedor[0].saldo_ars || 0) : 0;
   const saldoUsd = movimientosProveedor.length ? (movimientosProveedor[0].saldo_usd || 0) : 0;
+  const valorDolar = parsearMoneda(document.getElementById('valorDolarDisplay').value);
   const box = document.getElementById('saldoActualBoxProv');
   box.className = 'saldoBox ' + (saldoArs>0 || saldoUsd>0 ? 'deudor' : ((saldoArs<0 || saldoUsd<0) ? 'favor' : ''));
-  document.getElementById('saldoActualMontoProv').textContent = formatoMoneda(saldoArs);
+
   const usdEl = document.getElementById('saldoActualMontoProvUsd');
-  if(saldoUsd !== 0){
-    const valorDolar = parsearMoneda(document.getElementById('valorDolarDisplay').value);
-    let texto = formatoDolar(saldoUsd);
-    if(valorDolar > 0) texto += ` (≈ ${formatoMoneda(saldoUsd * valorDolar)})`;
-    usdEl.textContent = texto;
+  if(saldoUsd !== 0 && valorDolar > 0){
+    // Total combinado ya convertido a pesos, como pide el negocio
+    const totalPesos = saldoArs + saldoUsd * valorDolar;
+    document.getElementById('saldoActualMontoProv').textContent = formatoMoneda(totalPesos);
+    usdEl.textContent = `(${formatoMoneda(saldoArs)} + ${formatoDolar(saldoUsd)})`;
+    usdEl.style.display = '';
+  } else if(saldoUsd !== 0){
+    document.getElementById('saldoActualMontoProv').textContent = formatoMoneda(saldoArs);
+    usdEl.textContent = formatoDolar(saldoUsd) + ' — cargá el valor del dólar arriba para ver el total en pesos';
     usdEl.style.display = '';
   } else {
+    document.getElementById('saldoActualMontoProv').textContent = formatoMoneda(saldoArs);
     usdEl.textContent = '';
     usdEl.style.display = 'none';
   }
