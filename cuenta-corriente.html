@@ -267,6 +267,10 @@
           </div>
           <div id="listaProveedores"></div>
           <div class="totalGeneral" id="totalGeneralProv"></div>
+          <div style="border-top:1px solid var(--gris-borde);margin-top:14px;padding-top:12px;">
+            <label style="margin-bottom:4px;">Valor dólar hoy (para ver deuda USD en pesos)</label>
+            <input type="text" inputmode="decimal" class="input-monto" id="valorDolarDisplay" value="$0">
+          </div>
         </div>
       </div>
 
@@ -278,6 +282,7 @@
           <div class="saldoBox" id="saldoActualBoxProv">
             <div style="font-size:.8rem;color:#666;">Le debo (saldo actual)</div>
             <div class="monto" id="saldoActualMontoProv">$0</div>
+            <div class="monto" id="saldoActualMontoProvUsd" style="font-size:1.3rem;margin-top:4px;"></div>
           </div>
           <button class="btn" style="width:100%;" onclick="exportarImagenProveedor()">📤 Compartir resumen (imagen)</button>
           <button class="btn" style="width:100%;margin-top:8px;background:#fff;color:var(--negro);border:1px solid var(--gris-borde);" onclick="ajustarSaldoProveedor()">⚙️ Ajustar saldo</button>
@@ -290,8 +295,18 @@
           <input type="date" id="pFecha">
           <label>N° de factura (opcional)</label>
           <input type="text" id="pNumeroFactura" placeholder="Ej: 0001-00012345">
-          <label>Compra (monto de la factura)</label>
+          <label>Moneda de esta compra</label>
+          <div class="row2">
+            <button type="button" class="btn" id="pMonedaArsBtn" style="background:var(--negro);color:var(--amarillo);" onclick="elegirMonedaMovimiento('ARS')">Pesos ($)</button>
+            <button type="button" class="btn" id="pMonedaUsdBtn" style="background:#fff;color:#555;border:1px solid var(--gris-borde);" onclick="elegirMonedaMovimiento('USD')">Dólares (US$)</button>
+          </div>
+          <label id="pCompraLabel" style="margin-top:10px;">Compra (monto de la factura)</label>
           <input type="text" inputmode="decimal" class="input-monto" id="pCompra" placeholder="$0" value="$0">
+          <div id="pDolarWrap" class="hidden">
+            <label>Valor dólar (para convertir el pago a USD)</label>
+            <input type="text" inputmode="decimal" class="input-monto" id="pDolar" placeholder="$0" value="$0">
+            <small class="hint">Los pagos de abajo los cargás en pesos; se convierten a dólares con este valor.</small>
+          </div>
           <div class="row3">
             <div>
               <label>Depósito</label>
@@ -320,7 +335,7 @@
           <table>
             <thead>
               <tr>
-                <th>Fecha</th><th>N° Fact.</th><th>Compra</th><th>Dep.</th><th>Cheque</th><th>Echeq</th><th>Pago</th><th>Saldo</th><th>Obs.</th><th></th>
+                <th>Fecha</th><th>N° Fact.</th><th>Compra</th><th>Dólar</th><th>Dep.</th><th>Cheque</th><th>Echeq</th><th>Pago</th><th>Saldo $</th><th>Saldo US$</th><th>Obs.</th><th></th>
               </tr>
             </thead>
             <tbody id="tablaHistorialProv"></tbody>
@@ -343,6 +358,10 @@
     <input type="text" id="eNumeroFactura" class="hidden" placeholder="Ej: 0001-00012345">
     <label id="eMontoPrincipalLabel">Venta</label>
     <input type="text" inputmode="decimal" class="input-monto" id="eMontoPrincipal" value="$0">
+    <div id="eDolarWrap" class="hidden">
+      <label>Valor dólar</label>
+      <input type="text" inputmode="decimal" class="input-monto" id="eDolar" value="$0">
+    </div>
     <div class="row3">
       <div>
         <label>Depósito</label>
@@ -430,6 +449,7 @@ let proveedorActualId = null;
 let movimientosProveedor = [];
 
 let edicionActual = {id:null, tipo:null}; // tipo: 'cliente' | 'proveedor'
+let monedaMovimientoActual = 'ARS'; // moneda elegida para el movimiento que se está por cargar
 
 /* ---------- CAMBIO DE MODO (Clientes / Proveedores) ---------- */
 function cambiarModo(modo){
@@ -463,6 +483,11 @@ function cerrarSesion(){
 function formatoMoneda(n){
   n = Number(n) || 0;
   return "$" + n.toLocaleString('es-AR', {minimumFractionDigits:0, maximumFractionDigits:0});
+}
+
+function formatoDolar(n){
+  n = Number(n) || 0;
+  return "US$" + n.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
 /* Convierte "$1.234.567,89" -> 1234567.89 */
@@ -783,14 +808,16 @@ async function cargarProveedores(){
   const {data: listaProveedores, error: e1} = await sb.from('proveedores').select('id,nombre').order('nombre');
   if(e1){ console.error(e1); return; }
 
-  const {data: movs, error: e2} = await sb.from('movimientos_proveedores').select('proveedor_id,fecha_factura,created_at,saldo').order('fecha_factura',{ascending:true}).order('created_at',{ascending:true});
+  const {data: movs, error: e2} = await sb.from('movimientos_proveedores').select('proveedor_id,fecha_factura,created_at,saldo_ars,saldo_usd').order('fecha_factura',{ascending:true}).order('created_at',{ascending:true});
   if(e2){ console.error(e2); return; }
 
   const ultimoSaldo = {};
-  (movs||[]).forEach(m=>{ ultimoSaldo[m.proveedor_id] = m.saldo; });
+  (movs||[]).forEach(m=>{ ultimoSaldo[m.proveedor_id] = {ars: m.saldo_ars||0, usd: m.saldo_usd||0}; });
 
   proveedores = (listaProveedores||[]).map(p=>({
-    id:p.id, nombre:p.nombre, saldo: ultimoSaldo[p.id] ?? 0
+    id:p.id, nombre:p.nombre,
+    saldoArs: ultimoSaldo[p.id] ? ultimoSaldo[p.id].ars : 0,
+    saldoUsd: ultimoSaldo[p.id] ? ultimoSaldo[p.id].usd : 0
   }));
 
   renderListaProveedores();
@@ -800,20 +827,32 @@ function renderListaProveedores(){
   const filtro = (document.getElementById('buscadorProveedores').value||'').toLowerCase();
   const cont = document.getElementById('listaProveedores');
   cont.innerHTML = '';
-  let total = 0;
+  let totalArs = 0, totalUsd = 0;
+  const valorDolar = parsearMoneda(document.getElementById('valorDolarDisplay').value);
   proveedores
     .filter(p=>p.nombre.toLowerCase().includes(filtro))
     .sort((a,b)=>a.nombre.localeCompare(b.nombre))
     .forEach(p=>{
-      total += Number(p.saldo)||0;
+      totalArs += Number(p.saldoArs)||0;
+      totalUsd += Number(p.saldoUsd)||0;
       const div = document.createElement('div');
       div.className = 'clienteItem';
-      const claseSaldo = p.saldo > 0 ? 'deudor' : (p.saldo < 0 ? 'favor' : '');
-      div.innerHTML = `<span class="nombre">${p.nombre}</span><span class="saldo ${claseSaldo}">${formatoMoneda(p.saldo)}</span>`;
+      const claseSaldo = (p.saldoArs > 0 || p.saldoUsd > 0) ? 'deudor' : ((p.saldoArs < 0 || p.saldoUsd < 0) ? 'favor' : '');
+      let textoSaldo = formatoMoneda(p.saldoArs);
+      if(p.saldoUsd !== 0){
+        textoSaldo += ' + ' + formatoDolar(p.saldoUsd);
+        if(valorDolar > 0) textoSaldo += ` (${formatoMoneda(p.saldoUsd * valorDolar)})`;
+      }
+      div.innerHTML = `<span class="nombre">${p.nombre}</span><span class="saldo ${claseSaldo}">${textoSaldo}</span>`;
       div.onclick = () => abrirProveedor(p.id);
       cont.appendChild(div);
     });
-  document.getElementById('totalGeneralProv').textContent = "Total que debo: " + formatoMoneda(total);
+  let textoTotal = "Total que debo: " + formatoMoneda(totalArs);
+  if(totalUsd !== 0){
+    textoTotal += " + " + formatoDolar(totalUsd);
+    if(valorDolar > 0) textoTotal += ` (≈ ${formatoMoneda(totalArs + totalUsd*valorDolar)} en total)`;
+  }
+  document.getElementById('totalGeneralProv').textContent = textoTotal;
 }
 
 function mostrarFormNuevoProveedor(){
@@ -835,8 +874,22 @@ async function abrirProveedor(id){
   proveedorActualId = id;
   const p = proveedores.find(x=>x.id===id);
   document.getElementById('nombreProveedorActual').textContent = p ? p.nombre : '';
+  elegirMonedaMovimiento('ARS');
   mostrarTabProv('proveedor');
   await cargarMovimientosProveedor(id);
+}
+
+/* Elige la moneda del PRÓXIMO movimiento a cargar (cada compra puede tener su propia moneda) */
+function elegirMonedaMovimiento(moneda){
+  monedaMovimientoActual = moneda;
+  const btnArs = document.getElementById('pMonedaArsBtn');
+  const btnUsd = document.getElementById('pMonedaUsdBtn');
+  const activo = 'background:var(--negro);color:var(--amarillo);';
+  const inactivo = 'background:#fff;color:#555;border:1px solid var(--gris-borde);';
+  btnArs.style.cssText = moneda==='ARS' ? activo : inactivo;
+  btnUsd.style.cssText = moneda==='USD' ? activo : inactivo;
+  document.getElementById('pCompraLabel').textContent = moneda==='USD' ? 'Compra (en dólares USD)' : 'Compra (monto de la factura)';
+  document.getElementById('pDolarWrap').classList.toggle('hidden', moneda!=='USD');
 }
 
 async function cargarMovimientosProveedor(id){
@@ -848,10 +901,22 @@ async function cargarMovimientosProveedor(id){
   if(error){ console.error(error); return; }
   movimientosProveedor = data || [];
   renderHistorialProveedor();
-  const saldoActual = movimientosProveedor.length ? movimientosProveedor[0].saldo : 0;
+  const saldoArs = movimientosProveedor.length ? (movimientosProveedor[0].saldo_ars || 0) : 0;
+  const saldoUsd = movimientosProveedor.length ? (movimientosProveedor[0].saldo_usd || 0) : 0;
   const box = document.getElementById('saldoActualBoxProv');
-  box.className = 'saldoBox ' + (saldoActual>0?'deudor':(saldoActual<0?'favor':''));
-  document.getElementById('saldoActualMontoProv').textContent = formatoMoneda(saldoActual);
+  box.className = 'saldoBox ' + (saldoArs>0 || saldoUsd>0 ? 'deudor' : ((saldoArs<0 || saldoUsd<0) ? 'favor' : ''));
+  document.getElementById('saldoActualMontoProv').textContent = formatoMoneda(saldoArs);
+  const usdEl = document.getElementById('saldoActualMontoProvUsd');
+  if(saldoUsd !== 0){
+    const valorDolar = parsearMoneda(document.getElementById('valorDolarDisplay').value);
+    let texto = formatoDolar(saldoUsd);
+    if(valorDolar > 0) texto += ` (≈ ${formatoMoneda(saldoUsd * valorDolar)})`;
+    usdEl.textContent = texto;
+    usdEl.style.display = '';
+  } else {
+    usdEl.textContent = '';
+    usdEl.style.display = 'none';
+  }
 }
 
 function renderHistorialProveedor(){
@@ -860,16 +925,19 @@ function renderHistorialProveedor(){
   movimientosProveedor.forEach(m=>{
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
+    const esUsd = (m.moneda || 'ARS') === 'USD';
     const fechaFmt = new Date(m.fecha_factura+'T00:00:00').toLocaleDateString('es-AR');
     tr.innerHTML = `
       <td>${fechaFmt}</td>
       <td>${m.numero_factura||''}</td>
-      <td>${formatoMoneda(m.compra)}</td>
+      <td>${esUsd ? formatoDolar(m.compra) : formatoMoneda(m.compra)}</td>
+      <td>${esUsd && m.dolar ? formatoMoneda(m.dolar) : '-'}</td>
       <td>${formatoMoneda(m.deposito)}</td>
       <td>${formatoMoneda(m.cheque)}</td>
       <td>${formatoMoneda(m.echeq)}</td>
       <td>${formatoMoneda(m.pago)}</td>
-      <td>${formatoMoneda(m.saldo)}</td>
+      <td>${formatoMoneda(m.saldo_ars || 0)}</td>
+      <td>${(m.saldo_usd || 0) !== 0 ? formatoDolar(m.saldo_usd) : '-'}</td>
       <td class="obs">${m.observaciones||''}</td>
       <td><button class="miniBtn del" onclick="event.stopPropagation(); borrarMovimientoProveedor('${m.id}')">🗑</button></td>
     `;
@@ -889,23 +957,40 @@ async function guardarMovimientoProveedor(){
   const echeq = parsearMoneda(document.getElementById('pEcheq').value);
   const pago = parsearMoneda(document.getElementById('pPago').value);
   const observaciones = document.getElementById('pObs').value.trim();
+  const moneda = monedaMovimientoActual;
 
   if(!fecha_factura){ msg.textContent="Elegí una fecha"; msg.className="msg err"; return; }
 
-  const saldoAnterior = movimientosProveedor.length ? movimientosProveedor[0].saldo : 0;
-  const saldoNuevo = saldoAnterior + compra - (deposito + cheque + echeq + pago);
+  const saldoArsAnterior = movimientosProveedor.length ? (movimientosProveedor[0].saldo_ars || 0) : 0;
+  const saldoUsdAnterior = movimientosProveedor.length ? (movimientosProveedor[0].saldo_usd || 0) : 0;
+  let saldoArsNuevo = saldoArsAnterior, saldoUsdNuevo = saldoUsdAnterior, dolar = null;
+
+  if(moneda === 'USD'){
+    dolar = parsearMoneda(document.getElementById('pDolar').value);
+    const pesosPagados = deposito + cheque + echeq + pago;
+    if(pesosPagados > 0 && dolar <= 0){
+      msg.textContent = "Cargá el valor del dólar para convertir el pago"; msg.className = "msg err"; return;
+    }
+    const usdPagado = dolar > 0 ? pesosPagados / dolar : 0;
+    saldoUsdNuevo = saldoUsdAnterior + compra - usdPagado;
+  } else {
+    saldoArsNuevo = saldoArsAnterior + compra - (deposito + cheque + echeq + pago);
+  }
 
   const {error} = await sb.from('movimientos_proveedores').insert({
     proveedor_id: proveedorActualId, fecha_factura, numero_factura, compra, deposito, cheque, echeq, pago,
-    observaciones, saldo: saldoNuevo
+    moneda, dolar, observaciones, saldo_ars: saldoArsNuevo, saldo_usd: saldoUsdNuevo
   });
   if(error){ msg.textContent = "Error: " + error.message; msg.className="msg err"; return; }
 
   msg.textContent = "Movimiento guardado"; msg.className = "msg ok";
-  ['pCompra','pDeposito','pCheque','pEcheq','pPago'].forEach(id=>resetInputMonto(id));
+  ['pCompra','pDeposito','pCheque','pEcheq','pPago','pDolar'].forEach(id=>{
+    if(document.getElementById(id)) resetInputMonto(id);
+  });
   document.getElementById('pObs').value = '';
   document.getElementById('pNumeroFactura').value = '';
   document.getElementById('pFecha').valueAsDate = new Date();
+  elegirMonedaMovimiento('ARS');
 
   await recalcularSaldosProveedor(proveedorActualId);
   await cargarMovimientosProveedor(proveedorActualId);
@@ -944,11 +1029,18 @@ async function recalcularSaldosProveedor(proveedorId){
     .order('fecha_factura',{ascending:true})
     .order('created_at',{ascending:true});
   if(error || !data) return;
-  let saldo = 0;
+  let saldoArs = 0, saldoUsd = 0;
   for(const m of data){
-    saldo = saldo + Number(m.compra) - (Number(m.deposito)+Number(m.cheque)+Number(m.echeq)+Number(m.pago));
-    if(saldo !== m.saldo){
-      await sb.from('movimientos_proveedores').update({saldo}).eq('id', m.id);
+    const esUsd = (m.moneda || 'ARS') === 'USD';
+    if(esUsd){
+      const pesosPagados = Number(m.deposito)+Number(m.cheque)+Number(m.echeq)+Number(m.pago);
+      const usdPagado = m.dolar ? pesosPagados / Number(m.dolar) : 0;
+      saldoUsd = saldoUsd + Number(m.compra) - usdPagado;
+    } else {
+      saldoArs = saldoArs + Number(m.compra) - (Number(m.deposito)+Number(m.cheque)+Number(m.echeq)+Number(m.pago));
+    }
+    if(saldoArs !== (m.saldo_ars||0) || saldoUsd !== (m.saldo_usd||0)){
+      await sb.from('movimientos_proveedores').update({saldo_ars: saldoArs, saldo_usd: saldoUsd}).eq('id', m.id);
     }
   }
 }
@@ -962,26 +1054,29 @@ async function exportarImagenProveedor(){
 
   document.getElementById('expFechaProv').textContent = new Date().toLocaleDateString('es-AR');
   document.getElementById('expNombreProv').textContent = p.nombre;
-  const saldoActual = movimientosProveedor[0].saldo;
+  const saldoArs = movimientosProveedor[0].saldo_ars || 0;
+  const saldoUsd = movimientosProveedor[0].saldo_usd || 0;
   const expSaldoEl = document.getElementById('expSaldoProv');
-  expSaldoEl.textContent = formatoMoneda(saldoActual);
-  expSaldoEl.style.color = saldoActual > 0 ? '#c0392b' : (saldoActual < 0 ? '#1e7e34' : '#161616');
+  expSaldoEl.textContent = formatoMoneda(saldoArs) + (saldoUsd !== 0 ? ' + ' + formatoDolar(saldoUsd) : '');
+  expSaldoEl.style.color = (saldoArs > 0 || saldoUsd > 0) ? '#c0392b' : ((saldoArs < 0 || saldoUsd < 0) ? '#1e7e34' : '#161616');
 
   const tbody = document.getElementById('expTablaProv');
   tbody.innerHTML = '';
   [...movimientosProveedor].reverse().forEach(m=>{
+    const esUsd = (m.moneda || 'ARS') === 'USD';
     const fechaFmt = new Date(m.fecha_factura+'T00:00:00').toLocaleDateString('es-AR');
     const tr = document.createElement('tr');
     const celda = (contenido, alinear) => `<td style="padding:8px 6px;text-align:${alinear};border-bottom:1px solid #dcdcdc;">${contenido}</td>`;
+    const saldoTexto = formatoMoneda(m.saldo_ars||0) + ((m.saldo_usd||0) !== 0 ? ' / ' + formatoDolar(m.saldo_usd) : '');
     tr.innerHTML =
       celda(fechaFmt,'left') +
       celda(m.numero_factura||'','right') +
-      celda(formatoMoneda(m.compra),'right') +
+      celda(esUsd ? formatoDolar(m.compra) : formatoMoneda(m.compra),'right') +
       celda(formatoMoneda(m.deposito),'right') +
       celda(formatoMoneda(m.cheque),'right') +
       celda(formatoMoneda(m.echeq),'right') +
       celda(formatoMoneda(m.pago),'right') +
-      celda(formatoMoneda(m.saldo),'right');
+      celda(saldoTexto,'right');
     tbody.appendChild(tr);
   });
 
@@ -1035,6 +1130,7 @@ function abrirEdicionCliente(id){
   document.getElementById('modalEditarTitulo').textContent = 'Editar movimiento';
   document.getElementById('eNumeroFacturaLabel').classList.add('hidden');
   document.getElementById('eNumeroFactura').classList.add('hidden');
+  document.getElementById('eDolarWrap').classList.add('hidden');
   document.getElementById('eMontoPrincipalLabel').textContent = 'Venta';
   document.getElementById('eFecha').value = m.fecha;
   setMoneyInputValue('eMontoPrincipal', m.venta);
@@ -1050,12 +1146,15 @@ function abrirEdicionCliente(id){
 function abrirEdicionProveedor(id){
   const m = movimientosProveedor.find(x=>x.id===id);
   if(!m) return;
-  edicionActual = {id, tipo:'proveedor'};
+  edicionActual = {id, tipo:'proveedor', esUsd};
+  const esUsd = (m.moneda || 'ARS') === 'USD';
   document.getElementById('modalEditarTitulo').textContent = 'Editar movimiento';
   document.getElementById('eNumeroFacturaLabel').classList.remove('hidden');
   document.getElementById('eNumeroFactura').classList.remove('hidden');
   document.getElementById('eNumeroFactura').value = m.numero_factura || '';
-  document.getElementById('eMontoPrincipalLabel').textContent = 'Compra';
+  document.getElementById('eMontoPrincipalLabel').textContent = esUsd ? 'Compra (USD)' : 'Compra';
+  document.getElementById('eDolarWrap').classList.toggle('hidden', !esUsd);
+  if(esUsd) setMoneyInputValue('eDolar', m.dolar || 0);
   document.getElementById('eFecha').value = m.fecha_factura;
   setMoneyInputValue('eMontoPrincipal', m.compra);
   setMoneyInputValue('eDeposito', m.deposito);
@@ -1093,8 +1192,9 @@ async function guardarEdicionMovimiento(){
     await cargarClientes();
   } else if(edicionActual.tipo === 'proveedor'){
     const numero_factura = document.getElementById('eNumeroFactura').value.trim();
+    const dolar = edicionActual.esUsd ? parsearMoneda(document.getElementById('eDolar').value) : null;
     const {error} = await sb.from('movimientos_proveedores').update({
-      fecha_factura: fecha, numero_factura, compra: montoPrincipal, deposito, cheque, echeq, pago, observaciones
+      fecha_factura: fecha, numero_factura, compra: montoPrincipal, deposito, cheque, echeq, pago, dolar, observaciones
     }).eq('id', edicionActual.id);
     if(error){ msg.textContent = 'Error: ' + error.message; msg.className = 'msg err'; return; }
     await recalcularSaldosProveedor(proveedorActualId);
@@ -1133,8 +1233,19 @@ async function ajustarSaldoCliente(){
 
 async function ajustarSaldoProveedor(){
   if(!proveedorActualId) return;
-  const saldoActual = movimientosProveedor.length ? movimientosProveedor[0].saldo : 0;
-  const respuesta = prompt(`Saldo actual: ${formatoMoneda(saldoActual)}\n\nEscribí el saldo correcto (ej: 9800 o 9800,50):`);
+  const saldoArsActual = movimientosProveedor.length ? (movimientosProveedor[0].saldo_ars || 0) : 0;
+  const saldoUsdActual = movimientosProveedor.length ? (movimientosProveedor[0].saldo_usd || 0) : 0;
+
+  let moneda = 'ARS';
+  if(saldoUsdActual !== 0){
+    const cual = prompt(`Saldo en pesos: ${formatoMoneda(saldoArsActual)}\nSaldo en dólares: ${formatoDolar(saldoUsdActual)}\n\n¿Cuál querés ajustar? Escribí ARS o USD:`, 'ARS');
+    if(cual === null) return;
+    moneda = cual.trim().toUpperCase() === 'USD' ? 'USD' : 'ARS';
+  }
+
+  const saldoActual = moneda === 'USD' ? saldoUsdActual : saldoArsActual;
+  const textoActual = moneda === 'USD' ? formatoDolar(saldoActual) : formatoMoneda(saldoActual);
+  const respuesta = prompt(`Saldo actual (${moneda}): ${textoActual}\n\nEscribí el saldo correcto (ej: 9800 o 9800,50):`);
   if(respuesta === null || respuesta.trim() === '') return;
   const nuevoSaldo = parsearMoneda(respuesta);
   const diferencia = Math.round((nuevoSaldo - saldoActual) * 100) / 100;
@@ -1143,11 +1254,13 @@ async function ajustarSaldoProveedor(){
   const motivo = prompt('Motivo del ajuste (opcional):', 'Ajuste manual de saldo') || 'Ajuste manual de saldo';
   const compra = diferencia > 0 ? diferencia : 0;
   const pago = diferencia < 0 ? Math.abs(diferencia) : 0;
+  const saldoArsNuevo = moneda === 'ARS' ? nuevoSaldo : saldoArsActual;
+  const saldoUsdNuevo = moneda === 'USD' ? nuevoSaldo : saldoUsdActual;
 
   const {error} = await sb.from('movimientos_proveedores').insert({
     proveedor_id: proveedorActualId, fecha_factura: new Date().toISOString().slice(0,10),
-    numero_factura: '', compra, deposito:0, cheque:0, echeq:0, pago,
-    observaciones: motivo, saldo: nuevoSaldo
+    numero_factura: '', compra, deposito:0, cheque:0, echeq:0, pago, moneda, dolar: null,
+    observaciones: motivo, saldo_ars: saldoArsNuevo, saldo_usd: saldoUsdNuevo
   });
   if(error){ alert('Error: ' + error.message); return; }
   await cargarMovimientosProveedor(proveedorActualId);
