@@ -117,6 +117,13 @@
   #volverBtn{background:none;border:none;color:var(--negro);font-weight:600;cursor:pointer;padding:0 0 10px;font-size:.9rem;}
   .hidden{display:none !important;}
 
+  /* DATOS DE CHEQUE */
+  .datosCheque{
+    border:1px dashed var(--gris-borde);border-radius:8px;padding:10px 10px 2px;margin:6px 0 10px;background:var(--gris-claro);
+  }
+  .datosCheque .tituloDatosCheque{font-size:.75rem;font-weight:700;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em;}
+  .datosCheque label{margin-top:6px;}
+
   /* PLANTILLA PARA EXPORTAR IMAGEN */
   #plantillaExport{
     position:fixed;left:-9999px;top:0;
@@ -223,6 +230,31 @@
             <input type="text" inputmode="decimal" class="input-monto" id="mEcheq" placeholder="$0" value="$0">
           </div>
         </div>
+        <div id="mDatosCheque" class="datosCheque hidden">
+          <div class="tituloDatosCheque">Datos de cheque</div>
+          <label>Emisor</label>
+          <input type="text" id="mChequeEmisor" placeholder="Nombre del emisor">
+          <div class="row2">
+            <div>
+              <label>Fecha emisión</label>
+              <input type="date" id="mChequeFechaEmision">
+            </div>
+            <div>
+              <label>Fecha de pago</label>
+              <input type="date" id="mChequeFechaPago">
+            </div>
+          </div>
+          <div class="row2">
+            <div>
+              <label>N° de cheque</label>
+              <input type="text" id="mChequeNumero" placeholder="Ej: 00012345">
+            </div>
+            <div>
+              <label>Banco</label>
+              <input type="text" id="mChequeBanco" placeholder="Ej: Banco Nación">
+            </div>
+          </div>
+        </div>
         <label>Pago (efectivo)</label>
         <input type="text" inputmode="decimal" class="input-monto" id="mPago" placeholder="$0" value="$0">
         <label>Observaciones</label>
@@ -323,6 +355,31 @@
               <input type="text" inputmode="decimal" class="input-monto" id="pEcheq" placeholder="$0" value="$0">
             </div>
           </div>
+          <div id="pDatosCheque" class="datosCheque hidden">
+            <div class="tituloDatosCheque">Datos de cheque</div>
+            <label>Emisor</label>
+            <input type="text" id="pChequeEmisor" placeholder="Nombre del emisor">
+            <div class="row2">
+              <div>
+                <label>Fecha emisión</label>
+                <input type="date" id="pChequeFechaEmision">
+              </div>
+              <div>
+                <label>Fecha de pago</label>
+                <input type="date" id="pChequeFechaPago">
+              </div>
+            </div>
+            <div class="row2">
+              <div>
+                <label>N° de cheque</label>
+                <input type="text" id="pChequeNumero" placeholder="Ej: 00012345">
+              </div>
+              <div>
+                <label>Banco</label>
+                <input type="text" id="pChequeBanco" placeholder="Ej: Banco Nación">
+              </div>
+            </div>
+          </div>
           <label>Pago (efectivo)</label>
           <input type="text" inputmode="decimal" class="input-monto" id="pPago" placeholder="$0" value="$0">
           <label>Observaciones</label>
@@ -376,6 +433,31 @@
       <div>
         <label>Echeq</label>
         <input type="text" inputmode="decimal" class="input-monto" id="eEcheq" value="$0">
+      </div>
+    </div>
+    <div id="eDatosCheque" class="datosCheque hidden">
+      <div class="tituloDatosCheque">Datos de cheque</div>
+      <label>Emisor</label>
+      <input type="text" id="eChequeEmisor" placeholder="Nombre del emisor">
+      <div class="row2">
+        <div>
+          <label>Fecha emisión</label>
+          <input type="date" id="eChequeFechaEmision">
+        </div>
+        <div>
+          <label>Fecha de pago</label>
+          <input type="date" id="eChequeFechaPago">
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label>N° de cheque</label>
+          <input type="text" id="eChequeNumero" placeholder="Ej: 00012345">
+        </div>
+        <div>
+          <label>Banco</label>
+          <input type="text" id="eChequeBanco" placeholder="Ej: Banco Nación">
+        </div>
       </div>
     </div>
     <label>Pago (efectivo)</label>
@@ -552,7 +634,49 @@ function resetInputMonto(id){
   input.value = '$0';
 }
 
+/* ---------- DATOS DE CHEQUE (mostrar/ocultar/limpiar) ---------- */
+/* prefix: 'm' (cliente), 'p' (proveedor) o 'e' (edición) */
+function toggleDatosCheque(prefix){
+  const montoInput = document.getElementById(prefix + 'Cheque');
+  const panel = document.getElementById(prefix + 'DatosCheque');
+  if(!montoInput || !panel) return;
+  const tieneValor = parsearMoneda(montoInput.value) > 0;
+  panel.classList.toggle('hidden', !tieneValor);
+}
+
+function limpiarDatosCheque(prefix){
+  ['Emisor','FechaEmision','Numero','Banco','FechaPago'].forEach(campo=>{
+    const el = document.getElementById(prefix + 'Cheque' + campo);
+    if(el) el.value = '';
+  });
+  toggleDatosCheque(prefix);
+}
+
+function leerDatosCheque(prefix){
+  return {
+    cheque_emisor: document.getElementById(prefix + 'ChequeEmisor').value.trim(),
+    cheque_fecha_emision: document.getElementById(prefix + 'ChequeFechaEmision').value || null,
+    cheque_numero: document.getElementById(prefix + 'ChequeNumero').value.trim(),
+    cheque_banco: document.getElementById(prefix + 'ChequeBanco').value.trim(),
+    cheque_fecha_pago: document.getElementById(prefix + 'ChequeFechaPago').value || null
+  };
+}
+
+function cargarDatosCheque(prefix, m){
+  document.getElementById(prefix + 'ChequeEmisor').value = m.cheque_emisor || '';
+  document.getElementById(prefix + 'ChequeFechaEmision').value = m.cheque_fecha_emision || '';
+  document.getElementById(prefix + 'ChequeNumero').value = m.cheque_numero || '';
+  document.getElementById(prefix + 'ChequeBanco').value = m.cheque_banco || '';
+  document.getElementById(prefix + 'ChequeFechaPago').value = m.cheque_fecha_pago || '';
+  toggleDatosCheque(prefix);
+}
+
 document.querySelectorAll('.input-monto').forEach(attachMoneyInput);
+['mCheque','pCheque','eCheque'].forEach(id=>{
+  document.getElementById(id).addEventListener('beforeinput', ()=>{
+    setTimeout(()=>toggleDatosCheque(id.charAt(0)), 0);
+  });
+});
 document.getElementById('valorDolarDisplay').addEventListener('input', ()=>{
   renderListaProveedores();
   if(proveedorActualId) cargarMovimientosProveedor(proveedorActualId);
@@ -704,6 +828,7 @@ async function guardarMovimiento(){
   const echeq = parsearMoneda(document.getElementById('mEcheq').value);
   const pago = parsearMoneda(document.getElementById('mPago').value);
   const observaciones = document.getElementById('mObs').value.trim();
+  const datosCheque = leerDatosCheque('m');
 
   if(!fecha){ msg.textContent="Elegí una fecha"; msg.className="msg err"; return; }
 
@@ -712,12 +837,13 @@ async function guardarMovimiento(){
 
   const {error} = await sb.from('movimientos').insert({
     cliente_id: clienteActualId, fecha, venta, deposito, cheque, echeq, pago,
-    observaciones, saldo: saldoNuevo
+    observaciones, saldo: saldoNuevo, ...datosCheque
   });
   if(error){ msg.textContent = "Error: " + error.message; msg.className="msg err"; return; }
 
   msg.textContent = "Movimiento guardado"; msg.className = "msg ok";
   ['mVenta','mDeposito','mCheque','mEcheq','mPago'].forEach(id=>resetInputMonto(id));
+  limpiarDatosCheque('m');
   document.getElementById('mObs').value = '';
   document.getElementById('mFecha').valueAsDate = new Date();
 
@@ -1001,6 +1127,7 @@ async function guardarMovimientoProveedor(){
   const pago = parsearMoneda(document.getElementById('pPago').value);
   const observaciones = document.getElementById('pObs').value.trim();
   const moneda = monedaMovimientoActual;
+  const datosCheque = leerDatosCheque('p');
 
   if(!fecha_factura){ msg.textContent="Elegí una fecha"; msg.className="msg err"; return; }
 
@@ -1022,11 +1149,12 @@ async function guardarMovimientoProveedor(){
 
   const {error} = await sb.from('movimientos_proveedores').insert({
     proveedor_id: proveedorActualId, fecha_factura, numero_factura, compra, deposito, cheque, echeq, pago,
-    moneda, dolar, observaciones, saldo_ars: saldoArsNuevo, saldo_usd: saldoUsdNuevo
+    moneda, dolar, observaciones, saldo_ars: saldoArsNuevo, saldo_usd: saldoUsdNuevo, ...datosCheque
   });
   if(error){ msg.textContent = "Error: " + error.message; msg.className="msg err"; return; }
 
   msg.textContent = "Movimiento guardado"; msg.className = "msg ok";
+  limpiarDatosCheque('p');
   ['pCompra','pDeposito','pCheque','pEcheq','pPago','pDolar'].forEach(id=>{
     if(document.getElementById(id)) resetInputMonto(id);
   });
@@ -1182,6 +1310,7 @@ function abrirEdicionCliente(id){
   setMoneyInputValue('eEcheq', m.echeq);
   setMoneyInputValue('ePago', m.pago);
   document.getElementById('eObs').value = m.observaciones || '';
+  cargarDatosCheque('e', m);
   document.getElementById('msgEdicion').textContent = '';
   document.getElementById('modalEditar').classList.remove('hidden');
 }
@@ -1205,6 +1334,7 @@ function abrirEdicionProveedor(id){
   setMoneyInputValue('eEcheq', m.echeq);
   setMoneyInputValue('ePago', m.pago);
   document.getElementById('eObs').value = m.observaciones || '';
+  cargarDatosCheque('e', m);
   document.getElementById('msgEdicion').textContent = '';
   document.getElementById('modalEditar').classList.remove('hidden');
 }
@@ -1223,11 +1353,12 @@ async function guardarEdicionMovimiento(){
   const echeq = parsearMoneda(document.getElementById('eEcheq').value);
   const pago = parsearMoneda(document.getElementById('ePago').value);
   const observaciones = document.getElementById('eObs').value.trim();
+  const datosCheque = leerDatosCheque('e');
   if(!fecha){ msg.textContent='Elegí una fecha'; msg.className='msg err'; return; }
 
   if(edicionActual.tipo === 'cliente'){
     const {error} = await sb.from('movimientos').update({
-      fecha, venta: montoPrincipal, deposito, cheque, echeq, pago, observaciones
+      fecha, venta: montoPrincipal, deposito, cheque, echeq, pago, observaciones, ...datosCheque
     }).eq('id', edicionActual.id);
     if(error){ msg.textContent = 'Error: ' + error.message; msg.className = 'msg err'; return; }
     await recalcularSaldos(clienteActualId);
@@ -1237,7 +1368,7 @@ async function guardarEdicionMovimiento(){
     const numero_factura = document.getElementById('eNumeroFactura').value.trim();
     const dolar = edicionActual.esUsd ? parsearMoneda(document.getElementById('eDolar').value) : null;
     const {error} = await sb.from('movimientos_proveedores').update({
-      fecha_factura: fecha, numero_factura, compra: montoPrincipal, deposito, cheque, echeq, pago, dolar, observaciones
+      fecha_factura: fecha, numero_factura, compra: montoPrincipal, deposito, cheque, echeq, pago, dolar, observaciones, ...datosCheque
     }).eq('id', edicionActual.id);
     if(error){ msg.textContent = 'Error: ' + error.message; msg.className = 'msg err'; return; }
     await recalcularSaldosProveedor(proveedorActualId);
