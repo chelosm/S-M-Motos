@@ -154,6 +154,22 @@
   .color-panel .nombre-color{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
   .color-panel .swatch-mini{width:14px;height:14px;border-radius:50%;display:inline-block;border:1px solid var(--borde);}
 
+  .modelos-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;}
+  .chip-modelo{
+    flex:0 0 auto;background:#f4f2ec;border:1px solid var(--borde);border-radius:20px;
+    padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;
+  }
+  .chip-modelo.activo{background:var(--amarillo);border-color:var(--amarillo-fuerte);}
+  .chip-modelo.en-carrito{border-color:var(--verde-fuerte);color:var(--verde-fuerte);}
+  .modelo-panel{
+    display:none;background:#f8f7f3;border-radius:8px;padding:8px;
+    margin-top:4px;font-size:0.8rem;
+  }
+  .modelo-panel.open{display:block;}
+  .modelo-panel .nombre-modelo{font-weight:700;margin-bottom:2px;}
+  .modelo-panel .codigo-modelo{color:var(--gris);font-size:0.72rem;margin-bottom:4px;}
+  .modelo-panel .precio-modelo{font-weight:700;margin-bottom:6px;}
+
   #btn-admin-flotante{
     position:fixed;top:10px;left:10px;z-index:40;
     background:rgba(0,0,0,0.35);color:#fff;border:none;
@@ -221,6 +237,24 @@
   .color-add-row input[type=color]{width:40px;height:36px;padding:2px;border:1px solid var(--borde);border-radius:6px;margin-bottom:0;}
   .color-add-row button{white-space:nowrap;padding:0 10px;border-radius:6px;border:1px solid var(--borde);background:#fff;cursor:pointer;}
 
+  #f-variantes-lista{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+  .variante-tag{
+    display:flex;align-items:center;gap:8px;background:#f4f2ec;border:1px solid var(--borde);
+    border-radius:8px;padding:5px 8px;font-size:0.78rem;
+  }
+  .variante-tag .info{flex:1;}
+  .variante-tag button{background:none;border:none;color:var(--oferta);cursor:pointer;font-size:0.95rem;padding:0 4px;}
+  .variante-add-box{border:1px dashed var(--borde);border-radius:8px;padding:8px;margin-bottom:10px;}
+  .variante-add-box .fila{display:flex;gap:6px;margin-bottom:6px;}
+  .variante-add-box .fila input{margin-bottom:0;}
+  .variante-add-box input[type=text],.variante-add-box input[type=number]{flex:1;}
+  .variante-add-box button{width:100%;padding:8px;border-radius:6px;border:1px solid var(--borde);background:#fff;cursor:pointer;font-weight:700;}
+
+  #btn-aumento-masivo{
+    width:100%;padding:10px;border-radius:8px;border:none;background:var(--asfalto);color:#fff;
+    font-weight:700;cursor:pointer;margin-bottom:14px;
+  }
+
   .cart-item .qty-edit{display:flex;align-items:center;gap:4px;margin-top:4px;}
   .cart-item .qty-edit button{width:24px;height:24px;border-radius:5px;border:1px solid var(--borde);background:#fff;cursor:pointer;}
   .cart-item .qty-edit input{width:38px;text-align:center;border:1px solid var(--borde);border-radius:5px;padding:3px 2px;font-size:0.85rem;}
@@ -256,7 +290,7 @@
 </header>
 
 <button id="btn-admin-flotante" onclick="abrirAdmin()">✏️</button>
-<div class="subtitulo">Elegí las cantidades y armá tu presupuesto</div>
+<div class="subtitulo"><strong>Armá tu pedido</strong></div>
 
 <div id="buscador-wrap">
   <input type="text" id="buscador" placeholder="Buscar (ej: zap fre 1)" oninput="renderGrid()">
@@ -297,11 +331,13 @@
       <h3 id="admin-form-titulo">Agregar producto</h3>
       <div class="admin-form">
         <input type="text" id="f-nombre" placeholder="Nombre del producto">
+        <input type="text" id="f-codigo" placeholder="Código del producto (opcional)">
         <input type="text" id="f-rubro" placeholder="Rubro (ej: Repuestos, Accesorios, LED, Bulonería)">
-        <input type="number" id="f-precio" placeholder="Precio por unidad ($)">
+        <input type="number" id="f-precio" placeholder="Precio por unidad ($) — si no tiene variantes de modelo">
         <input type="number" id="f-pack" placeholder="Unidades por pack (dejar 1 si es individual)" value="1">
         <label><input type="checkbox" id="f-oferta" style="width:auto;display:inline-block;"> Marcar como oferta</label>
         <input type="file" id="f-foto" accept="image/*">
+        <small style="color:var(--gris);display:block;margin:-4px 0 8px;">Si cargás variantes de modelo abajo, se usa esta misma foto para todas; el precio de arriba se ignora y se usa el de cada variante.</small>
 
         <label style="font-weight:700;margin-top:4px;">Colores disponibles (opcional)</label>
         <div id="f-colores-lista"></div>
@@ -311,11 +347,25 @@
           <button type="button" onclick="agregarColorTemp()">+ Agregar color</button>
         </div>
 
+        <label style="font-weight:700;margin-top:4px;">Variantes de modelo (opcional — misma foto, distinto nombre y precio)</label>
+        <div id="f-variantes-lista"></div>
+        <div class="variante-add-box">
+          <div class="fila">
+            <input type="text" id="f-variante-modelo" placeholder="Modelo (ej: Transmisión 428H)">
+            <input type="text" id="f-variante-codigo" placeholder="Código">
+          </div>
+          <div class="fila">
+            <input type="number" id="f-variante-precio" placeholder="Precio de este modelo ($)">
+          </div>
+          <button type="button" onclick="agregarVarianteTemp()" id="btn-agregar-variante">+ Agregar variante</button>
+        </div>
+
         <div style="display:flex;gap:8px;">
           <button class="btn-primario" style="flex:1;padding:10px;border-radius:8px;" onclick="agregarProducto()" id="btn-guardar-producto">Guardar producto</button>
           <button class="btn-secundario" style="display:none;padding:10px;border-radius:8px;" onclick="cancelarEdicion()" id="btn-cancelar-edicion">Cancelar</button>
         </div>
       </div>
+      <button id="btn-aumento-masivo" onclick="abrirAumentoMasivo()">💰 Aumentar precios de todos los productos</button>
       <h3>Productos cargados</h3>
       <div id="admin-lista"></div>
     </div>
@@ -344,7 +394,9 @@ let esAdmin = false;
 let rubroActivo = "";
 let editandoId = null;
 let coloresTemp = []; // colores que se están cargando/editando en el form admin
+let variantesTemp = []; // variantes de modelo que se están cargando/editando en el form admin
 let chipAbierto = {}; // {productoId: indiceColorAbierto}
+let modeloAbierto = {}; // {productoId: indiceVarianteAbierto}
 
 // Búsqueda aproximada: separa lo escrito en palabras (o fragmentos) y
 // exige que TODAS aparezcan como parte del nombre, en cualquier orden.
@@ -416,9 +468,42 @@ function renderGrid(){
     div.className = "card" + (p.oferta ? " oferta" : "");
     const packTxt = p.pack_size > 1 ? `<div class="pack-info">Pack de ${p.pack_size} unidades &middot; Total: ${money(p.precio*p.pack_size)}</div>` : "";
     const tieneColores = Array.isArray(p.colores) && p.colores.length > 0;
+    const tieneVariantes = Array.isArray(p.variantes) && p.variantes.length > 0;
 
     let bloqueSeleccion;
-    if(tieneColores){
+    let fotoMostrada = p.foto_url || "";
+    let precioMostrado = `<div class="precio">${money(p.precio)} c/u</div>${packTxt}`;
+
+    if(tieneVariantes){
+      const idxModeloAbierto = modeloAbierto[p.id];
+      if(idxModeloAbierto !== undefined){
+        const vSel = p.variantes[idxModeloAbierto];
+        precioMostrado = `<div class="precio">${vSel.modelo} — ${money(vSel.precio)} c/u</div>`;
+      } else {
+        precioMostrado = `<div class="precio" style="color:var(--gris);font-size:0.85rem;">Tocá un modelo para ver el precio</div>`;
+      }
+      const thumbs = p.variantes.map((v,idx)=>{
+        const claveV = claveCarritoVariante(p.id, idx);
+        const enCarrito = !!cart[claveV];
+        return `<button type="button" class="chip-modelo${idxModeloAbierto===idx?' activo':''}${enCarrito?' en-carrito':''}"
+          onclick="toggleModeloPanel(${p.id},${idx})">${v.modelo}${enCarrito?' ✓':''}</button>`;
+      }).join("");
+      const paneles = p.variantes.map((v,idx)=>{
+        const claveV = claveCarritoVariante(p.id, idx);
+        return `<div class="modelo-panel${idxModeloAbierto===idx?' open':''}" id="panel-modelo-${p.id}-${idx}">
+          <div class="nombre-modelo">${v.modelo}</div>
+          ${v.codigo ? `<div class="codigo-modelo">Cod: ${v.codigo}</div>` : ''}
+          <div class="precio-modelo">${money(v.precio)} c/u</div>
+          <div class="qty-row">
+            <button onclick="cambiarQty('modelo-${p.id}-${idx}',-1)">-</button>
+            <input type="number" id="qty-modelo-${p.id}-${idx}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
+            <button onclick="cambiarQty('modelo-${p.id}-${idx}',1)">+</button>
+          </div>
+          <button class="add-btn${cart[claveV]?' en-carrito':''}" onclick="agregarAlCarritoVariante(${p.id},${idx})">${cart[claveV]?'✓ En presupuesto':'Agregar'}</button>
+        </div>`;
+      }).join("");
+      bloqueSeleccion = `<div class="modelos-row">${thumbs}</div>${paneles}`;
+    } else if(tieneColores){
       const idxAbierto = chipAbierto[p.id];
       const chips = p.colores.map((c,idx)=>{
         const claveC = claveCarrito(p.id, c.nombre);
@@ -452,11 +537,10 @@ function renderGrid(){
 
     div.innerHTML = `
       ${p.oferta ? '<div class="badge-oferta">OFERTA</div>' : ''}
-      <img src="${p.foto_url || ''}" alt="${p.nombre}" onerror="this.style.opacity=0.3">
+      <img src="${fotoMostrada}" alt="${p.nombre}" onerror="this.style.opacity=0.3">
       <div class="card-body">
-        <h3>${p.nombre}</h3>
-        <div class="precio">${money(p.precio)} c/u</div>
-        ${packTxt}
+        <h3>${p.nombre}${p.codigo ? ' <small style="color:var(--gris);font-weight:400;">('+p.codigo+')</small>' : ''}</h3>
+        ${precioMostrado}
         ${bloqueSeleccion}
       </div>`;
     grid.appendChild(div);
@@ -477,18 +561,43 @@ function actualizarBotonesCarrito(){
   });
 }
 
-// El carrito usa una clave simple "id" para productos sin color,
-// y "id|NombreColor" para productos con color elegido.
+// El carrito usa una clave simple "id" para productos sin color/variante,
+// "id|NombreColor" para color elegido, e "id|v:INDICE" para variante de modelo elegida.
 function claveCarrito(id, color){
   return color ? `${id}|${color}` : `${id}`;
 }
+function claveCarritoVariante(id, idx){
+  return `${id}|v:${idx}`;
+}
 function parseClaveCarrito(clave){
-  const [idStr, color] = String(clave).split("|");
-  return { id: parseInt(idStr), color: color || null };
+  const partes = String(clave).split("|");
+  const id = parseInt(partes[0]);
+  if(partes[1] && partes[1].startsWith("v:")){
+    return { id, color: null, varianteIdx: parseInt(partes[1].slice(2)) };
+  }
+  return { id, color: partes[1] || null, varianteIdx: null };
+}
+
+// Dada una clave del carrito, devuelve el producto, el nombre a mostrar
+// y el precio unitario que corresponde (el propio de la variante, si tiene).
+function itemCarrito(clave){
+  const { id, color, varianteIdx } = parseClaveCarrito(clave);
+  const p = productos.find(x=>x.id===id);
+  if(!p) return null;
+  if(varianteIdx !== null && p.variantes && p.variantes[varianteIdx]){
+    const v = p.variantes[varianteIdx];
+    return { p, precio: v.precio, nombre: `${p.nombre} — ${v.modelo}${v.codigo ? ' (Cod: '+v.codigo+')' : ''}` };
+  }
+  return { p, precio: p.precio, nombre: `${p.nombre}${color ? ' — '+color : ''}` };
 }
 
 function toggleColorPanel(id, idx){
   chipAbierto[id] = (chipAbierto[id] === idx) ? undefined : idx;
+  renderGrid();
+}
+
+function toggleModeloPanel(id, idx){
+  modeloAbierto[id] = (modeloAbierto[id] === idx) ? undefined : idx;
   renderGrid();
 }
 
@@ -502,6 +611,18 @@ function agregarAlCarritoColor(id, idx){
   cart[clave] += qty;
   guardarCarrito();
   showToast(`${p.nombre} (${color.nombre}) agregado`);
+}
+
+function agregarAlCarritoVariante(id, idx){
+  const p = productos.find(x=>x.id===id);
+  const variante = p.variantes[idx];
+  const input = document.getElementById(`qty-modelo-${id}-${idx}`);
+  const qty = parseInt(input.value || "1");
+  const clave = claveCarritoVariante(id, idx);
+  if(!cart[clave]) cart[clave] = 0;
+  cart[clave] += qty;
+  guardarCarrito();
+  showToast(`${p.nombre} (${variante.modelo}) agregado`);
 }
 
 function cambiarQty(id, delta){
@@ -526,7 +647,7 @@ function guardarCarrito(){
   localStorage.setItem("dt_cart", JSON.stringify(cart));
   actualizarBarra();
   actualizarBotonesCarrito();
-  if(document.querySelectorAll(".colores-row").length){
+  if(document.querySelectorAll(".colores-row, .modelos-row").length){
     renderGrid();
   }
 }
@@ -534,11 +655,10 @@ function guardarCarrito(){
 function actualizarBarra(){
   let count = 0, total = 0;
   Object.keys(cart).forEach(clave=>{
-    const { id } = parseClaveCarrito(clave);
-    const p = productos.find(x=>x.id==id);
-    if(!p) return;
+    const it = itemCarrito(clave);
+    if(!it) return;
     count += cart[clave];
-    total += cart[clave] * p.pack_size * p.precio;
+    total += cart[clave] * it.p.pack_size * it.precio;
   });
   document.getElementById("cart-count").textContent = count;
   document.getElementById("cart-total").textContent = money(total);
@@ -565,19 +685,19 @@ function renderCarrito(){
     cont.innerHTML = "<p style='color:#888;'>Todavía no agregaste productos.</p>";
   }
   claves.forEach(clave=>{
-    const { id, color } = parseClaveCarrito(clave);
-    const p = productos.find(x=>x.id==id);
-    if(!p) return;
+    const it = itemCarrito(clave);
+    if(!it) return;
+    const { p, precio, nombre } = it;
     const cantidad = cart[clave];
     const unidades = cantidad * p.pack_size;
-    const subtotal = unidades * p.precio;
+    const subtotal = unidades * precio;
     total += subtotal;
     const claveJs = clave.replace(/'/g,"\\'");
     const div = document.createElement("div");
     div.className = "cart-item";
     div.innerHTML = `
-      <div class="info"><b>${p.nombre}${color ? ' — '+color : ''}</b><br>
-      ${p.pack_size>1 ? unidades+' unid. ('+cantidad+' pack(s))' : cantidad+' unid.'} &middot; ${money(p.precio)} c/u &middot; <b>Total: ${money(subtotal)}</b>
+      <div class="info"><b>${nombre}</b><br>
+      ${p.pack_size>1 ? unidades+' unid. ('+cantidad+' pack(s))' : cantidad+' unid.'} &middot; ${money(precio)} c/u &middot; <b>Total: ${money(subtotal)}</b>
       <div class="qty-edit">
         <button onclick="cambiarCantidadCarrito('${claveJs}',-1)">-</button>
         <input type="number" value="${cantidad}" min="1" inputmode="numeric" pattern="[0-9]*"
@@ -626,9 +746,8 @@ function exportarImagen(){
     return;
   }
   const items = claves.map(clave=>{
-    const { id, color } = parseClaveCarrito(clave);
-    const p = productos.find(x=>x.id==id);
-    return p ? {p, color, cantidad: cart[clave]} : null;
+    const it = itemCarrito(clave);
+    return it ? {p: it.p, nombre: it.nombre, precio: it.precio, cantidad: cart[clave]} : null;
   }).filter(Boolean);
 
   const POR_PAGINA = 20;
@@ -647,19 +766,19 @@ async function generarPaginasPresupuesto(paginas, index, archivos){
   }
   const pageItems = paginas[index];
   const esUltima = index === paginas.length - 1;
-  const totalPagina = pageItems.reduce((acc,it)=> acc + it.cantidad*it.p.pack_size*it.p.precio, 0);
+  const totalPagina = pageItems.reduce((acc,it)=> acc + it.cantidad*it.p.pack_size*it.precio, 0);
   let totalGeneral = 0;
-  paginas.forEach(pg=> pg.forEach(it=> totalGeneral += it.cantidad*it.p.pack_size*it.p.precio));
+  paginas.forEach(pg=> pg.forEach(it=> totalGeneral += it.cantidad*it.p.pack_size*it.precio));
 
   const tpl = document.getElementById("plantilla-presupuesto-img");
   let filas = "";
   pageItems.forEach((it,i)=>{
     const unidades = it.cantidad * it.p.pack_size;
-    const subtotal = unidades * it.p.precio;
+    const subtotal = unidades * it.precio;
     filas += `<tr style="background:${i%2===0?'#ffffff':'#f5f5f5'};">
       <td style="padding:9px 6px;text-align:center;border-bottom:1px solid #eee;">${unidades}</td>
-      <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.p.nombre}${it.color ? ' — '+it.color : ''}</td>
-      <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;">${money(it.p.precio)}</td>
+      <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.nombre}</td>
+      <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;">${money(it.precio)}</td>
       <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;font-weight:700;">${money(subtotal)}</td>
     </tr>`;
   });
@@ -765,40 +884,79 @@ function quitarColorTemp(idx){
   renderColoresTemp();
 }
 
+async function subirFoto(file){
+  const path = `${Date.now()}_${file.name}`;
+  const { error: upErr } = await sb.storage.from(BUCKET).upload(path, file);
+  if(upErr) return null;
+  const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(path);
+  return pub.publicUrl;
+}
+
+function renderVariantesTemp(){
+  const cont = document.getElementById("f-variantes-lista");
+  cont.innerHTML = "";
+  variantesTemp.forEach((v, idx)=>{
+    const tag = document.createElement("div");
+    tag.className = "variante-tag";
+    tag.innerHTML = `<div class="info"><b>${v.modelo}</b>${v.codigo?' &middot; Cod: '+v.codigo:''}<br>${money(v.precio)} c/u</div>
+      <button type="button" onclick="quitarVarianteTemp(${idx})">✕</button>`;
+    cont.appendChild(tag);
+  });
+}
+
+function agregarVarianteTemp(){
+  const modelo = document.getElementById("f-variante-modelo").value.trim();
+  const codigo = document.getElementById("f-variante-codigo").value.trim();
+  const precio = parseFloat(document.getElementById("f-variante-precio").value);
+
+  if(!modelo || !precio){
+    showToast("Completá modelo y precio de la variante");
+    return;
+  }
+  variantesTemp.push({ modelo, codigo, precio });
+  document.getElementById("f-variante-modelo").value = "";
+  document.getElementById("f-variante-codigo").value = "";
+  document.getElementById("f-variante-precio").value = "";
+  renderVariantesTemp();
+}
+
+function quitarVarianteTemp(idx){
+  variantesTemp.splice(idx, 1);
+  renderVariantesTemp();
+}
+
 async function agregarProducto(){
   const nombre = document.getElementById("f-nombre").value.trim();
+  const codigo = document.getElementById("f-codigo").value.trim();
   const rubro = document.getElementById("f-rubro").value.trim();
-  const precio = parseFloat(document.getElementById("f-precio").value);
+  const precio = parseFloat(document.getElementById("f-precio").value) || 0;
   const pack = parseInt(document.getElementById("f-pack").value || "1");
   const oferta = document.getElementById("f-oferta").checked;
   const fotoInput = document.getElementById("f-foto");
 
-  if(!nombre || !precio){
-    showToast("Completá nombre y precio");
+  if(!nombre || (!precio && variantesTemp.length === 0)){
+    showToast("Completá nombre y precio (o cargá al menos una variante de modelo)");
     return;
   }
 
   let foto_url = editandoId ? productos.find(p=>p.id===editandoId).foto_url : "";
   if(fotoInput.files.length > 0){
-    const file = fotoInput.files[0];
-    const path = `${Date.now()}_${file.name}`;
-    const { error: upErr } = await sb.storage.from(BUCKET).upload(path, file);
-    if(upErr){
+    const url = await subirFoto(fotoInput.files[0]);
+    if(!url){
       showToast("Error subiendo la foto");
       return;
     }
-    const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(path);
-    foto_url = pub.publicUrl;
+    foto_url = url;
   }
 
   let error;
   if(editandoId){
     ({ error } = await sb.from("DistribuidoraTienda").update({
-      nombre, rubro, precio, pack_size: pack, oferta, foto_url, colores: coloresTemp
+      nombre, codigo, rubro, precio, pack_size: pack, oferta, foto_url, colores: coloresTemp, variantes: variantesTemp
     }).eq("id", editandoId));
   } else {
     ({ error } = await sb.from("DistribuidoraTienda").insert({
-      nombre, rubro, precio, pack_size: pack, oferta, activo: true, foto_url, colores: coloresTemp
+      nombre, codigo, rubro, precio, pack_size: pack, oferta, activo: true, foto_url, colores: coloresTemp, variantes: variantesTemp
     }));
   }
   if(error){
@@ -816,6 +974,7 @@ function editarProducto(id){
   if(!p) return;
   editandoId = id;
   document.getElementById("f-nombre").value = p.nombre || "";
+  document.getElementById("f-codigo").value = p.codigo || "";
   document.getElementById("f-rubro").value = p.rubro || "";
   document.getElementById("f-precio").value = p.precio || "";
   document.getElementById("f-pack").value = p.pack_size || 1;
@@ -823,6 +982,8 @@ function editarProducto(id){
   document.getElementById("f-foto").value = "";
   coloresTemp = Array.isArray(p.colores) ? JSON.parse(JSON.stringify(p.colores)) : [];
   renderColoresTemp();
+  variantesTemp = Array.isArray(p.variantes) ? JSON.parse(JSON.stringify(p.variantes)) : [];
+  renderVariantesTemp();
   document.getElementById("admin-form-titulo").textContent = "Editando: " + p.nombre;
   document.getElementById("btn-guardar-producto").textContent = "Guardar cambios";
   document.getElementById("btn-cancelar-edicion").style.display = "block";
@@ -832,6 +993,7 @@ function editarProducto(id){
 function cancelarEdicion(){
   editandoId = null;
   document.getElementById("f-nombre").value = "";
+  document.getElementById("f-codigo").value = "";
   document.getElementById("f-rubro").value = "";
   document.getElementById("f-precio").value = "";
   document.getElementById("f-pack").value = "1";
@@ -839,6 +1001,8 @@ function cancelarEdicion(){
   document.getElementById("f-foto").value = "";
   coloresTemp = [];
   renderColoresTemp();
+  variantesTemp = [];
+  renderVariantesTemp();
   document.getElementById("admin-form-titulo").textContent = "Agregar producto";
   document.getElementById("btn-guardar-producto").textContent = "Guardar producto";
   document.getElementById("btn-cancelar-edicion").style.display = "none";
@@ -850,9 +1014,13 @@ function renderAdminLista(){
   productos.forEach(p=>{
     const row = document.createElement("div");
     row.className = "prod-row";
+    const tieneVariantes = Array.isArray(p.variantes) && p.variantes.length > 0;
+    const precioTxt = tieneVariantes
+      ? p.variantes.length + ' modelo(s) con precio propio'
+      : money(p.precio) + ' c/u' + (p.pack_size>1?' &middot; pack x'+p.pack_size+' = '+money(p.precio*p.pack_size):'');
     row.innerHTML = `
       <img src="${p.foto_url||''}">
-      <div class="nombre">${p.nombre} ${p.rubro?'<span style="color:#999;">('+p.rubro+')</span>':''}<br><small>${money(p.precio)} c/u ${p.pack_size>1?'&middot; pack x'+p.pack_size+' = '+money(p.precio*p.pack_size):''}</small></div>
+      <div class="nombre">${p.nombre} ${p.codigo?'<span style="color:#999;">['+p.codigo+']</span>':''} ${p.rubro?'<span style="color:#999;">('+p.rubro+')</span>':''}<br><small>${precioTxt}</small></div>
       <button style="background:${p.activo!==false?'#ffe08a':'#ddd'};" onclick="toggleCampo(${p.id},'activo',${p.activo===false})">${p.activo!==false?'Con stock':'Sin stock'}</button>
       <button style="background:${p.oferta?'#f5b5b5':'#ddd'};" onclick="toggleCampo(${p.id},'oferta',${!p.oferta})">${p.oferta?'En oferta':'Oferta'}</button>
       <button style="background:#cfe8ff;" onclick="editarProducto(${p.id})">Editar</button>
@@ -869,6 +1037,34 @@ async function toggleCampo(id, campo, valor){
 async function borrarProducto(id){
   if(!confirm("¿Borrar este producto?")) return;
   await sb.from("DistribuidoraTienda").delete().eq("id", id);
+  cargarProductos();
+}
+
+// ===== AUMENTO MASIVO DE PRECIOS =====
+async function abrirAumentoMasivo(){
+  const txt = prompt("¿Qué porcentaje de aumento querés aplicar a TODOS los productos?\nEj: 10 para +10%, -5 para bajar 5%");
+  if(txt === null) return;
+  const pct = parseFloat(txt.replace(",", "."));
+  if(isNaN(pct)){
+    showToast("Ingresá un número válido");
+    return;
+  }
+  const cantidadProductos = productos.length;
+  if(!confirm(`Se va a aplicar ${pct > 0 ? '+' : ''}${pct}% al precio de los ${cantidadProductos} productos cargados (y a cada variante de modelo). ¿Confirmás?`)) return;
+
+  showToast("Actualizando precios...");
+  let actualizados = 0;
+  for(const p of productos){
+    const nuevoPrecio = Math.round(p.precio * (1 + pct/100));
+    const nuevasVariantes = Array.isArray(p.variantes) && p.variantes.length > 0
+      ? p.variantes.map(v => ({...v, precio: Math.round(v.precio * (1 + pct/100))}))
+      : p.variantes;
+    const { error } = await sb.from("DistribuidoraTienda").update({
+      precio: nuevoPrecio, variantes: nuevasVariantes
+    }).eq("id", p.id);
+    if(!error) actualizados++;
+  }
+  showToast(`Precios actualizados en ${actualizados} de ${cantidadProductos} productos`);
   cargarProductos();
 }
 
