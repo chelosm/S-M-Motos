@@ -284,6 +284,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="plantilla-presupuesto-img" style="position:fixed;left:-9999px;top:0;width:600px;background:#ffffff;color:#161616;font-family:Arial,sans-serif;padding:24px;"></div>
 
 <footer>
   <a href="https://wa.me/5492235923638" target="_blank" style="color:#25D366;font-weight:700;text-decoration:none;">💬 223 592-3638</a>
@@ -492,30 +493,100 @@ function vaciarCarrito(){
 }
 
 function exportarImagen(){
-  const sheet = document.querySelector("#cart-panel .sheet");
-  html2canvas(sheet, {backgroundColor:"#ffffff"}).then(canvas=>{
-    canvas.toBlob(blob=>{
-      const file = new File([blob], "presupuesto-sm-motos.png", {type:"image/png"});
-      if(navigator.canShare && navigator.canShare({files:[file]})){
-        navigator.share({
-          files:[file],
-          title:"Presupuesto S-M Motos"
-        }).then(()=>{
-          vaciarCarritoSilencioso();
-        }).catch(()=>{});
-      } else {
-        const link = document.createElement("a");
-        link.download = "presupuesto-sm-motos.png";
-        link.href = canvas.toDataURL();
-        link.click();
-        showToast("Imagen descargada, se abre WhatsApp para enviarla");
-        setTimeout(()=>{
-          window.open(`https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent("Hola! Te mando mi presupuesto de S-M Motos")}`, "_blank");
-        }, 800);
-        vaciarCarritoSilencioso();
-      }
-    }, "image/png");
+  const ids = Object.keys(cart);
+  if(ids.length === 0){
+    showToast("No hay productos en el presupuesto");
+    return;
+  }
+  const items = ids.map(id=>{
+    const p = productos.find(x=>x.id==id);
+    return p ? {p, cantidad: cart[id]} : null;
+  }).filter(Boolean);
+
+  const POR_PAGINA = 20;
+  const paginas = [];
+  for(let i=0; i<items.length; i+=POR_PAGINA){
+    paginas.push(items.slice(i, i+POR_PAGINA));
+  }
+  showToast(`Generando imagen${paginas.length>1?'es':''}...`);
+  generarPaginasPresupuesto(paginas, 0, []);
+}
+
+async function generarPaginasPresupuesto(paginas, index, archivos){
+  if(index >= paginas.length){
+    compartirArchivosPresupuesto(archivos);
+    return;
+  }
+  const pageItems = paginas[index];
+  const esUltima = index === paginas.length - 1;
+  const totalPagina = pageItems.reduce((acc,it)=> acc + it.cantidad*it.p.pack_size*it.p.precio, 0);
+  let totalGeneral = 0;
+  paginas.forEach(pg=> pg.forEach(it=> totalGeneral += it.cantidad*it.p.pack_size*it.p.precio));
+
+  const tpl = document.getElementById("plantilla-presupuesto-img");
+  let filas = "";
+  pageItems.forEach((it,i)=>{
+    const unidades = it.cantidad * it.p.pack_size;
+    const subtotal = unidades * it.p.precio;
+    filas += `<tr style="background:${i%2===0?'#ffffff':'#f5f5f5'};">
+      <td style="padding:9px 6px;text-align:center;border-bottom:1px solid #eee;">${unidades}</td>
+      <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.p.nombre}</td>
+      <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;">${money(it.p.precio)}</td>
+      <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;font-weight:700;">${money(subtotal)}</td>
+    </tr>`;
   });
+
+  const fecha = new Date().toLocaleDateString("es-AR");
+  tpl.innerHTML = `
+    <div style="text-align:center;margin-bottom:2px;">
+      <span style="font-size:26px;font-weight:900;color:#161616;">S-M </span><span style="font-size:26px;font-weight:900;color:#ff6a1a;">MOTOS</span>
+    </div>
+    <div style="text-align:center;font-size:11px;color:#888;letter-spacing:1px;margin-bottom:20px;">DISTRIBUIDORA TIENDA &middot; VENTA DE REPUESTOS Y ACCESORIOS</div>
+    <div style="font-weight:800;font-size:15px;margin-bottom:2px;">PRESUPUESTO${paginas.length>1 ? ' — Página '+(index+1)+' de '+paginas.length : ''}</div>
+    <div style="font-size:12px;color:#666;margin-bottom:14px;">Fecha: ${fecha}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:#161616;color:#fff;">
+          <th style="padding:9px 6px;text-align:center;">CANT.</th>
+          <th style="padding:9px 6px;text-align:left;">DESCRIPCIÓN</th>
+          <th style="padding:9px 6px;text-align:right;">P. UNIT.</th>
+          <th style="padding:9px 6px;text-align:right;">SUBTOTAL</th>
+        </tr>
+      </thead>
+      <tbody>${filas}</tbody>
+    </table>
+    <div style="display:flex;justify-content:space-between;margin-top:14px;padding-top:10px;border-top:2px solid #161616;font-weight:900;font-size:17px;">
+      <span>${esUltima ? 'TOTAL' : 'Subtotal página'}</span><span>${money(esUltima ? totalGeneral : totalPagina)}</span>
+    </div>`;
+
+  const canvas = await html2canvas(tpl, {backgroundColor:"#ffffff"});
+  canvas.toBlob(blob=>{
+    const file = new File([blob], `presupuesto-sm-motos-${index+1}.png`, {type:"image/png"});
+    archivos.push(file);
+    generarPaginasPresupuesto(paginas, index+1, archivos);
+  }, "image/png");
+}
+
+function compartirArchivosPresupuesto(archivos){
+  if(navigator.canShare && navigator.canShare({files:archivos})){
+    navigator.share({files:archivos, title:"Presupuesto S-M Motos"}).then(()=>{
+      vaciarCarritoSilencioso();
+    }).catch(()=>{});
+  } else {
+    archivos.forEach((file,i)=>{
+      setTimeout(()=>{
+        const link = document.createElement("a");
+        link.download = file.name;
+        link.href = URL.createObjectURL(file);
+        link.click();
+      }, i*400);
+    });
+    showToast("Imágenes descargadas, se abre WhatsApp para enviarlas");
+    setTimeout(()=>{
+      window.open(`https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent("Hola! Te mando mi presupuesto de S-M Motos")}`, "_blank");
+    }, archivos.length*400 + 600);
+    vaciarCarritoSilencioso();
+  }
 }
 
 function vaciarCarritoSilencioso(){
