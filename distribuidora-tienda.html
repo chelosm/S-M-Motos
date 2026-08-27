@@ -598,12 +598,23 @@ function renderGrid(){
     titulo.textContent = "Del proveedor (no cargado en la tienda todavía)";
     grid.appendChild(titulo);
     sugerenciasProveedor.forEach(item=>{
+      const codigoSeguro = item.codigo.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const claveP = claveCarritoProveedor(item.codigo);
+      const enCarrito = !!cart[claveP];
       const div = document.createElement("div");
       div.className = "card compacta compacta-proveedor";
       div.innerHTML = `
         <div class="compacta-info">
           <h3>${item.d} <small style="color:var(--gris);font-weight:400;">(${item.codigo})</small></h3>
           <div class="precio">${money(item.p)} c/u</div>
+        </div>
+        <div class="compacta-controles">
+          <div class="qty-row">
+            <button onclick="cambiarQty('prov-${codigoSeguro}',-1)">-</button>
+            <input type="number" id="qty-prov-${codigoSeguro}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
+            <button onclick="cambiarQty('prov-${codigoSeguro}',1)">+</button>
+          </div>
+          <button class="add-btn${enCarrito?' en-carrito':''}" onclick="agregarAlCarritoProveedor('${codigoSeguro}','${item.codigo.replace(/'/g,"\\'")}')">${enCarrito?'✓ En presupuesto':'✏️ Agregar'}</button>
         </div>`;
       grid.appendChild(div);
     });
@@ -647,33 +658,56 @@ function actualizarBotonesCarrito(){
 }
 
 // El carrito usa una clave simple "id" para productos sin color/variante,
-// "id|NombreColor" para color elegido, e "id|v:INDICE" para variante de modelo elegida.
+// "id|NombreColor" para color elegido, "id|v:INDICE" para variante de modelo elegida,
+// y "prov|CODIGO" para un ítem de la lista de precios del proveedor (sin producto cargado).
 function claveCarrito(id, color){
   return color ? `${id}|${color}` : `${id}`;
 }
 function claveCarritoVariante(id, idx){
   return `${id}|v:${idx}`;
 }
+function claveCarritoProveedor(codigo){
+  return `prov|${codigo}`;
+}
 function parseClaveCarrito(clave){
-  const partes = String(clave).split("|");
+  const claveStr = String(clave);
+  if(claveStr.startsWith("prov|")){
+    return { tipo: "proveedor", codigo: claveStr.slice(5) };
+  }
+  const partes = claveStr.split("|");
   const id = parseInt(partes[0]);
   if(partes[1] && partes[1].startsWith("v:")){
-    return { id, color: null, varianteIdx: parseInt(partes[1].slice(2)) };
+    return { tipo: "variante", id, varianteIdx: parseInt(partes[1].slice(2)) };
   }
-  return { id, color: partes[1] || null, varianteIdx: null };
+  return { tipo: "normal", id, color: partes[1] || null };
 }
 
-// Dada una clave del carrito, devuelve el producto, el nombre a mostrar
-// y el precio unitario que corresponde (el propio de la variante, si tiene).
+// Dada una clave del carrito, devuelve el producto (si existe), el nombre a mostrar
+// y el precio unitario que corresponde (el propio de la variante o del proveedor, si aplica).
 function itemCarrito(clave){
-  const { id, color, varianteIdx } = parseClaveCarrito(clave);
-  const p = productos.find(x=>x.id===id);
+  const info = parseClaveCarrito(clave);
+  if(info.tipo === "proveedor"){
+    const item = LISTA_PRECIOS_PROVEEDOR[info.codigo];
+    if(!item) return null;
+    return { p: { pack_size: 1 }, precio: item.p, nombre: `${item.d} (${info.codigo})` };
+  }
+  const p = productos.find(x=>x.id===info.id);
   if(!p) return null;
-  if(varianteIdx !== null && p.variantes && p.variantes[varianteIdx]){
-    const v = p.variantes[varianteIdx];
+  if(info.tipo === "variante" && p.variantes && p.variantes[info.varianteIdx]){
+    const v = p.variantes[info.varianteIdx];
     return { p, precio: v.precio, nombre: `${p.nombre} — ${v.modelo}${v.codigo ? ' (Cod: '+v.codigo+')' : ''}` };
   }
-  return { p, precio: p.precio, nombre: `${p.nombre}${color ? ' — '+color : ''}` };
+  return { p, precio: p.precio, nombre: `${p.nombre}${info.color ? ' — '+info.color : ''}` };
+}
+
+function agregarAlCarritoProveedor(codigoSeguro, codigo){
+  const input = document.getElementById(`qty-prov-${codigoSeguro}`);
+  const qty = parseInt(input.value || "1");
+  const clave = claveCarritoProveedor(codigo);
+  if(!cart[clave]) cart[clave] = 0;
+  cart[clave] += qty;
+  guardarCarrito();
+  showToast(`${LISTA_PRECIOS_PROVEEDOR[codigo].d} agregado`);
 }
 
 function toggleColorPanel(id, idx){
@@ -732,7 +766,7 @@ function guardarCarrito(){
   localStorage.setItem("dt_cart", JSON.stringify(cart));
   actualizarBarra();
   actualizarBotonesCarrito();
-  if(document.querySelectorAll(".colores-row, .modelos-row").length){
+  if(document.querySelectorAll(".colores-row, .modelos-row, .compacta-proveedor").length){
     renderGrid();
   }
 }
