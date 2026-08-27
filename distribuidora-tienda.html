@@ -140,6 +140,20 @@
   .add-btn.en-carrito{background:var(--verde);color:#fff;}
   .add-btn.en-carrito:active{background:var(--verde-fuerte);}
 
+  .colores-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;}
+  .chip-color{
+    width:22px;height:22px;border-radius:50%;border:2px solid #fff;
+    box-shadow:0 0 0 1px var(--borde);cursor:pointer;padding:0;
+  }
+  .chip-color.activo{box-shadow:0 0 0 2px var(--negro);}
+  .color-panel{
+    display:none;background:#f8f7f3;border-radius:8px;padding:8px;
+    margin-top:4px;font-size:0.8rem;
+  }
+  .color-panel.open{display:block;}
+  .color-panel .nombre-color{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+  .color-panel .swatch-mini{width:14px;height:14px;border-radius:50%;display:inline-block;border:1px solid var(--borde);}
+
   #btn-admin-flotante{
     position:fixed;top:10px;left:10px;z-index:40;
     background:rgba(0,0,0,0.35);color:#fff;border:none;
@@ -195,6 +209,22 @@
   .admin-form input[type=text],.admin-form input[type=number],.admin-form input[type=password]{
     padding:8px;border:1px solid var(--borde);border-radius:6px;
   }
+  #f-colores-lista{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .color-tag{
+    display:flex;align-items:center;gap:6px;background:#f4f2ec;border:1px solid var(--borde);
+    border-radius:20px;padding:4px 8px 4px 4px;font-size:0.78rem;
+  }
+  .color-tag .dot{width:14px;height:14px;border-radius:50%;border:1px solid var(--borde);}
+  .color-tag button{background:none;border:none;color:var(--oferta);cursor:pointer;font-size:0.9rem;padding:0;}
+  .color-add-row{display:flex;gap:6px;margin-bottom:10px;}
+  .color-add-row input[type=text]{flex:1;margin-bottom:0;}
+  .color-add-row input[type=color]{width:40px;height:36px;padding:2px;border:1px solid var(--borde);border-radius:6px;margin-bottom:0;}
+  .color-add-row button{white-space:nowrap;padding:0 10px;border-radius:6px;border:1px solid var(--borde);background:#fff;cursor:pointer;}
+
+  .cart-item .qty-edit{display:flex;align-items:center;gap:4px;margin-top:4px;}
+  .cart-item .qty-edit button{width:24px;height:24px;border-radius:5px;border:1px solid var(--borde);background:#fff;cursor:pointer;}
+  .cart-item .qty-edit input{width:38px;text-align:center;border:1px solid var(--borde);border-radius:5px;padding:3px 2px;font-size:0.85rem;}
+
   .prod-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde);}
   .prod-row img{width:44px;height:44px;object-fit:cover;border-radius:6px;}
   .prod-row .nombre{flex:1;font-size:0.85rem;}
@@ -272,6 +302,15 @@
         <input type="number" id="f-pack" placeholder="Unidades por pack (dejar 1 si es individual)" value="1">
         <label><input type="checkbox" id="f-oferta" style="width:auto;display:inline-block;"> Marcar como oferta</label>
         <input type="file" id="f-foto" accept="image/*">
+
+        <label style="font-weight:700;margin-top:4px;">Colores disponibles (opcional)</label>
+        <div id="f-colores-lista"></div>
+        <div class="color-add-row">
+          <input type="text" id="f-color-nombre" placeholder="Nombre del color (ej: Rojo)">
+          <input type="color" id="f-color-hex" value="#161616">
+          <button type="button" onclick="agregarColorTemp()">+ Agregar color</button>
+        </div>
+
         <div style="display:flex;gap:8px;">
           <button class="btn-primario" style="flex:1;padding:10px;border-radius:8px;" onclick="agregarProducto()" id="btn-guardar-producto">Guardar producto</button>
           <button class="btn-secundario" style="display:none;padding:10px;border-radius:8px;" onclick="cancelarEdicion()" id="btn-cancelar-edicion">Cancelar</button>
@@ -304,6 +343,8 @@ let cart = JSON.parse(localStorage.getItem("dt_cart") || "{}");
 let esAdmin = false;
 let rubroActivo = "";
 let editandoId = null;
+let coloresTemp = []; // colores que se están cargando/editando en el form admin
+let chipAbierto = {}; // {productoId: indiceColorAbierto}
 
 // Búsqueda aproximada: separa lo escrito en palabras (o fragmentos) y
 // exige que TODAS aparezcan como parte del nombre, en cualquier orden.
@@ -374,6 +415,41 @@ function renderGrid(){
     const div = document.createElement("div");
     div.className = "card" + (p.oferta ? " oferta" : "");
     const packTxt = p.pack_size > 1 ? `<div class="pack-info">Pack de ${p.pack_size} unidades &middot; Total: ${money(p.precio*p.pack_size)}</div>` : "";
+    const tieneColores = Array.isArray(p.colores) && p.colores.length > 0;
+
+    let bloqueSeleccion;
+    if(tieneColores){
+      const idxAbierto = chipAbierto[p.id];
+      const chips = p.colores.map((c,idx)=>{
+        const claveC = claveCarrito(p.id, c.nombre);
+        const enCarrito = !!cart[claveC];
+        return `<button type="button" class="chip-color${idxAbierto===idx?' activo':''}${enCarrito?' en-carrito':''}"
+          style="background:${c.hex};" title="${c.nombre}${enCarrito?' (en presupuesto)':''}"
+          onclick="toggleColorPanel(${p.id},${idx})"></button>`;
+      }).join("");
+      const paneles = p.colores.map((c,idx)=>{
+        const claveC = claveCarrito(p.id, c.nombre);
+        return `<div class="color-panel${idxAbierto===idx?' open':''}" id="panel-${p.id}-${idx}">
+          <div class="nombre-color"><span class="swatch-mini" style="background:${c.hex};"></span>${c.nombre}</div>
+          <div class="qty-row">
+            <button onclick="cambiarQty('${p.id}-${idx}',-1)">-</button>
+            <input type="number" id="qty-${p.id}-${idx}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
+            <button onclick="cambiarQty('${p.id}-${idx}',1)">+</button>
+          </div>
+          <button class="add-btn${cart[claveC]?' en-carrito':''}" onclick="agregarAlCarritoColor(${p.id},${idx})">${cart[claveC]?'✓ En presupuesto':'Agregar'}</button>
+        </div>`;
+      }).join("");
+      bloqueSeleccion = `<div class="colores-row">${chips}</div>${paneles}`;
+    } else {
+      bloqueSeleccion = `
+        <div class="qty-row">
+          <button onclick="cambiarQty(${p.id},-1)">-</button>
+          <input type="number" id="qty-${p.id}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
+          <button onclick="cambiarQty(${p.id},1)">+</button>
+        </div>
+        <button class="add-btn" id="add-btn-${p.id}" onclick="agregarAlCarrito(${p.id})">Agregar</button>`;
+    }
+
     div.innerHTML = `
       ${p.oferta ? '<div class="badge-oferta">OFERTA</div>' : ''}
       <img src="${p.foto_url || ''}" alt="${p.nombre}" onerror="this.style.opacity=0.3">
@@ -381,12 +457,7 @@ function renderGrid(){
         <h3>${p.nombre}</h3>
         <div class="precio">${money(p.precio)} c/u</div>
         ${packTxt}
-        <div class="qty-row">
-          <button onclick="cambiarQty(${p.id},-1)">-</button>
-          <input type="number" id="qty-${p.id}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
-          <button onclick="cambiarQty(${p.id},1)">+</button>
-        </div>
-        <button class="add-btn" id="add-btn-${p.id}" onclick="agregarAlCarrito(${p.id})">Agregar</button>
+        ${bloqueSeleccion}
       </div>`;
     grid.appendChild(div);
   });
@@ -404,6 +475,33 @@ function actualizarBotonesCarrito(){
       btn.textContent = "Agregar";
     }
   });
+}
+
+// El carrito usa una clave simple "id" para productos sin color,
+// y "id|NombreColor" para productos con color elegido.
+function claveCarrito(id, color){
+  return color ? `${id}|${color}` : `${id}`;
+}
+function parseClaveCarrito(clave){
+  const [idStr, color] = String(clave).split("|");
+  return { id: parseInt(idStr), color: color || null };
+}
+
+function toggleColorPanel(id, idx){
+  chipAbierto[id] = (chipAbierto[id] === idx) ? undefined : idx;
+  renderGrid();
+}
+
+function agregarAlCarritoColor(id, idx){
+  const p = productos.find(x=>x.id===id);
+  const color = p.colores[idx];
+  const input = document.getElementById(`qty-${id}-${idx}`);
+  const qty = parseInt(input.value || "1");
+  const clave = claveCarrito(id, color.nombre);
+  if(!cart[clave]) cart[clave] = 0;
+  cart[clave] += qty;
+  guardarCarrito();
+  showToast(`${p.nombre} (${color.nombre}) agregado`);
 }
 
 function cambiarQty(id, delta){
@@ -428,15 +526,19 @@ function guardarCarrito(){
   localStorage.setItem("dt_cart", JSON.stringify(cart));
   actualizarBarra();
   actualizarBotonesCarrito();
+  if(document.querySelectorAll(".colores-row").length){
+    renderGrid();
+  }
 }
 
 function actualizarBarra(){
   let count = 0, total = 0;
-  Object.keys(cart).forEach(id=>{
+  Object.keys(cart).forEach(clave=>{
+    const { id } = parseClaveCarrito(clave);
     const p = productos.find(x=>x.id==id);
     if(!p) return;
-    count += cart[id];
-    total += cart[id] * p.pack_size * p.precio;
+    count += cart[clave];
+    total += cart[clave] * p.pack_size * p.precio;
   });
   document.getElementById("cart-count").textContent = count;
   document.getElementById("cart-total").textContent = money(total);
@@ -458,29 +560,54 @@ function renderCarrito(){
   const cont = document.getElementById("cart-items");
   cont.innerHTML = "";
   let total = 0;
-  const ids = Object.keys(cart);
-  if(ids.length === 0){
+  const claves = Object.keys(cart);
+  if(claves.length === 0){
     cont.innerHTML = "<p style='color:#888;'>Todavía no agregaste productos.</p>";
   }
-  ids.forEach(id=>{
+  claves.forEach(clave=>{
+    const { id, color } = parseClaveCarrito(clave);
     const p = productos.find(x=>x.id==id);
     if(!p) return;
-    const unidades = cart[id] * p.pack_size;
+    const cantidad = cart[clave];
+    const unidades = cantidad * p.pack_size;
     const subtotal = unidades * p.precio;
     total += subtotal;
+    const claveJs = clave.replace(/'/g,"\\'");
     const div = document.createElement("div");
     div.className = "cart-item";
     div.innerHTML = `
-      <div class="info"><b>${p.nombre}</b><br>
-      ${cart[id]} ${p.pack_size>1 ? 'pack(s) = '+unidades+' unid.' : 'unid.'} &middot; ${money(p.precio)} c/u &middot; <b>Total: ${money(subtotal)}</b></div>
-      <button class="del" onclick="quitarDelCarrito(${id})">✕</button>`;
+      <div class="info"><b>${p.nombre}${color ? ' — '+color : ''}</b><br>
+      ${p.pack_size>1 ? unidades+' unid. ('+cantidad+' pack(s))' : cantidad+' unid.'} &middot; ${money(p.precio)} c/u &middot; <b>Total: ${money(subtotal)}</b>
+      <div class="qty-edit">
+        <button onclick="cambiarCantidadCarrito('${claveJs}',-1)">-</button>
+        <input type="number" value="${cantidad}" min="1" inputmode="numeric" pattern="[0-9]*"
+          onchange="setCantidadCarrito('${claveJs}', this.value)">
+        <button onclick="cambiarCantidadCarrito('${claveJs}',1)">+</button>
+      </div></div>
+      <button class="del" onclick="quitarDelCarrito('${claveJs}')">✕</button>`;
     cont.appendChild(div);
   });
   document.getElementById("cart-total-2").textContent = money(total);
 }
 
-function quitarDelCarrito(id){
-  delete cart[id];
+function cambiarCantidadCarrito(clave, delta){
+  const nueva = (cart[clave] || 1) + delta;
+  if(nueva < 1) return;
+  cart[clave] = nueva;
+  guardarCarrito();
+  renderCarrito();
+}
+
+function setCantidadCarrito(clave, valor){
+  let nueva = parseInt(valor || "1");
+  if(nueva < 1) nueva = 1;
+  cart[clave] = nueva;
+  guardarCarrito();
+  renderCarrito();
+}
+
+function quitarDelCarrito(clave){
+  delete cart[clave];
   guardarCarrito();
   renderCarrito();
 }
@@ -493,14 +620,15 @@ function vaciarCarrito(){
 }
 
 function exportarImagen(){
-  const ids = Object.keys(cart);
-  if(ids.length === 0){
+  const claves = Object.keys(cart);
+  if(claves.length === 0){
     showToast("No hay productos en el presupuesto");
     return;
   }
-  const items = ids.map(id=>{
+  const items = claves.map(clave=>{
+    const { id, color } = parseClaveCarrito(clave);
     const p = productos.find(x=>x.id==id);
-    return p ? {p, cantidad: cart[id]} : null;
+    return p ? {p, color, cantidad: cart[clave]} : null;
   }).filter(Boolean);
 
   const POR_PAGINA = 20;
@@ -530,7 +658,7 @@ async function generarPaginasPresupuesto(paginas, index, archivos){
     const subtotal = unidades * it.p.precio;
     filas += `<tr style="background:${i%2===0?'#ffffff':'#f5f5f5'};">
       <td style="padding:9px 6px;text-align:center;border-bottom:1px solid #eee;">${unidades}</td>
-      <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.p.nombre}</td>
+      <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.p.nombre}${it.color ? ' — '+it.color : ''}</td>
       <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;">${money(it.p.precio)}</td>
       <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;font-weight:700;">${money(subtotal)}</td>
     </tr>`;
@@ -608,6 +736,35 @@ function loginAdmin(){
   }
 }
 
+function renderColoresTemp(){
+  const cont = document.getElementById("f-colores-lista");
+  cont.innerHTML = "";
+  coloresTemp.forEach((c, idx)=>{
+    const tag = document.createElement("div");
+    tag.className = "color-tag";
+    tag.innerHTML = `<span class="dot" style="background:${c.hex};"></span>${c.nombre}
+      <button type="button" onclick="quitarColorTemp(${idx})">✕</button>`;
+    cont.appendChild(tag);
+  });
+}
+
+function agregarColorTemp(){
+  const nombre = document.getElementById("f-color-nombre").value.trim();
+  const hex = document.getElementById("f-color-hex").value;
+  if(!nombre){
+    showToast("Poné un nombre para el color");
+    return;
+  }
+  coloresTemp.push({ nombre, hex });
+  document.getElementById("f-color-nombre").value = "";
+  renderColoresTemp();
+}
+
+function quitarColorTemp(idx){
+  coloresTemp.splice(idx, 1);
+  renderColoresTemp();
+}
+
 async function agregarProducto(){
   const nombre = document.getElementById("f-nombre").value.trim();
   const rubro = document.getElementById("f-rubro").value.trim();
@@ -637,11 +794,11 @@ async function agregarProducto(){
   let error;
   if(editandoId){
     ({ error } = await sb.from("DistribuidoraTienda").update({
-      nombre, rubro, precio, pack_size: pack, oferta, foto_url
+      nombre, rubro, precio, pack_size: pack, oferta, foto_url, colores: coloresTemp
     }).eq("id", editandoId));
   } else {
     ({ error } = await sb.from("DistribuidoraTienda").insert({
-      nombre, rubro, precio, pack_size: pack, oferta, activo: true, foto_url
+      nombre, rubro, precio, pack_size: pack, oferta, activo: true, foto_url, colores: coloresTemp
     }));
   }
   if(error){
@@ -664,6 +821,8 @@ function editarProducto(id){
   document.getElementById("f-pack").value = p.pack_size || 1;
   document.getElementById("f-oferta").checked = !!p.oferta;
   document.getElementById("f-foto").value = "";
+  coloresTemp = Array.isArray(p.colores) ? JSON.parse(JSON.stringify(p.colores)) : [];
+  renderColoresTemp();
   document.getElementById("admin-form-titulo").textContent = "Editando: " + p.nombre;
   document.getElementById("btn-guardar-producto").textContent = "Guardar cambios";
   document.getElementById("btn-cancelar-edicion").style.display = "block";
@@ -678,6 +837,8 @@ function cancelarEdicion(){
   document.getElementById("f-pack").value = "1";
   document.getElementById("f-oferta").checked = false;
   document.getElementById("f-foto").value = "";
+  coloresTemp = [];
+  renderColoresTemp();
   document.getElementById("admin-form-titulo").textContent = "Agregar producto";
   document.getElementById("btn-guardar-producto").textContent = "Guardar producto";
   document.getElementById("btn-cancelar-edicion").style.display = "none";
