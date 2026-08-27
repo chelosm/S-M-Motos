@@ -568,7 +568,7 @@ function editarProducto(id){
   document.getElementById("admin-form-titulo").textContent = "Editando: " + p.nombre;
   document.getElementById("btn-guardar-producto").textContent = "Guardar cambios";
   document.getElementById("btn-cancelar-edicion").style.display = "block";
-  document.getElementById("admin-content").scrollTop = 0;
+  document.querySelector("#admin-panel .sheet").scrollTo({top:0, behavior:"smooth"});
 }
 
 function cancelarEdicion(){
