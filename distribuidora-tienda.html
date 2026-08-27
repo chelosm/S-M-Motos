@@ -119,6 +119,15 @@
   .card.compacta .colores-row,.card.compacta .modelos-row{margin-top:0;}
   .card.compacta > *{flex:0 0 auto;}
   .card.compacta .compacta-controles{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .titulo-sugerencias{
+    grid-column:1/-1;font-size:0.75rem;font-weight:700;color:var(--gris);
+    text-transform:uppercase;letter-spacing:0.5px;margin:10px 4px 0;
+  }
+  .card.compacta-proveedor{
+    border-style:dashed;background:#fafaf7;
+  }
+  .card.compacta-proveedor h3{color:var(--gris);font-weight:600;}
+  .card.compacta-proveedor .precio{color:var(--gris);}
   .badge-oferta{
     position:absolute;top:6px;left:6px;
     background:var(--oferta);color:#fff;
@@ -442,7 +451,7 @@ function showToast(msg){
 
 async function cargarProductos(){
   const grid = document.getElementById("grid");
-  const { data, error } = await sb.from("DistribuidoraTienda").select("*").order("created_at",{ascending:false});
+  const { data, error } = await sb.from("DistribuidoraTienda").select("*").order("created_at",{ascending:true});
   if(error){
     grid.innerHTML = "<p>Error cargando productos. Reintentando...</p>";
     setTimeout(cargarProductos, 1500);
@@ -480,7 +489,10 @@ function renderGrid(){
   let visibles = productos.filter(p => p.activo !== false);
   if(rubroActivo) visibles = visibles.filter(p => p.rubro === rubroActivo);
   visibles = visibles.filter(p => coincideBusqueda(p, busqueda));
-  if(visibles.length === 0){
+
+  const sugerenciasProveedor = buscarEnListaProveedor(busqueda);
+
+  if(visibles.length === 0 && sugerenciasProveedor.length === 0){
     grid.innerHTML = "<p style='padding:20px;text-align:center;color:#888;'>No se encontraron productos.</p>";
     return;
   }
@@ -579,7 +591,46 @@ function renderGrid(){
     }
     grid.appendChild(div);
   });
+
+  if(sugerenciasProveedor.length > 0){
+    const titulo = document.createElement("div");
+    titulo.className = "titulo-sugerencias";
+    titulo.textContent = "Del proveedor (no cargado en la tienda todavía)";
+    grid.appendChild(titulo);
+    sugerenciasProveedor.forEach(item=>{
+      const div = document.createElement("div");
+      div.className = "card compacta compacta-proveedor";
+      div.innerHTML = `
+        <div class="compacta-info">
+          <h3>${item.d} <small style="color:var(--gris);font-weight:400;">(${item.codigo})</small></h3>
+          <div class="precio">${money(item.p)} c/u</div>
+        </div>`;
+      grid.appendChild(div);
+    });
+  }
+
   actualizarBotonesCarrito();
+}
+
+// Busca en la lista de precios del proveedor códigos que coincidan con lo escrito,
+// y que todavía no estén cargados como producto (ni como código de una variante).
+function buscarEnListaProveedor(busqueda){
+  const term = busqueda.toLowerCase().trim();
+  if(!term) return [];
+  const codigosCargados = new Set();
+  productos.forEach(p=>{
+    if(p.codigo) codigosCargados.add(p.codigo.toLowerCase());
+    if(Array.isArray(p.variantes)) p.variantes.forEach(v=>{ if(v.codigo) codigosCargados.add(v.codigo.toLowerCase()); });
+  });
+  const resultados = [];
+  for(const codigo in LISTA_PRECIOS_PROVEEDOR){
+    if(codigosCargados.has(codigo.toLowerCase())) continue;
+    if(codigo.toLowerCase().includes(term)){
+      resultados.push({ codigo, ...LISTA_PRECIOS_PROVEEDOR[codigo] });
+      if(resultados.length >= 8) break;
+    }
+  }
+  return resultados;
 }
 
 function actualizarBotonesCarrito(){
