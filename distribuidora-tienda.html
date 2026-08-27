@@ -48,6 +48,41 @@
     font-size:0.95rem;
     color:var(--negro);
   }
+  #buscador-wrap{
+    padding:14px 16px 0;
+    max-width:1000px;
+    margin:0 auto;
+  }
+  #buscador{
+    width:100%;
+    padding:12px 14px;
+    border:1px solid var(--borde);
+    border-radius:10px;
+    font-size:0.95rem;
+  }
+  #tabs{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding:12px 16px 0;
+    max-width:1000px;
+    margin:0 auto;
+  }
+  #tabs button{
+    flex:0 0 auto;
+    background:#f4f2ec;
+    border:1px solid var(--borde);
+    border-radius:20px;
+    padding:8px 14px;
+    font-size:0.82rem;
+    font-weight:600;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  #tabs button.activo{
+    background:var(--amarillo);
+    border-color:var(--amarillo-fuerte);
+  }
   #grid{
     display:grid;
     grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
@@ -162,6 +197,11 @@
 </header>
 <div class="subtitulo">Elegí las cantidades y armá tu presupuesto</div>
 
+<div id="buscador-wrap">
+  <input type="text" id="buscador" placeholder="Buscar (ej: zap fre 1)" oninput="renderGrid()">
+</div>
+<div id="tabs"></div>
+
 <div id="grid">Cargando productos...</div>
 
 <div id="cart-bar">
@@ -194,6 +234,7 @@
       <h3>Agregar producto</h3>
       <div class="admin-form">
         <input type="text" id="f-nombre" placeholder="Nombre del producto">
+        <input type="text" id="f-rubro" placeholder="Rubro (ej: Repuestos, Accesorios, LED, Bulonería)">
         <input type="number" id="f-precio" placeholder="Precio por pack ($)">
         <input type="number" id="f-pack" placeholder="Unidades por pack (dejar 1 si es individual)" value="1">
         <label><input type="checkbox" id="f-oferta" style="width:auto;display:inline-block;"> Marcar como oferta</label>
@@ -221,6 +262,17 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let productos = [];
 let cart = JSON.parse(localStorage.getItem("dt_cart") || "{}");
 let esAdmin = false;
+let rubroActivo = "";
+
+// Búsqueda aproximada: separa lo escrito en palabras (o fragmentos) y
+// exige que TODAS aparezcan como parte del nombre, en cualquier orden.
+// Así "zap fre 1" encuentra "Zapata freno 110".
+function coincideBusqueda(nombre, busqueda){
+  if(!busqueda.trim()) return true;
+  const texto = nombre.toLowerCase();
+  const partes = busqueda.toLowerCase().trim().split(/\s+/);
+  return partes.every(parte => texto.includes(parte));
+}
 
 function money(n){
   return "$" + Math.round(n).toLocaleString("es-AR");
@@ -241,15 +293,39 @@ async function cargarProductos(){
     return;
   }
   productos = data || [];
+  renderTabs();
   renderGrid();
   if(esAdmin) renderAdminLista();
 }
 
+function renderTabs(){
+  const cont = document.getElementById("tabs");
+  const rubros = [...new Set(productos.filter(p=>p.activo!==false).map(p=>p.rubro).filter(Boolean))].sort();
+  if(rubros.length === 0){
+    cont.innerHTML = "";
+    return;
+  }
+  let html = `<button class="${rubroActivo===''?'activo':''}" onclick="filtrarRubro('')">Todos</button>`;
+  rubros.forEach(r=>{
+    html += `<button class="${rubroActivo===r?'activo':''}" onclick="filtrarRubro('${r.replace(/'/g,"\\'")}')">${r}</button>`;
+  });
+  cont.innerHTML = html;
+}
+
+function filtrarRubro(r){
+  rubroActivo = r;
+  renderGrid();
+  renderTabs();
+}
+
 function renderGrid(){
   const grid = document.getElementById("grid");
-  const visibles = productos.filter(p => p.activo !== false);
+  const busqueda = document.getElementById("buscador").value;
+  let visibles = productos.filter(p => p.activo !== false);
+  if(rubroActivo) visibles = visibles.filter(p => p.rubro === rubroActivo);
+  visibles = visibles.filter(p => coincideBusqueda(p.nombre, busqueda));
   if(visibles.length === 0){
-    grid.innerHTML = "<p style='padding:20px;text-align:center;color:#888;'>No hay productos disponibles por el momento.</p>";
+    grid.innerHTML = "<p style='padding:20px;text-align:center;color:#888;'>No se encontraron productos.</p>";
     return;
   }
   grid.innerHTML = "";
@@ -384,6 +460,7 @@ function loginAdmin(){
 
 async function agregarProducto(){
   const nombre = document.getElementById("f-nombre").value.trim();
+  const rubro = document.getElementById("f-rubro").value.trim();
   const precio = parseFloat(document.getElementById("f-precio").value);
   const pack = parseInt(document.getElementById("f-pack").value || "1");
   const oferta = document.getElementById("f-oferta").checked;
@@ -408,13 +485,14 @@ async function agregarProducto(){
   }
 
   const { error } = await sb.from("DistribuidoraTienda").insert({
-    nombre, precio, pack_size: pack, oferta, activo: true, foto_url
+    nombre, rubro, precio, pack_size: pack, oferta, activo: true, foto_url
   });
   if(error){
     showToast("Error guardando producto");
     return;
   }
   document.getElementById("f-nombre").value = "";
+  document.getElementById("f-rubro").value = "";
   document.getElementById("f-precio").value = "";
   document.getElementById("f-pack").value = "1";
   document.getElementById("f-oferta").checked = false;
@@ -431,7 +509,7 @@ function renderAdminLista(){
     row.className = "prod-row";
     row.innerHTML = `
       <img src="${p.foto_url||''}">
-      <div class="nombre">${p.nombre}<br><small>${money(p.precio)} ${p.pack_size>1?'/pack x'+p.pack_size:''}</small></div>
+      <div class="nombre">${p.nombre} ${p.rubro?'<span style="color:#999;">('+p.rubro+')</span>':''}<br><small>${money(p.precio)} ${p.pack_size>1?'/pack x'+p.pack_size:''}</small></div>
       <button style="background:${p.activo!==false?'#ffe08a':'#ddd'};" onclick="toggleCampo(${p.id},'activo',${p.activo===false})">${p.activo!==false?'Con stock':'Sin stock'}</button>
       <button style="background:${p.oferta?'#f5b5b5':'#ddd'};" onclick="toggleCampo(${p.id},'oferta',${!p.oferta})">${p.oferta?'En oferta':'Oferta'}</button>
       <button style="background:#eee;" onclick="borrarProducto(${p.id})">Borrar</button>`;
