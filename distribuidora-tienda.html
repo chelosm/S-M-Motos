@@ -8,8 +8,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
-    --amarillo:#F5C518;
-    --amarillo-fuerte:#E0AC00;
+    --amarillo:#FFD500;
+    --amarillo-fuerte:#E6C000;
+    --verde:#2ECC71;
+    --verde-fuerte:#27AE60;
     --negro:#161616;
     --gris:#6b6b6b;
     --borde:#e8e6df;
@@ -135,6 +137,8 @@
     padding:8px;font-weight:700;cursor:pointer;font-size:0.85rem;
   }
   .add-btn:active{background:var(--amarillo-fuerte);}
+  .add-btn.en-carrito{background:var(--verde);color:#fff;}
+  .add-btn.en-carrito:active{background:var(--verde-fuerte);}
 
   #btn-admin-flotante{
     position:fixed;top:10px;left:10px;z-index:40;
@@ -381,9 +385,23 @@ function renderGrid(){
           <input type="number" id="qty-${p.id}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
           <button onclick="cambiarQty(${p.id},1)">+</button>
         </div>
-        <button class="add-btn" onclick="agregarAlCarrito(${p.id})">Agregar</button>
+        <button class="add-btn" id="add-btn-${p.id}" onclick="agregarAlCarrito(${p.id})">Agregar</button>
       </div>`;
     grid.appendChild(div);
+  });
+  actualizarBotonesCarrito();
+}
+
+function actualizarBotonesCarrito(){
+  document.querySelectorAll(".add-btn").forEach(btn=>{
+    const id = btn.id.replace("add-btn-","");
+    if(cart[id]){
+      btn.classList.add("en-carrito");
+      btn.textContent = "✓ En presupuesto";
+    } else {
+      btn.classList.remove("en-carrito");
+      btn.textContent = "Agregar";
+    }
   });
 }
 
@@ -408,6 +426,7 @@ function agregarAlCarrito(id){
 function guardarCarrito(){
   localStorage.setItem("dt_cart", JSON.stringify(cart));
   actualizarBarra();
+  actualizarBotonesCarrito();
 }
 
 function actualizarBarra(){
@@ -481,6 +500,8 @@ function exportarImagen(){
         navigator.share({
           files:[file],
           title:"Presupuesto S-M Motos"
+        }).then(()=>{
+          vaciarCarritoSilencioso();
         }).catch(()=>{});
       } else {
         const link = document.createElement("a");
@@ -491,9 +512,16 @@ function exportarImagen(){
         setTimeout(()=>{
           window.open(`https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent("Hola! Te mando mi presupuesto de S-M Motos")}`, "_blank");
         }, 800);
+        vaciarCarritoSilencioso();
       }
     }, "image/png");
   });
+}
+
+function vaciarCarritoSilencioso(){
+  cart = {};
+  guardarCarrito();
+  renderCarrito();
 }
 
 // ===== ADMIN =====
