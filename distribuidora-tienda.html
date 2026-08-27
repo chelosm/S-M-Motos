@@ -136,6 +136,13 @@
   }
   .add-btn:active{background:var(--amarillo-fuerte);}
 
+  #btn-admin-flotante{
+    position:fixed;top:14px;right:14px;z-index:40;
+    background:var(--amarillo);color:var(--negro);border:none;
+    padding:9px 14px;border-radius:20px;font-weight:700;font-size:0.8rem;
+    cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);
+  }
+
   #cart-bar{
     position:fixed;bottom:0;left:0;right:0;
     background:var(--negro);color:#fff;
@@ -212,6 +219,8 @@
   <img src="logo-sm-motos.jpg" alt="S-M Motos">
   <p>Distribuidora Tienda &middot; Av. Polonia 2260, Mar del Plata</p>
 </header>
+
+<button id="btn-admin-flotante" onclick="abrirAdmin()">⚙️ Admin</button>
 <div class="subtitulo">Elegí las cantidades y armá tu presupuesto</div>
 
 <div id="buscador-wrap">
@@ -236,7 +245,7 @@
     <div class="total-row"><span>Total</span><span id="cart-total-2">$0</span></div>
     <div class="sheet-actions">
       <button class="btn-secundario" onclick="vaciarCarrito()">Vaciar</button>
-      <button class="btn-primario" onclick="exportarImagen()">Descargar imagen</button>
+      <button class="btn-primario" onclick="exportarImagen()">🖼️ Generar imagen y compartir</button>
     </div>
   </div>
 </div>
@@ -271,7 +280,9 @@
 
 <div class="toast" id="toast"></div>
 
-<footer><a href="#" onclick="abrirAdmin();return false;">Panel administrador</a></footer>
+<footer>
+  <a href="https://wa.me/5492235923638" target="_blank" style="color:#25D366;font-weight:700;text-decoration:none;">💬 223 592-3638</a>
+</footer>
 
 <script>
 // ====== CONFIGURACION SUPABASE ======
@@ -279,6 +290,7 @@ const SUPABASE_URL = "https://lzozlxxcnkqznnuueuxd.supabase.co";
 const SUPABASE_KEY = "sb_publishable_pX8-nV0ceP1Q5CWPl2baiA_S9BSCDq6";
 const BUCKET = "distribuidora-tienda";
 const ADMIN_PASS = "tienda1234"; // podés cambiarla acá
+const WHATSAPP_NUMERO = "5492235923638";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let productos = [];
@@ -383,9 +395,11 @@ function cambiarQty(id, delta){
 
 function agregarAlCarrito(id){
   const p = productos.find(x=>x.id===id);
-  const qty = parseInt(document.getElementById("qty-"+id).value || "1");
+  const input = document.getElementById("qty-"+id);
+  const qty = parseInt(input.value || "1");
   if(!cart[id]) cart[id] = 0;
   cart[id] += qty;
+  input.value = 1;
   guardarCarrito();
   showToast(`${p.nombre} agregado`);
 }
@@ -437,7 +451,7 @@ function renderCarrito(){
     div.className = "cart-item";
     div.innerHTML = `
       <div class="info"><b>${p.nombre}</b><br>
-      ${cart[id]} ${p.pack_size>1 ? 'pack(s) = '+unidades+' unid.' : 'unid.'} &middot; ${money(subtotal)}</div>
+      ${cart[id]} ${p.pack_size>1 ? 'pack(s) = '+unidades+' unid.' : 'unid.'} &middot; ${money(p.precio)} c/u &middot; <b>Total: ${money(subtotal)}</b></div>
       <button class="del" onclick="quitarDelCarrito(${id})">✕</button>`;
     cont.appendChild(div);
   });
@@ -460,11 +474,24 @@ function vaciarCarrito(){
 function exportarImagen(){
   const sheet = document.querySelector("#cart-panel .sheet");
   html2canvas(sheet, {backgroundColor:"#ffffff"}).then(canvas=>{
-    const link = document.createElement("a");
-    link.download = "presupuesto-sm-motos.png";
-    link.href = canvas.toDataURL();
-    link.click();
-    showToast("Imagen descargada, ya la podés enviar por WhatsApp");
+    canvas.toBlob(blob=>{
+      const file = new File([blob], "presupuesto-sm-motos.png", {type:"image/png"});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        navigator.share({
+          files:[file],
+          title:"Presupuesto S-M Motos"
+        }).catch(()=>{});
+      } else {
+        const link = document.createElement("a");
+        link.download = "presupuesto-sm-motos.png";
+        link.href = canvas.toDataURL();
+        link.click();
+        showToast("Imagen descargada, se abre WhatsApp para enviarla");
+        setTimeout(()=>{
+          window.open(`https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent("Hola! Te mando mi presupuesto de S-M Motos")}`, "_blank");
+        }, 800);
+      }
+    }, "image/png");
   });
 }
 
