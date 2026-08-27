@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S-M Motos | Distribuidora Tienda</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --amarillo:#F5C518;
+    --amarillo-fuerte:#E0AC00;
+    --negro:#161616;
+    --gris:#6b6b6b;
+    --borde:#e8e6df;
+    --fondo:#ffffff;
+    --oferta:#D64545;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--fondo);
+    color:var(--negro);
+    padding-bottom:90px;
+  }
+  header{
+    background:#fff;
+    border-bottom:3px solid var(--amarillo);
+    padding:22px 16px 16px;
+    text-align:center;
+  }
+  header h1{
+    margin:0;
+    font-size:2rem;
+    letter-spacing:1px;
+    color:var(--amarillo-fuerte);
+    font-weight:800;
+  }
+  header p{
+    margin:4px 0 0;
+    color:var(--gris);
+    font-size:0.85rem;
+  }
+  .subtitulo{
+    text-align:center;
+    padding:10px 16px 0;
+    font-size:0.95rem;
+    color:var(--negro);
+  }
+  #grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:14px;
+    padding:16px;
+    max-width:1000px;
+    margin:0 auto;
+  }
+  .card{
+    border:1px solid var(--borde);
+    border-radius:10px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    background:#fff;
+    position:relative;
+  }
+  .card.oferta{border:2px solid var(--oferta);}
+  .badge-oferta{
+    position:absolute;top:6px;left:6px;
+    background:var(--oferta);color:#fff;
+    font-size:0.65rem;font-weight:700;
+    padding:2px 8px;border-radius:20px;
+    letter-spacing:0.5px;
+  }
+  .card img{
+    width:100%;aspect-ratio:1/1;object-fit:cover;
+    background:#f3f3f0;
+  }
+  .card-body{padding:10px;display:flex;flex-direction:column;gap:6px;flex:1;}
+  .card-body h3{margin:0;font-size:0.9rem;line-height:1.2;}
+  .precio{font-weight:700;color:var(--negro);font-size:1rem;}
+  .pack-info{font-size:0.72rem;color:var(--gris);}
+  .qty-row{display:flex;align-items:center;gap:6px;margin-top:auto;}
+  .qty-row button{
+    width:30px;height:30px;border-radius:6px;border:1px solid var(--borde);
+    background:#fff;font-size:1.1rem;cursor:pointer;
+  }
+  .qty-row input{
+    width:44px;text-align:center;border:1px solid var(--borde);
+    border-radius:6px;padding:5px 2px;font-size:0.9rem;
+  }
+  .add-btn{
+    margin-top:6px;background:var(--amarillo);border:none;border-radius:8px;
+    padding:8px;font-weight:700;cursor:pointer;font-size:0.85rem;
+  }
+  .add-btn:active{background:var(--amarillo-fuerte);}
+
+  #cart-bar{
+    position:fixed;bottom:0;left:0;right:0;
+    background:var(--negro);color:#fff;
+    padding:12px 16px;display:flex;justify-content:space-between;align-items:center;
+    box-shadow:0 -4px 12px rgba(0,0,0,0.15);
+  }
+  #cart-bar span{font-size:0.9rem;}
+  #cart-bar b{color:var(--amarillo);}
+  #cart-bar button{
+    background:var(--amarillo);border:none;border-radius:8px;
+    padding:9px 16px;font-weight:700;cursor:pointer;
+  }
+
+  #cart-panel, #admin-panel{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
+    z-index:50;align-items:flex-end;justify-content:center;
+  }
+  #cart-panel.open, #admin-panel.open{display:flex;}
+  .sheet{
+    background:#fff;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;
+    border-radius:16px 16px 0 0;padding:18px;
+  }
+  .sheet h2{margin-top:0;}
+  .cart-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:8px 0;border-bottom:1px solid var(--borde);gap:8px;
+  }
+  .cart-item .info{font-size:0.85rem;flex:1;}
+  .cart-item .del{color:var(--oferta);background:none;border:none;font-size:1.1rem;cursor:pointer;}
+  .total-row{display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem;margin-top:10px;padding-top:10px;border-top:2px solid var(--negro);}
+  .sheet-actions{display:flex;gap:8px;margin-top:14px;}
+  .sheet-actions button{
+    flex:1;padding:11px;border-radius:8px;border:none;font-weight:700;cursor:pointer;
+  }
+  .btn-primario{background:var(--amarillo);}
+  .btn-secundario{background:#eee;}
+  .cerrar-x{position:absolute;top:10px;right:16px;background:none;border:none;font-size:1.4rem;cursor:pointer;}
+
+  footer{text-align:center;padding:18px;}
+  footer a{color:var(--gris);font-size:0.75rem;text-decoration:none;}
+
+  #admin-link{margin-top:auto;}
+  .admin-form input, .admin-form label{display:block;width:100%;margin-bottom:8px;}
+  .admin-form input[type=text],.admin-form input[type=number],.admin-form input[type=password]{
+    padding:8px;border:1px solid var(--borde);border-radius:6px;
+  }
+  .prod-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde);}
+  .prod-row img{width:44px;height:44px;object-fit:cover;border-radius:6px;}
+  .prod-row .nombre{flex:1;font-size:0.85rem;}
+  .prod-row button{border:none;border-radius:6px;padding:5px 8px;font-size:0.75rem;cursor:pointer;}
+  .toast{
+    position:fixed;top:14px;left:50%;transform:translateX(-50%);
+    background:var(--negro);color:#fff;padding:9px 16px;border-radius:20px;
+    font-size:0.85rem;z-index:100;opacity:0;transition:opacity .3s;
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>S-M MOTOS</h1>
+  <p>Distribuidora Tienda &middot; Av. Polonia 2260, Mar del Plata</p>
+</header>
+<div class="subtitulo">Elegí las cantidades y armá tu presupuesto</div>
+
+<div id="grid">Cargando productos...</div>
+
+<div id="cart-bar">
+  <span>🧾 <b id="cart-count">0</b> items &middot; <b id="cart-total">$0</b></span>
+  <button onclick="abrirCarrito()">Ver presupuesto</button>
+</div>
+
+<div id="cart-panel">
+  <div class="sheet">
+    <button class="cerrar-x" onclick="cerrarModales()">✕</button>
+    <h2>Tu presupuesto</h2>
+    <div id="cart-items"></div>
+    <div class="total-row"><span>Total</span><span id="cart-total-2">$0</span></div>
+    <div class="sheet-actions">
+      <button class="btn-secundario" onclick="vaciarCarrito()">Vaciar</button>
+      <button class="btn-primario" onclick="exportarImagen()">Descargar imagen</button>
+    </div>
+  </div>
+</div>
+
+<div id="admin-panel">
+  <div class="sheet">
+    <button class="cerrar-x" onclick="cerrarModales()">✕</button>
+    <h2>Panel administrador</h2>
+    <div id="admin-login">
+      <input type="password" id="admin-pass" placeholder="Contraseña">
+      <button class="btn-primario" style="width:100%;padding:10px;border-radius:8px;margin-top:8px;" onclick="loginAdmin()">Ingresar</button>
+    </div>
+    <div id="admin-content" style="display:none;">
+      <h3>Agregar producto</h3>
+      <div class="admin-form">
+        <input type="text" id="f-nombre" placeholder="Nombre del producto">
+        <input type="number" id="f-precio" placeholder="Precio por pack ($)">
+        <input type="number" id="f-pack" placeholder="Unidades por pack (dejar 1 si es individual)" value="1">
+        <label><input type="checkbox" id="f-oferta" style="width:auto;display:inline-block;"> Marcar como oferta</label>
+        <input type="file" id="f-foto" accept="image/*">
+        <button class="btn-primario" style="width:100%;padding:10px;border-radius:8px;" onclick="agregarProducto()">Guardar producto</button>
+      </div>
+      <h3>Productos cargados</h3>
+      <div id="admin-lista"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<footer><a href="#" onclick="abrirAdmin();return false;">Panel administrador</a></footer>
+
+<script>
+// ====== CONFIGURACION SUPABASE ======
+const SUPABASE_URL = "https://lzozlxxcnkqznnuueuxd.supabase.co";
+const SUPABASE_KEY = "sb_publishable_pX8-nV0ceP1Q5CWPl2baiA_S9BSCDq6";
+const BUCKET = "distribuidora-tienda";
+const ADMIN_PASS = "tienda1234"; // podés cambiarla acá
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let productos = [];
+let cart = JSON.parse(localStorage.getItem("dt_cart") || "{}");
+let esAdmin = false;
+
+function money(n){
+  return "$" + Math.round(n).toLocaleString("es-AR");
+}
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 2000);
+}
+
+async function cargarProductos(){
+  const grid = document.getElementById("grid");
+  const { data, error } = await sb.from("DistribuidoraTienda").select("*").order("created_at",{ascending:false});
+  if(error){
+    grid.innerHTML = "<p>Error cargando productos. Reintentando...</p>";
+    setTimeout(cargarProductos, 1500);
+    return;
+  }
+  productos = data || [];
+  renderGrid();
+  if(esAdmin) renderAdminLista();
+}
+
+function renderGrid(){
+  const grid = document.getElementById("grid");
+  const visibles = productos.filter(p => p.activo !== false);
+  if(visibles.length === 0){
+    grid.innerHTML = "<p style='padding:20px;text-align:center;color:#888;'>No hay productos disponibles por el momento.</p>";
+    return;
+  }
+  grid.innerHTML = "";
+  visibles.forEach(p=>{
+    const div = document.createElement("div");
+    div.className = "card" + (p.oferta ? " oferta" : "");
+    const packTxt = p.pack_size > 1 ? `<div class="pack-info">Pack de ${p.pack_size} unidades</div>` : "";
+    div.innerHTML = `
+      ${p.oferta ? '<div class="badge-oferta">OFERTA</div>' : ''}
+      <img src="${p.foto_url || ''}" alt="${p.nombre}" onerror="this.style.opacity=0.3">
+      <div class="card-body">
+        <h3>${p.nombre}</h3>
+        <div class="precio">${money(p.precio)} ${p.pack_size>1 ? '/ pack':''}</div>
+        ${packTxt}
+        <div class="qty-row">
+          <button onclick="cambiarQty(${p.id},-1)">-</button>
+          <input type="number" id="qty-${p.id}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
+          <button onclick="cambiarQty(${p.id},1)">+</button>
+        </div>
+        <button class="add-btn" onclick="agregarAlCarrito(${p.id})">Agregar</button>
+      </div>`;
+    grid.appendChild(div);
+  });
+}
+
+function cambiarQty(id, delta){
+  const input = document.getElementById("qty-"+id);
+  let v = parseInt(input.value||"1") + delta;
+  if(v < 1) v = 1;
+  input.value = v;
+}
+
+function agregarAlCarrito(id){
+  const p = productos.find(x=>x.id===id);
+  const qty = parseInt(document.getElementById("qty-"+id).value || "1");
+  if(!cart[id]) cart[id] = 0;
+  cart[id] += qty;
+  guardarCarrito();
+  showToast(`${p.nombre} agregado`);
+}
+
+function guardarCarrito(){
+  localStorage.setItem("dt_cart", JSON.stringify(cart));
+  actualizarBarra();
+}
+
+function actualizarBarra(){
+  let count = 0, total = 0;
+  Object.keys(cart).forEach(id=>{
+    const p = productos.find(x=>x.id==id);
+    if(!p) return;
+    count += cart[id];
+    total += cart[id] * p.precio;
+  });
+  document.getElementById("cart-count").textContent = count;
+  document.getElementById("cart-total").textContent = money(total);
+}
+
+function abrirCarrito(){
+  renderCarrito();
+  document.getElementById("cart-panel").classList.add("open");
+}
+function cerrarModales(){
+  document.getElementById("cart-panel").classList.remove("open");
+  document.getElementById("admin-panel").classList.remove("open");
+}
+function abrirAdmin(){
+  document.getElementById("admin-panel").classList.add("open");
+}
+
+function renderCarrito(){
+  const cont = document.getElementById("cart-items");
+  cont.innerHTML = "";
+  let total = 0;
+  const ids = Object.keys(cart);
+  if(ids.length === 0){
+    cont.innerHTML = "<p style='color:#888;'>Todavía no agregaste productos.</p>";
+  }
+  ids.forEach(id=>{
+    const p = productos.find(x=>x.id==id);
+    if(!p) return;
+    const unidades = cart[id] * p.pack_size;
+    const subtotal = cart[id] * p.precio;
+    total += subtotal;
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML = `
+      <div class="info"><b>${p.nombre}</b><br>
+      ${cart[id]} ${p.pack_size>1 ? 'pack(s) = '+unidades+' unid.' : 'unid.'} &middot; ${money(subtotal)}</div>
+      <button class="del" onclick="quitarDelCarrito(${id})">✕</button>`;
+    cont.appendChild(div);
+  });
+  document.getElementById("cart-total-2").textContent = money(total);
+}
+
+function quitarDelCarrito(id){
+  delete cart[id];
+  guardarCarrito();
+  renderCarrito();
+}
+
+function vaciarCarrito(){
+  if(!confirm("¿Vaciar todo el presupuesto?")) return;
+  cart = {};
+  guardarCarrito();
+  renderCarrito();
+}
+
+function exportarImagen(){
+  const sheet = document.querySelector("#cart-panel .sheet");
+  html2canvas(sheet, {backgroundColor:"#ffffff"}).then(canvas=>{
+    const link = document.createElement("a");
+    link.download = "presupuesto-sm-motos.png";
+    link.href = canvas.toDataURL();
+    link.click();
+    showToast("Imagen descargada, ya la podés enviar por WhatsApp");
+  });
+}
+
+// ===== ADMIN =====
+function loginAdmin(){
+  const pass = document.getElementById("admin-pass").value;
+  if(pass === ADMIN_PASS){
+    esAdmin = true;
+    document.getElementById("admin-login").style.display = "none";
+    document.getElementById("admin-content").style.display = "block";
+    renderAdminLista();
+  } else {
+    showToast("Contraseña incorrecta");
+  }
+}
+
+async function agregarProducto(){
+  const nombre = document.getElementById("f-nombre").value.trim();
+  const precio = parseFloat(document.getElementById("f-precio").value);
+  const pack = parseInt(document.getElementById("f-pack").value || "1");
+  const oferta = document.getElementById("f-oferta").checked;
+  const fotoInput = document.getElementById("f-foto");
+
+  if(!nombre || !precio){
+    showToast("Completá nombre y precio");
+    return;
+  }
+
+  let foto_url = "";
+  if(fotoInput.files.length > 0){
+    const file = fotoInput.files[0];
+    const path = `${Date.now()}_${file.name}`;
+    const { error: upErr } = await sb.storage.from(BUCKET).upload(path, file);
+    if(upErr){
+      showToast("Error subiendo la foto");
+      return;
+    }
+    const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(path);
+    foto_url = pub.publicUrl;
+  }
+
+  const { error } = await sb.from("DistribuidoraTienda").insert({
+    nombre, precio, pack_size: pack, oferta, activo: true, foto_url
+  });
+  if(error){
+    showToast("Error guardando producto");
+    return;
+  }
+  document.getElementById("f-nombre").value = "";
+  document.getElementById("f-precio").value = "";
+  document.getElementById("f-pack").value = "1";
+  document.getElementById("f-oferta").checked = false;
+  document.getElementById("f-foto").value = "";
+  showToast("Producto guardado");
+  cargarProductos();
+}
+
+function renderAdminLista(){
+  const cont = document.getElementById("admin-lista");
+  cont.innerHTML = "";
+  productos.forEach(p=>{
+    const row = document.createElement("div");
+    row.className = "prod-row";
+    row.innerHTML = `
+      <img src="${p.foto_url||''}">
+      <div class="nombre">${p.nombre}<br><small>${money(p.precio)} ${p.pack_size>1?'/pack x'+p.pack_size:''}</small></div>
+      <button style="background:${p.activo!==false?'#ffe08a':'#ddd'};" onclick="toggleCampo(${p.id},'activo',${p.activo===false})">${p.activo!==false?'Con stock':'Sin stock'}</button>
+      <button style="background:${p.oferta?'#f5b5b5':'#ddd'};" onclick="toggleCampo(${p.id},'oferta',${!p.oferta})">${p.oferta?'En oferta':'Oferta'}</button>
+      <button style="background:#eee;" onclick="borrarProducto(${p.id})">Borrar</button>`;
+    cont.appendChild(row);
+  });
+}
+
+async function toggleCampo(id, campo, valor){
+  await sb.from("DistribuidoraTienda").update({[campo]: valor}).eq("id", id);
+  cargarProductos();
+}
+
+async function borrarProducto(id){
+  if(!confirm("¿Borrar este producto?")) return;
+  await sb.from("DistribuidoraTienda").delete().eq("id", id);
+  cargarProductos();
+}
+
+// ===== INIT =====
+cargarProductos();
+actualizarBarra();
+</script>
+</body>
+</html>
