@@ -137,10 +137,11 @@
   .add-btn:active{background:var(--amarillo-fuerte);}
 
   #btn-admin-flotante{
-    position:fixed;top:14px;right:14px;z-index:40;
-    background:var(--amarillo);color:var(--negro);border:none;
-    padding:9px 14px;border-radius:20px;font-weight:700;font-size:0.8rem;
-    cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);
+    position:fixed;top:10px;left:10px;z-index:40;
+    background:rgba(0,0,0,0.35);color:#fff;border:none;
+    width:30px;height:30px;border-radius:50%;font-size:0.95rem;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    opacity:0.6;
   }
 
   #cart-bar{
@@ -220,7 +221,7 @@
   <p>Distribuidora Tienda &middot; Av. Polonia 2260, Mar del Plata</p>
 </header>
 
-<button id="btn-admin-flotante" onclick="abrirAdmin()">⚙️ Admin</button>
+<button id="btn-admin-flotante" onclick="abrirAdmin()">✏️</button>
 <div class="subtitulo">Elegí las cantidades y armá tu presupuesto</div>
 
 <div id="buscador-wrap">
@@ -237,7 +238,7 @@
   </div>
 </div>
 
-<div id="cart-panel">
+<div id="cart-panel" onclick="if(event.target===this) cerrarModales()">
   <div class="sheet">
     <button class="cerrar-x" onclick="cerrarModales()">✕</button>
     <h2>Tu presupuesto</h2>
@@ -250,7 +251,7 @@
   </div>
 </div>
 
-<div id="admin-panel">
+<div id="admin-panel" onclick="if(event.target===this) cerrarModales()">
   <div class="sheet">
     <button class="cerrar-x" onclick="cerrarModales()">✕</button>
     <h2>Panel administrador</h2>
