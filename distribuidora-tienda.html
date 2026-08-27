@@ -263,7 +263,7 @@
       <div class="admin-form">
         <input type="text" id="f-nombre" placeholder="Nombre del producto">
         <input type="text" id="f-rubro" placeholder="Rubro (ej: Repuestos, Accesorios, LED, Bulonería)">
-        <input type="number" id="f-precio" placeholder="Precio por pack ($)">
+        <input type="number" id="f-precio" placeholder="Precio por unidad ($)">
         <input type="number" id="f-pack" placeholder="Unidades por pack (dejar 1 si es individual)" value="1">
         <label><input type="checkbox" id="f-oferta" style="width:auto;display:inline-block;"> Marcar como oferta</label>
         <input type="file" id="f-foto" accept="image/*">
@@ -367,13 +367,13 @@ function renderGrid(){
   visibles.forEach(p=>{
     const div = document.createElement("div");
     div.className = "card" + (p.oferta ? " oferta" : "");
-    const packTxt = p.pack_size > 1 ? `<div class="pack-info">Pack de ${p.pack_size} unidades</div>` : "";
+    const packTxt = p.pack_size > 1 ? `<div class="pack-info">Pack de ${p.pack_size} unidades &middot; Total: ${money(p.precio*p.pack_size)}</div>` : "";
     div.innerHTML = `
       ${p.oferta ? '<div class="badge-oferta">OFERTA</div>' : ''}
       <img src="${p.foto_url || ''}" alt="${p.nombre}" onerror="this.style.opacity=0.3">
       <div class="card-body">
         <h3>${p.nombre}</h3>
-        <div class="precio">${money(p.precio)} ${p.pack_size>1 ? '/ pack':''}</div>
+        <div class="precio">${money(p.precio)} c/u</div>
         ${packTxt}
         <div class="qty-row">
           <button onclick="cambiarQty(${p.id},-1)">-</button>
@@ -415,7 +415,7 @@ function actualizarBarra(){
     const p = productos.find(x=>x.id==id);
     if(!p) return;
     count += cart[id];
-    total += cart[id] * p.precio;
+    total += cart[id] * p.pack_size * p.precio;
   });
   document.getElementById("cart-count").textContent = count;
   document.getElementById("cart-total").textContent = money(total);
@@ -445,7 +445,7 @@ function renderCarrito(){
     const p = productos.find(x=>x.id==id);
     if(!p) return;
     const unidades = cart[id] * p.pack_size;
-    const subtotal = cart[id] * p.precio;
+    const subtotal = unidades * p.precio;
     total += subtotal;
     const div = document.createElement("div");
     div.className = "cart-item";
@@ -591,7 +591,7 @@ function renderAdminLista(){
     row.className = "prod-row";
     row.innerHTML = `
       <img src="${p.foto_url||''}">
-      <div class="nombre">${p.nombre} ${p.rubro?'<span style="color:#999;">('+p.rubro+')</span>':''}<br><small>${money(p.precio)} ${p.pack_size>1?'/pack x'+p.pack_size:''}</small></div>
+      <div class="nombre">${p.nombre} ${p.rubro?'<span style="color:#999;">('+p.rubro+')</span>':''}<br><small>${money(p.precio)} c/u ${p.pack_size>1?'&middot; pack x'+p.pack_size+' = '+money(p.precio*p.pack_size):''}</small></div>
       <button style="background:${p.activo!==false?'#ffe08a':'#ddd'};" onclick="toggleCampo(${p.id},'activo',${p.activo===false})">${p.activo!==false?'Con stock':'Sin stock'}</button>
       <button style="background:${p.oferta?'#f5b5b5':'#ddd'};" onclick="toggleCampo(${p.id},'oferta',${!p.oferta})">${p.oferta?'En oferta':'Oferta'}</button>
       <button style="background:#cfe8ff;" onclick="editarProducto(${p.id})">Editar</button>
