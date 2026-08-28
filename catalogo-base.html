@@ -18,7 +18,7 @@
     --texto-tenue: #b8bec9;
     --naranja: #ff6a1a;
     --amarillo: #ffb84d;
-    --amarillo-chillon: #fff200;
+    --amarillo-chillon: #e3b94a;
     --verde-stock: #4ade80;
     --rojo-sinstock: #f87171;
   }
@@ -341,7 +341,7 @@
     font-size: 0.85rem;
   }
   .btn-agregar {
-    background: var(--amarillo-chillon);
+    background: var(--verde-stock);
     color: #1a1a1a;
     border: none;
     font-weight: 700;
@@ -769,7 +769,7 @@
   <input type="number" inputmode="numeric" id="input-prompt-numerico" style="width:100%; background:var(--asfalto); border:1px solid var(--amarillo); color:var(--texto); padding:12px; border-radius:6px; font-size:1.2rem; text-align:center; margin-bottom:14px;">
   <div style="display:flex; gap:8px;">
     <button onclick="resolverPromptNumerico(false)" style="flex:1; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">Cancelar</button>
-    <button onclick="resolverPromptNumerico(true)" style="flex:1; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">Aceptar</button>
+    <button onclick="resolverPromptNumerico(true)" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:6px; cursor:pointer;">Aceptar</button>
   </div>
 </div>
 
@@ -1136,7 +1136,7 @@
           <td>
             <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">🛒 Pedido</button>
             <button class="btn-agregar" style="background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}')">🧾 Presup.</button>
-            <button class="btn-agregar" style="background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}')">📋 Venta</button>
+            <button class="btn-agregar" style="background:var(--naranja); color:#1a1a1a;" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}')">📋 Venta</button>
           </td>
         `;
       } else {
@@ -1216,7 +1216,7 @@
         <div style="display:flex; gap:8px; margin-top:16px;">
           <button class="btn-agregar" style="flex:1;" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">🛒 Pedido</button>
           <button class="btn-agregar" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">🧾 Presup.</button>
-          <button class="btn-agregar" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">📋 Venta</button>
+          <button class="btn-agregar" style="flex:1; background:var(--naranja); color:#1a1a1a;" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">📋 Venta</button>
         </div>
       ` : ""}
     `;
