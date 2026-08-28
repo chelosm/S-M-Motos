@@ -553,28 +553,22 @@
     cursor: pointer;
   }
   #btn-tienda {
-    position: absolute;
+    position: fixed;
     top: 14px;
-    right: 16px;
-    z-index: 3;
+    right: 14px;
+    z-index: 25;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 2px;
+    justify-content: center;
     background: var(--amarillo-chillon);
     color: #1a1a1a;
     text-decoration: none;
-    font-weight: 800;
-    font-size: 0.7rem;
-    padding: 8px 10px;
-    border-radius: 8px;
-    line-height: 1;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   }
   #btn-tienda svg { width: 20px; height: 20px; }
-  @media (min-width: 900px) {
-    #btn-tienda { top: 20px; right: 24px; font-size: 0.8rem; padding: 10px 14px; }
-    #btn-tienda svg { width: 24px; height: 24px; }
-  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -589,9 +583,8 @@
       <path d="M480 256c-17.7 0-32 14.3-32 32c0 8.4 3.2 16 8.5 21.7L432 320h-45.3l-25.4-88.9c-3-10.5-12.6-17.7-23.5-17.7H272l-16-32h48c8.8 0 16-7.2 16-16s-7.2-16-16-16h-64c-6.1 0-11.6 3.4-14.3 8.9s-2.1 12 1.5 16.9l25.9 51.9L232 272h-72l-33.9-45.3c-9-12-23.1-19-38.1-19H64c-8.8 0-16 7.2-16 16s7.2 16 16 16h24c5 0 9.8 2.3 12.8 6.4L128 288H64c-35.3 0-64 28.7-64 64s28.7 64 64 64s64-28.7 64-64c0-6.7-1-13.1-2.9-19.2L160 304h56l64 64h72l16-32h64c17.7 0 32-14.3 32-32c0-8.4-3.2-16-8.5-21.7L480 288c17.7 0 32-14.3 32-32s-14.3-32-32-32zM64 384c-17.7 0-32-14.3-32-32s14.3-32 32-32s32 14.3 32 32s-14.3 32-32 32z"/>
     </svg>
   </div>
-  <a id="btn-tienda" href="https://chelosm.github.io/S-M-Motos/distribuidora-tienda.html" target="_blank" rel="noopener">
+  <a id="btn-tienda" href="https://chelosm.github.io/S-M-Motos/distribuidora-tienda.html" target="_blank" rel="noopener" title="Ir a la tienda">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5.5A2 2 0 0 1 6.4 2h11.2a2 2 0 0 1 1.9 1.5L21 9"/><path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z"/><path d="M9 22V15h6v7"/></svg>
-    Tienda
   </a>
   <div class="logo">
     <img class="logo-img" src="logo-sm-motos.jpg" alt="S-M Motos">
