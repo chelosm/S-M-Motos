@@ -107,7 +107,7 @@
     width: 150px;
   }
   #login-box button {
-    background: var(--naranja);
+    background: var(--amarillo-chillon);
     color: #1a1a1a;
     border: none;
     font-weight: 700;
@@ -126,8 +126,8 @@
   /* Controles del dólar y el margen: mismo estilo, dos botoncitos */
   .config-box { position: relative; }
   .config-box button.abrir {
-    background: var(--metal-claro);
-    color: var(--amarillo);
+    background: var(--amarillo-chillon);
+    color: #1a1a1a;
     border: 1px solid var(--amarillo);
     font-weight: 700;
     padding: 8px 12px;
@@ -177,7 +177,7 @@
   }
   .panel-config button.aplicar {
     width: 100%;
-    background: var(--naranja);
+    background: var(--amarillo-chillon);
     color: #1a1a1a;
     border: none;
     font-weight: 700;
@@ -341,7 +341,7 @@
     font-size: 0.85rem;
   }
   .btn-agregar {
-    background: var(--verde-stock);
+    background: var(--amarillo-chillon);
     color: #1a1a1a;
     border: none;
     font-weight: 700;
@@ -357,7 +357,7 @@
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: var(--amarillo);
+    background: var(--amarillo-chillon);
     color: #1a1a1a;
     border: none;
     width: 56px;
@@ -372,7 +372,7 @@
     position: fixed;
     bottom: 88px;
     right: 20px;
-    background: var(--amarillo);
+    background: var(--amarillo-chillon);
     color: #1a1a1a;
     border: none;
     width: 56px;
@@ -608,7 +608,7 @@
     </select>
   </div>
   <button onclick="abrirPresupuesto()" style="width:100%; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:12px;">🧾 Hacer Presupuesto</button>
-  <button onclick="abrirPlanilla()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:1px solid var(--amarillo); font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:16px;">📋 Planilla de Venta Diaria</button>
+  <button onclick="abrirPlanilla()" style="width:100%; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:800; font-size:1.1rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:16px;">📋 Planilla de Venta Diaria</button>
   <div id="contador"></div>
 
   <table>
@@ -637,7 +637,7 @@
   <label for="input-dolar">Valor del dólar (1 USD = ? ARS)</label>
   <input type="number" id="input-dolar" step="0.01" min="0" placeholder="Ej: 1250">
   <button class="aplicar" onclick="guardarDolar()">Aplicar</button>
-  <button class="aplicar" style="background:var(--metal-claro); color:var(--texto); margin-top:8px;" onclick="usarDolarBlue()">🔄 Usar dólar blue (auto)</button>
+  <button class="aplicar" style="background:var(--amarillo-chillon); color:#1a1a1a; margin-top:8px;" onclick="usarDolarBlue()">🔄 Usar dólar blue (auto)</button>
   <div id="msg-dolar-blue" style="font-size:0.72rem; color:var(--texto-tenue); margin-top:6px;"></div>
 </div>
 
@@ -677,7 +677,7 @@
     </div>
 
     <div id="lista-presupuesto"></div>
-    <button onclick="recalcularPreciosPresupuesto()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:1px dashed var(--texto-tenue); font-size:0.8rem; padding:8px; border-radius:6px; cursor:pointer; margin:8px 0;">🔄 Recalcular precios con el dólar/modo actual</button>
+    <button onclick="recalcularPreciosPresupuesto()" style="width:100%; background:var(--amarillo-chillon); color:#1a1a1a; border:1px dashed #1a1a1a; font-size:0.8rem; padding:8px; border-radius:6px; cursor:pointer; margin:8px 0;">🔄 Recalcular precios con el dólar/modo actual</button>
 
     <div style="background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; padding:12px; margin:14px 0;">
       <div style="font-size:0.85rem; color:var(--texto-tenue); margin-bottom:8px;">Agregar ítem que no está en el catálogo:</div>
@@ -694,7 +694,7 @@
       <input type="number" id="input-descuento-presupuesto" min="0" max="100" value="0" oninput="renderPresupuesto()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px; margin-top:4px;">
     </label>
     <input type="text" id="input-cliente-presupuesto" placeholder="Nombre del cliente (opcional)" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:10px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
-    <button onclick="exportarPresupuestoExcel()" style="width:100%; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">📊 Exportar a Excel</button>
+    <button onclick="exportarPresupuestoExcel()" style="width:100%; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">📊 Exportar a Excel</button>
     <button onclick="generarImagenPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">🖼️ Generar imagen / Compartir</button>
     <div id="estado-generacion-img" style="text-align:center; font-size:0.85rem; color:var(--amarillo); margin-bottom:10px;"></div>
     <button onclick="confirmarVaciarPresupuesto()" style="width:100%; background:none; color:var(--rojo-sinstock); border:1px solid var(--rojo-sinstock); font-weight:700; padding:10px; border-radius:8px; font-size:0.9rem; cursor:pointer;">🗑️ Vaciar presupuesto</button>
@@ -721,7 +721,7 @@
   <div style="display:flex; gap:6px; margin-bottom:14px;">
     <button onclick="llenarFormaPago('efectivo')" style="flex:1; background:var(--verde-stock); color:#0a0a0a; border:none; font-weight:700; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:0.82rem;">💵 Todo<br>efectivo</button>
     <button onclick="llenarFormaPago('transferencia')" style="flex:1; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:0.82rem;">📲 Todo<br>transf.</button>
-    <button onclick="llenarFormaPago('tarjeta')" style="flex:1; background:var(--naranja); color:#1a1a1a; border:none; font-weight:700; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:0.82rem;">💳 Todo<br>tarjeta</button>
+    <button onclick="llenarFormaPago('tarjeta')" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:700; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:0.82rem;">💳 Todo<br>tarjeta</button>
   </div>
 
   <div style="font-size:0.78rem; color:var(--texto-tenue); text-align:left; margin-bottom:8px;">O combiná varios métodos (la suma debe dar el total):</div>
@@ -1116,7 +1116,7 @@
           <td>
             <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">🛒 Pedido</button>
             <button class="btn-agregar" style="background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}')">🧾 Presup.</button>
-            <button class="btn-agregar" style="background:var(--metal-claro); color:var(--texto); border:1px solid var(--amarillo);" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}')">📋 Venta</button>
+            <button class="btn-agregar" style="background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}')">📋 Venta</button>
           </td>
         `;
       } else {
@@ -1196,7 +1196,7 @@
         <div style="display:flex; gap:8px; margin-top:16px;">
           <button class="btn-agregar" style="flex:1;" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">🛒 Pedido</button>
           <button class="btn-agregar" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">🧾 Presup.</button>
-          <button class="btn-agregar" style="flex:1; background:var(--metal-claro); color:var(--texto); border:1px solid var(--amarillo);" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">📋 Venta</button>
+          <button class="btn-agregar" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">📋 Venta</button>
         </div>
       ` : ""}
     `;
