@@ -265,6 +265,12 @@
   .variante-tag .info{flex:1;}
   .variante-tag button{background:none;border:none;color:var(--oferta);cursor:pointer;font-size:0.95rem;padding:0 4px;}
   .variante-add-box{border:1px dashed var(--borde);border-radius:8px;padding:8px;margin-bottom:10px;}
+
+  .manual-add-box{border:1px dashed var(--borde);border-radius:8px;padding:8px;margin:10px 0;background:#fafaf7;}
+  .manual-add-box .fila{display:flex;gap:6px;margin-bottom:6px;}
+  .manual-add-box input{margin-bottom:0;}
+  .manual-add-box button{width:100%;padding:8px;border-radius:6px;border:1px solid var(--borde);background:#fff;cursor:pointer;font-weight:700;font-size:0.85rem;}
+  .precio-editable{width:80px;border:1px solid var(--borde);border-radius:5px;padding:2px 4px;font-size:0.85rem;}
   .variante-add-box .fila{display:flex;gap:6px;margin-bottom:6px;}
   .variante-add-box .fila input{margin-bottom:0;}
   .variante-add-box input[type=text],.variante-add-box input[type=number]{flex:1;}
@@ -331,6 +337,16 @@
     <button class="cerrar-x" onclick="cerrarModales()">✕</button>
     <h2>Tu presupuesto</h2>
     <div id="cart-items"></div>
+    <div class="manual-add-box">
+      <div class="fila">
+        <input type="text" id="manual-nombre" placeholder="Nombre del producto/servicio">
+      </div>
+      <div class="fila">
+        <input type="number" id="manual-precio" placeholder="Precio ($)">
+        <input type="number" id="manual-cantidad" placeholder="Cant." value="1" style="max-width:70px;">
+      </div>
+      <button type="button" onclick="agregarItemManual()">+ Agregar ítem que no está en el catálogo</button>
+    </div>
     <div class="total-row"><span>Total</span><span id="cart-total-2">$0</span></div>
     <div class="sheet-actions">
       <button class="btn-secundario" onclick="vaciarCarrito()">Vaciar</button>
@@ -660,7 +676,8 @@ function actualizarBotonesCarrito(){
 
 // El carrito usa una clave simple "id" para productos sin color/variante,
 // "id|NombreColor" para color elegido, "id|v:INDICE" para variante de modelo elegida,
-// y "prov|CODIGO" para un ítem de la lista de precios del proveedor (sin producto cargado).
+// "prov|CODIGO" para un ítem de la lista de precios del proveedor (sin producto cargado),
+// y "custom|ID" para un ítem cargado a mano en el presupuesto (no existe como producto).
 function claveCarrito(id, color){
   return color ? `${id}|${color}` : `${id}`;
 }
@@ -670,10 +687,16 @@ function claveCarritoVariante(id, idx){
 function claveCarritoProveedor(codigo){
   return `prov|${codigo}`;
 }
+function claveCarritoCustom(id){
+  return `custom|${id}`;
+}
 function parseClaveCarrito(clave){
   const claveStr = String(clave);
   if(claveStr.startsWith("prov|")){
     return { tipo: "proveedor", codigo: claveStr.slice(5) };
+  }
+  if(claveStr.startsWith("custom|")){
+    return { tipo: "custom", customId: claveStr.slice(7) };
   }
   const partes = claveStr.split("|");
   const id = parseInt(partes[0]);
@@ -684,13 +707,18 @@ function parseClaveCarrito(clave){
 }
 
 // Dada una clave del carrito, devuelve el producto (si existe), el nombre a mostrar
-// y el precio unitario que corresponde (el propio de la variante o del proveedor, si aplica).
+// y el precio unitario que corresponde (el propio de la variante, del proveedor o manual, si aplica).
 function itemCarrito(clave){
   const info = parseClaveCarrito(clave);
   if(info.tipo === "proveedor"){
     const item = LISTA_PRECIOS_PROVEEDOR[info.codigo];
     if(!item) return null;
     return { p: { pack_size: 1 }, precio: item.p, nombre: `${item.d} (${info.codigo})` };
+  }
+  if(info.tipo === "custom"){
+    const c = customItems[info.customId];
+    if(!c) return null;
+    return { p: { pack_size: 1 }, precio: c.precio, nombre: c.nombre, esCustom: true, customId: info.customId };
   }
   const p = productos.find(x=>x.id===info.id);
   if(!p) return null;
@@ -699,6 +727,48 @@ function itemCarrito(clave){
     return { p, precio: v.precio, nombre: `${p.nombre} — ${v.modelo}${v.codigo ? ' (Cod: '+v.codigo+')' : ''}` };
   }
   return { p, precio: p.precio, nombre: `${p.nombre}${info.color ? ' — '+info.color : ''}` };
+}
+
+let customItems = JSON.parse(localStorage.getItem("dt_custom") || "{}");
+function guardarCustomItems(){
+  localStorage.setItem("dt_custom", JSON.stringify(customItems));
+}
+
+function agregarItemManual(){
+  const nombre = document.getElementById("manual-nombre").value.trim();
+  const precio = parseFloat(document.getElementById("manual-precio").value);
+  const cantidad = parseInt(document.getElementById("manual-cantidad").value || "1");
+  if(!nombre || !precio){
+    showToast("Completá nombre y precio del ítem");
+    return;
+  }
+  const id = Date.now().toString(36);
+  customItems[id] = { nombre, precio };
+  guardarCustomItems();
+  const clave = claveCarritoCustom(id);
+  cart[clave] = cantidad;
+  guardarCarrito();
+  document.getElementById("manual-nombre").value = "";
+  document.getElementById("manual-precio").value = "";
+  document.getElementById("manual-cantidad").value = "1";
+  showToast("Ítem agregado al presupuesto");
+  renderCarrito();
+}
+
+// Editar el precio de una línea del presupuesto directamente (no toca el precio real del producto,
+// solo cómo queda reflejado en este presupuesto puntual — salvo en ítems manuales, que son 100% propios).
+function editarPrecioCarrito(clave, valor){
+  const nuevo = parseFloat(valor);
+  if(isNaN(nuevo) || nuevo < 0) return;
+  const info = parseClaveCarrito(clave);
+  if(info.tipo === "custom"){
+    if(customItems[info.customId]){
+      customItems[info.customId].precio = nuevo;
+      guardarCustomItems();
+    }
+  }
+  renderCarrito();
+  actualizarBarra();
 }
 
 function agregarAlCarritoProveedor(codigoSeguro, codigo){
@@ -817,7 +887,9 @@ function renderCarrito(){
     div.className = "cart-item";
     div.innerHTML = `
       <div class="info"><b>${nombre}</b><br>
-      ${p.pack_size>1 ? unidades+' unid. ('+cantidad+' pack(s))' : cantidad+' unid.'} &middot; ${money(precio)} c/u &middot; <b>Total: ${money(subtotal)}</b>
+      ${p.pack_size>1 ? unidades+' unid. ('+cantidad+' pack(s))' : cantidad+' unid.'} &middot;
+      <input type="number" class="precio-editable" value="${precio}" min="0"
+        onchange="editarPrecioCarrito('${claveJs}', this.value)"> c/u &middot; <b>Total: ${money(subtotal)}</b>
       <div class="qty-edit">
         <button onclick="cambiarCantidadCarrito('${claveJs}',-1)">-</button>
         <input type="number" value="${cantidad}" min="1" inputmode="numeric" pattern="[0-9]*"
@@ -847,6 +919,11 @@ function setCantidadCarrito(clave, valor){
 }
 
 function quitarDelCarrito(clave){
+  const info = parseClaveCarrito(clave);
+  if(info.tipo === "custom" && customItems[info.customId]){
+    delete customItems[info.customId];
+    guardarCustomItems();
+  }
   delete cart[clave];
   guardarCarrito();
   renderCarrito();
