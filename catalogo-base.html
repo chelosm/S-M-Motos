@@ -637,7 +637,7 @@
         <th>Código</th>
         <th>Descripción</th>
         <th class="num">Precio</th>
-        <th>Pedido</th>
+        <th>Acciones</th>
       </tr>
     </thead>
     <tbody id="tabla-productos"></tbody>
@@ -670,12 +670,6 @@
 <!-- Fondo oscuro y panel del detalle de producto -->
 <div id="fondo-detalle" onclick="cerrarDetalle()"></div>
 <div id="panel-detalle"></div>
-
-<!-- Botón flotante del carrito -->
-<button id="btn-carrito-flotante" onclick="abrirCarrito()">
-  🛒
-  <span id="contador-carrito" style="display:none;">0</span>
-</button>
 
 <!-- Botón flotante del presupuesto -->
 <button id="btn-presupuesto-flotante" onclick="abrirPresupuesto()">
@@ -825,17 +819,6 @@
     <button onclick="exportarPlanillaExcel()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:800; padding:14px; border-radius:8px; font-size:1rem; cursor:pointer;">📊 Cerrar día y descargar Excel</button>
   </div>
 </div>
-
-<!-- Panel del carrito -->
-<div id="overlay-carrito" onclick="if(event.target===this) cerrarCarrito()">
-  <div id="panel-carrito">
-    <h2>Mi pedido <button onclick="cerrarCarrito()">✕</button></h2>
-    <div id="lista-carrito"></div>
-    <div id="total-carrito"></div>
-    <input type="text" id="input-cliente-factura" placeholder="Nombre del cliente (opcional)" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:10px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
-    <button id="btn-exportar-excel" onclick="exportarExcel()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">📊 Exportar a Excel</button>
-    <button id="btn-pedir-whatsapp" onclick="pedirPorWhatsapp()">📲 Encargar por WhatsApp</button>
-  </div>
 </div>
 
 <script>
@@ -1143,7 +1126,6 @@
         celdaPrecio = `<td class="num">${celdaVenta}</td>`;
         celdaPedido = `
           <td>
-            <button class="btn-agregar" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}')">🛒 Pedido</button>
             <button class="btn-agregar" style="background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}')">🧾 Presup.</button>
             <button class="btn-agregar" style="background:var(--naranja); color:#1a1a1a;" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}')">📋 Venta</button>
           </td>
@@ -1223,7 +1205,6 @@
       ${filasPrecio}
       ${logueado ? `
         <div style="display:flex; gap:8px; margin-top:16px;">
-          <button class="btn-agregar" style="flex:1;" onclick="agregarAlCarrito('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">🛒 Pedido</button>
           <button class="btn-agregar" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a;" onclick="agregarAPresupuesto('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">🧾 Presup.</button>
           <button class="btn-agregar" style="flex:1; background:var(--naranja); color:#1a1a1a;" onclick="agregarVentaDia('${p.id.replace(/'/g,"\\'")}'); cerrarDetalle();">📋 Venta</button>
         </div>
@@ -1237,167 +1218,6 @@
     document.getElementById("fondo-detalle").classList.remove("abierto");
     document.getElementById("panel-detalle").classList.remove("abierto");
   }
-
-  /* ============================================
-     CARRITO
-     Se guarda en localStorage para que no se pierda
-     si recargás la página sin querer.
-     ============================================ */
-  let CARRITO = JSON.parse(localStorage.getItem("carritoHada") || "[]");
-
-  function guardarCarrito() {
-    localStorage.setItem("carritoHada", JSON.stringify(CARRITO));
-    actualizarContadorCarrito();
-  }
-
-  async function agregarAlCarrito(id) {
-    const producto = PRODUCTOS.find(p => p.id === id);
-    if (!producto) return;
-
-    const respuesta = await pedirNumero("¿Cuántas unidades de \"" + producto.descripcion + "\" agregar al pedido?", "1");
-    if (respuesta === null) return; // canceló, no se agrega nada
-    const cantidad = Math.max(1, parseInt(respuesta) || 0);
-    if (cantidad <= 0) return;
-
-    const costoArs = producto.precio_usd * valorDolar;
-    const costoConIva = costoArs * (1 + IVA);
-
-    const existente = CARRITO.find(item => item.id === id);
-    if (existente) {
-      existente.cantidad += cantidad;
-    } else {
-      CARRITO.push({
-        id: producto.id,
-        codigo: producto.codigo,
-        descripcion: producto.descripcion || "",
-        cantidad: cantidad,
-        precioUnitario: costoConIva
-      });
-    }
-    guardarCarrito();
-  }
-
-  function quitarDelCarrito(id) {
-    CARRITO = CARRITO.filter(item => item.id !== id);
-    guardarCarrito();
-    renderCarrito();
-  }
-
-  function actualizarContadorCarrito() {
-    const totalItems = CARRITO.reduce((sum, item) => sum + item.cantidad, 0);
-    const contador = document.getElementById("contador-carrito");
-    if (totalItems > 0) {
-      contador.style.display = "flex";
-      contador.textContent = totalItems;
-    } else {
-      contador.style.display = "none";
-    }
-  }
-
-  function abrirCarrito() {
-    renderCarrito();
-    document.getElementById("overlay-carrito").classList.add("abierto");
-  }
-
-  function cerrarCarrito() {
-    document.getElementById("overlay-carrito").classList.remove("abierto");
-  }
-
-  function renderCarrito() {
-    const lista = document.getElementById("lista-carrito");
-    const totalDiv = document.getElementById("total-carrito");
-    const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-    if (CARRITO.length === 0) {
-      lista.innerHTML = `<div id="carrito-vacio">Todavía no agregaste productos.</div>`;
-      totalDiv.textContent = "";
-      return;
-    }
-
-    let total = 0;
-    lista.innerHTML = CARRITO.map(item => {
-      const subtotal = item.precioUnitario * item.cantidad;
-      total += subtotal;
-      return `
-        <div class="item-carrito">
-          <div class="info">
-            <div class="cod">${item.codigo} × ${item.cantidad}</div>
-            <div class="desc">${item.descripcion}</div>
-          </div>
-          <div class="subtotal">$${fmt(subtotal)}</div>
-          <button class="btn-quitar" onclick="quitarDelCarrito('${item.id.replace(/'/g,"\\'")}')">✕</button>
-        </div>
-      `;
-    }).join("");
-
-    totalDiv.textContent = "Total: $" + fmt(total);
-  }
-
-  function exportarExcel() {
-    if (CARRITO.length === 0) {
-      alert("Todavía no agregaste productos al pedido.");
-      return;
-    }
-
-    const cliente = document.getElementById("input-cliente-factura").value.trim() || "";
-    const fecha = new Date().toLocaleString('es-AR');
-
-    const filas = [];
-    filas.push(["", "CLIENTE", cliente, fecha, ""]);
-    filas.push([]);
-    filas.push(["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]);
-
-    let total = 0;
-    CARRITO.forEach(item => {
-      const subtotal = item.precioUnitario * item.cantidad;
-      total += subtotal;
-      filas.push([item.cantidad, item.codigo, item.descripcion, fmtPesos(item.precioUnitario), fmtPesos(subtotal)]);
-    });
-    const filaTotal = 3 + CARRITO.length + 2;
-    filas.push([]);
-    filas.push([]);
-    filas.push(["", "", "", "TOTAL =", fmtPesos(total)]);
-
-    const hoja = XLSX.utils.aoa_to_sheet(filas);
-    hoja["!cols"] = [{wch:8}, {wch:14}, {wch:45}, {wch:12}, {wch:14}];
-    // Filtro clásico de Excel (flechitas en cada columna) sobre la
-    // fila de encabezados y los productos — funciona en cualquier app.
-    hoja["!autofilter"] = { ref: `A3:E${3 + CARRITO.length}` };
-
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, "Pedido");
-
-    const nombreArchivo = "Pedido" + (cliente ? "_" + cliente.replace(/\s+/g, "_") : "") + ".xlsx";
-    XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
-  }
-
-  function pedirPorWhatsapp() {
-    if (CARRITO.length === 0) {
-      alert("Todavía no agregaste productos al pedido.");
-      return;
-    }
-    const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    let total = 0;
-    let mensaje = "Hola! Quiero encargar este pedido de S-M Motos:\n\n";
-    CARRITO.forEach(item => {
-      const subtotal = item.precioUnitario * item.cantidad;
-      total += subtotal;
-      mensaje += `• ${item.codigo} - ${item.descripcion}\n  Cantidad: ${item.cantidad} x $${fmt(item.precioUnitario)} = $${fmt(subtotal)}\n\n`;
-    });
-    mensaje += `Total del pedido: $${fmt(total)}`;
-
-    const numeroWhatsapp = "5492235923638";
-    const url = "https://wa.me/" + numeroWhatsapp + "?text=" + encodeURIComponent(mensaje);
-    window.open(url, "_blank");
-
-    // Vaciamos el carrito, ya que el pedido quedó armado y enviado
-    CARRITO = [];
-    guardarCarrito();
-    renderCarrito();
-  }
-
-  revisarSesionExistente();
-  actualizarContadorCarrito();
 
   /* ============================================
      PRESUPUESTO
@@ -1462,7 +1282,8 @@
         descripcion: producto.descripcion || "",
         cantidad: cantidad,
         precioUnitario: precioFinal,
-        manual: false
+        manual: false,
+        origen: "catalogo"
       });
     }
     guardarPresupuesto();
@@ -1490,7 +1311,8 @@
       descripcion: desc,
       cantidad: cant,
       precioUnitario: precio,
-      manual: true
+      manual: true,
+      origen: "catalogo"
     });
 
     document.getElementById("manual-descripcion").value = "";
@@ -1526,6 +1348,7 @@
     let recalculados = 0;
     PRESUPUESTO.forEach(item => {
       if (item.manual) return; // los ítems manuales no tienen fórmula, no se tocan
+      if (item.origen === "tienda") return; // esos precios se manejan desde la tienda
       const producto = PRODUCTOS.find(p => p.id === item.id);
       if (!producto) return;
       item.precioUnitario = precioSegunModo(producto);
@@ -1537,7 +1360,8 @@
   }
 
   function vaciarPresupuesto() {
-    PRESUPUESTO = [];
+    // Solo se borra lo que se cargó desde el catálogo; lo de la tienda se vacía desde ahí.
+    PRESUPUESTO = PRESUPUESTO.filter(item => item.origen === "tienda");
     guardarPresupuesto();
     renderPresupuesto();
     const inputDescuento = document.getElementById("input-descuento-presupuesto");
@@ -1545,8 +1369,9 @@
   }
 
   function confirmarVaciarPresupuesto() {
-    if (PRESUPUESTO.length === 0) return;
-    if (confirm("¿Seguro que querés vaciar el presupuesto? Se van a borrar los " + PRESUPUESTO.length + " ítems cargados.")) {
+    const delCatalogo = PRESUPUESTO.filter(item => item.origen !== "tienda");
+    if (delCatalogo.length === 0) return;
+    if (confirm("¿Seguro que querés vaciar el presupuesto? Se van a borrar los " + delCatalogo.length + " ítems cargados desde el catálogo (lo de la tienda no se toca).")) {
       vaciarPresupuesto();
     }
   }
@@ -1563,6 +1388,8 @@
   }
 
   function abrirPresupuesto() {
+    // Se relee del localStorage por si se agregaron ítems desde la tienda mientras tanto.
+    PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
     renderPresupuesto();
     actualizarBotonesModo();
     document.getElementById("overlay-presupuesto").classList.add("abierto");
@@ -1587,15 +1414,21 @@
     lista.innerHTML = PRESUPUESTO.map(item => {
       const sub = item.precioUnitario * item.cantidad;
       subtotal += sub;
+      const esDeLaTienda = item.origen === "tienda";
+      const acciones = esDeLaTienda
+        ? `<span style="color:var(--texto-tenue); font-size:0.7rem;">editar en tienda</span>`
+        : `
+          <button class="btn-quitar" style="color:var(--amarillo);" onclick="editarPrecioPresupuesto('${item.id.replace(/'/g,"\\'")}')">✏️</button>
+          <button class="btn-quitar" onclick="quitarDePresupuesto('${item.id.replace(/'/g,"\\'")}')">✕</button>
+        `;
       return `
         <div class="item-carrito">
           <div class="info">
-            <div class="cod">${item.codigo} × ${item.cantidad} ${item.manual ? "(manual)" : ""}</div>
+            <div class="cod">${item.codigo} × ${item.cantidad} ${item.manual ? "(manual)" : ""} ${esDeLaTienda ? "(de la tienda)" : ""}</div>
             <div class="desc">${item.descripcion}</div>
           </div>
           <div class="subtotal">$${fmt(sub)}</div>
-          <button class="btn-quitar" style="color:var(--amarillo);" onclick="editarPrecioPresupuesto('${item.id.replace(/'/g,"\\'")}')">✏️</button>
-          <button class="btn-quitar" onclick="quitarDePresupuesto('${item.id.replace(/'/g,"\\'")}')">✕</button>
+          ${acciones}
         </div>
       `;
     }).join("");
@@ -2175,6 +2008,8 @@
     document.getElementById("caja-inicial").value = "0";
     renderPlanilla();
   }
+
+  revisarSesionExistente();
 </script>
 
 </body>

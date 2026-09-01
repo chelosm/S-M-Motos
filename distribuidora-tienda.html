@@ -675,12 +675,13 @@ function renderGrid(){
       const codigoSeguro = item.codigo.replace(/[^a-zA-Z0-9_-]/g, "_");
       const claveP = claveCarritoProveedor(item.codigo);
       const enCarrito = !!cart[claveP];
+      const precioFinal = item.esFinal ? item.p : conMargen(item.p);
       const div = document.createElement("div");
       div.className = "card compacta compacta-proveedor";
       div.innerHTML = `
         <div class="compacta-info">
           <h3>${item.d} <small style="color:var(--gris);font-weight:400;">(${item.codigo})</small></h3>
-          <div class="precio">${money(conMargen(item.p))} c/u${margenSugerido ? ` <small style="color:var(--gris);font-weight:400;">(costo ${money(item.p)} +${margenSugerido}%)</small>` : ''}</div>
+          <div class="precio">${money(precioFinal)} c/u${(!item.esFinal && margenSugerido) ? ` <small style="color:var(--gris);font-weight:400;">(costo ${money(item.p)} +${margenSugerido}%)</small>` : ''}</div>
         </div>
         <div class="compacta-controles">
           <div class="qty-row">
@@ -752,9 +753,11 @@ function onBuscadorInput(){
 
 async function buscarCatalogoVivo(busqueda){
   const term = busqueda.trim();
-  // El dólar lo carga catalogo-base.html; como comparten dominio, comparten localStorage.
+  // El dólar y el margen los carga catalogo-base.html; como comparten dominio, comparten localStorage.
   const dolar = parseFloat(localStorage.getItem("valorDolarHada") || "0");
   if(!dolar) return; // sin dólar configurado no podemos convertir el precio a pesos
+  const IVA_CATALOGO = 0.21; // misma tasa que usa catalogo-base.html
+  const margenCatalogo = parseFloat(localStorage.getItem("margenHada") || "30");
 
   const codigosCargados = new Set();
   productos.forEach(p=>{
@@ -771,8 +774,11 @@ async function buscarCatalogoVivo(busqueda){
   resultadosCatalogoVivo = data
     .filter(p => p.codigo && !codigosCargados.has(normalizarCodigo(p.codigo)))
     .map(p => {
-      const item = { codigo: p.codigo, d: p.descripcion || "", p: Math.round((p.precio_usd||0) * dolar) };
-      catalogoVivoCache[p.codigo] = { d: item.d, p: item.p }; // queda disponible para el carrito
+      // Mismo cálculo que catalogo-base.html: dólar -> costo con IVA -> venta sugerida con margen.
+      const costoConIva = (p.precio_usd||0) * dolar * (1 + IVA_CATALOGO);
+      const ventaSugerida = Math.round(costoConIva * (1 + margenCatalogo/100));
+      const item = { codigo: p.codigo, d: p.descripcion || "", p: ventaSugerida, esFinal: true };
+      catalogoVivoCache[p.codigo] = { d: item.d, p: item.p, esFinal: true }; // queda disponible para el carrito
       return item;
     });
   terminoCatalogoVivo = busqueda;
@@ -840,7 +846,8 @@ function itemCarrito(clave){
   if(info.tipo === "proveedor"){
     const item = obtenerItemProveedor(info.codigo);
     if(!item) return null;
-    return { p: { pack_size: 1 }, precio: conMargen(item.p), nombre: `${item.d} (${info.codigo})` };
+    const precio = item.esFinal ? item.p : conMargen(item.p);
+    return { p: { pack_size: 1 }, precio, nombre: `${item.d} (${info.codigo})` };
   }
   if(info.tipo === "custom"){
     const c = customItems[info.customId];
@@ -963,11 +970,88 @@ function agregarAlCarrito(id){
 
 function guardarCarrito(){
   localStorage.setItem("dt_cart", JSON.stringify(cart));
+  sincronizarPresupuestoCompartido();
   actualizarBarra();
   actualizarBotonesCarrito();
   if(document.querySelectorAll(".colores-row, .modelos-row, .compacta-proveedor").length){
     renderGrid();
   }
+}
+
+// ===== INTEGRACIÓN CON EL PRESUPUESTO DE catalogo-base.html (mismo localStorage) =====
+const CLAVE_PRESUPUESTO_COMPARTIDO = "presupuestoSMMotos";
+
+function leerPresupuestoCompartido(){
+  try { return JSON.parse(localStorage.getItem(CLAVE_PRESUPUESTO_COMPARTIDO) || "[]"); }
+  catch(e){ return []; }
+}
+function guardarPresupuestoCompartido(arr){
+  localStorage.setItem(CLAVE_PRESUPUESTO_COMPARTIDO, JSON.stringify(arr));
+}
+
+// Actualiza, dentro del presupuesto compartido, solo la parte que agregamos desde
+// esta página (la tienda). Lo que se agregó desde catalogo-base.html se deja intacto.
+function sincronizarPresupuestoCompartido(){
+  const compartido = leerPresupuestoCompartido();
+  const delCatalogo = compartido.filter(it => it.origen !== "tienda");
+  const deLaTienda = Object.keys(cart).map(clave=>{
+    const it = itemCarrito(clave);
+    if(!it) return null;
+    return {
+      id: "tienda-" + clave,
+      codigo: "",
+      descripcion: it.nombre,
+      cantidad: cart[clave] * (it.p.pack_size || 1),
+      precioUnitario: it.precio,
+      manual: !!it.esCustom,
+      origen: "tienda"
+    };
+  }).filter(Boolean);
+  guardarPresupuestoCompartido([...delCatalogo, ...deLaTienda]);
+}
+
+// Ítems agregados desde catalogo-base.html: se muestran y se pueden editar
+// también desde acá, escribiendo directo al presupuesto compartido.
+function itemsDelCatalogoCompartidos(){
+  return leerPresupuestoCompartido().filter(it => it.origen !== "tienda");
+}
+
+function cambiarCantidadCompartida(id, delta){
+  const arr = leerPresupuestoCompartido();
+  const item = arr.find(it => it.id === id);
+  if(!item) return;
+  item.cantidad = Math.max(1, item.cantidad + delta);
+  guardarPresupuestoCompartido(arr);
+  renderCarrito();
+  actualizarBarra();
+}
+function setCantidadCompartida(id, valor){
+  const arr = leerPresupuestoCompartido();
+  const item = arr.find(it => it.id === id);
+  if(!item) return;
+  let nueva = parseInt(valor || "1");
+  if(nueva < 1) nueva = 1;
+  item.cantidad = nueva;
+  guardarPresupuestoCompartido(arr);
+  renderCarrito();
+  actualizarBarra();
+}
+function editarPrecioCompartido(id, valor){
+  const nuevo = parseFloat(valor);
+  if(isNaN(nuevo) || nuevo < 0) return;
+  const arr = leerPresupuestoCompartido();
+  const item = arr.find(it => it.id === id);
+  if(!item) return;
+  item.precioUnitario = nuevo;
+  guardarPresupuestoCompartido(arr);
+  renderCarrito();
+  actualizarBarra();
+}
+function quitarDeCompartido(id){
+  const arr = leerPresupuestoCompartido().filter(it => it.id !== id);
+  guardarPresupuestoCompartido(arr);
+  renderCarrito();
+  actualizarBarra();
 }
 
 function actualizarBarra(){
@@ -977,6 +1061,10 @@ function actualizarBarra(){
     if(!it) return;
     count += cart[clave];
     total += cart[clave] * it.p.pack_size * it.precio;
+  });
+  itemsDelCatalogoCompartidos().forEach(it=>{
+    count += it.cantidad;
+    total += it.cantidad * it.precioUnitario;
   });
   document.getElementById("cart-count").textContent = count;
   document.getElementById("cart-total").textContent = money(total);
@@ -999,7 +1087,8 @@ function renderCarrito(){
   cont.innerHTML = "";
   let total = 0;
   const claves = Object.keys(cart);
-  if(claves.length === 0){
+  const compartidos = itemsDelCatalogoCompartidos();
+  if(claves.length === 0 && compartidos.length === 0){
     cont.innerHTML = "<p style='color:#888;'>Todavía no agregaste productos.</p>";
   }
   claves.forEach(clave=>{
@@ -1025,6 +1114,26 @@ function renderCarrito(){
         <button onclick="cambiarCantidadCarrito('${claveJs}',1)">+</button>
       </div></div>
       <button class="del" onclick="quitarDelCarrito('${claveJs}')">✕</button>`;
+    cont.appendChild(div);
+  });
+  compartidos.forEach(it=>{
+    const subtotal = it.cantidad * it.precioUnitario;
+    total += subtotal;
+    const idJs = it.id.replace(/'/g,"\\'");
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML = `
+      <div class="info"><b>${it.descripcion}</b> <small style="color:var(--gris);">(del catálogo)</small><br>
+      ${it.cantidad} unid. &middot;
+      <input type="number" class="precio-editable" value="${it.precioUnitario}" min="0"
+        onchange="editarPrecioCompartido('${idJs}', this.value)"> c/u &middot; <b>Total: ${money(subtotal)}</b>
+      <div class="qty-edit">
+        <button onclick="cambiarCantidadCompartida('${idJs}',-1)">-</button>
+        <input type="number" value="${it.cantidad}" min="1" inputmode="numeric" pattern="[0-9]*"
+          onchange="setCantidadCompartida('${idJs}', this.value)">
+        <button onclick="cambiarCantidadCompartida('${idJs}',1)">+</button>
+      </div></div>
+      <button class="del" onclick="quitarDeCompartido('${idJs}')">✕</button>`;
     cont.appendChild(div);
   });
   document.getElementById("cart-total-2").textContent = money(total);
@@ -1058,7 +1167,7 @@ function quitarDelCarrito(clave){
 }
 
 function vaciarCarrito(){
-  if(!confirm("¿Vaciar todo el presupuesto?")) return;
+  if(!confirm("¿Vaciar los productos que agregaste desde la tienda? (Lo que agregaste desde el catálogo no se borra acá, se vacía desde ahí)")) return;
   cart = {};
   guardarCarrito();
   renderCarrito();
@@ -1066,14 +1175,19 @@ function vaciarCarrito(){
 
 function exportarImagen(){
   const claves = Object.keys(cart);
-  if(claves.length === 0){
+  const compartidos = itemsDelCatalogoCompartidos();
+  if(claves.length === 0 && compartidos.length === 0){
     showToast("No hay productos en el presupuesto");
     return;
   }
-  const items = claves.map(clave=>{
+  const itemsPropios = claves.map(clave=>{
     const it = itemCarrito(clave);
     return it ? {p: it.p, nombre: it.nombre, precio: it.precio, cantidad: cart[clave]} : null;
   }).filter(Boolean);
+  const itemsCompartidos = compartidos.map(it=> ({
+    p: { pack_size: 1 }, nombre: it.descripcion, precio: it.precioUnitario, cantidad: it.cantidad
+  }));
+  const items = [...itemsPropios, ...itemsCompartidos];
 
   const POR_PAGINA = 20;
   const paginas = [];
