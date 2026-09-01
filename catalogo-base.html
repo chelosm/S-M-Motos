@@ -847,6 +847,12 @@
   const IVA = 0.21; // 21%, tasa general vigente en Argentina
 
   // Redondea al múltiplo de 50 más cercano (505 -> 500, 525.01 -> 550, 576 -> 600)
+  // Normaliza un código para comparar sin importar espacios ni mayúsculas/minúsculas
+  // (ej: "cb738" y "CB 738" se consideran iguales).
+  function normalizarCodigo(s) {
+    return String(s).toUpperCase().replace(/\s+/g, "");
+  }
+
   function redondearA50(n) {
     return Math.round(n / 50) * 50;
   }
@@ -1097,8 +1103,11 @@
       // Partimos la búsqueda en palabras sueltas: "estator rx" busca
       // que el texto tenga "estator" Y "rx", sin importar el orden.
       const palabras = busqueda.split(/\s+/).filter(Boolean);
+      const busquedaNormalizada = normalizarCodigo(busqueda);
       lista = lista.filter(p => {
         const texto = (p.codigo + " " + (p.descripcion || "")).toLowerCase();
+        // Coincidencia de código ignorando espacios (ej: "cb738" encuentra "CB 738")
+        if (normalizarCodigo(p.codigo).includes(busquedaNormalizada)) return true;
         return palabras.every(palabra => texto.includes(palabra));
       });
     }
