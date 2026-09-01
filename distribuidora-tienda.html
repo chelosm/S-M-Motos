@@ -507,6 +507,8 @@ function renderGrid(){
   let visibles = productos.filter(p => p.activo !== false);
   if(rubroActivo) visibles = visibles.filter(p => p.rubro === rubroActivo);
   visibles = visibles.filter(p => coincideBusqueda(p, busqueda));
+  // Los productos en oferta suben arriba de todo; el resto mantiene su orden habitual.
+  visibles.sort((a, b) => (b.oferta ? 1 : 0) - (a.oferta ? 1 : 0));
 
   const sugerenciasProveedor = buscarEnListaProveedor(busqueda);
 
