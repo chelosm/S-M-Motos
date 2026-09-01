@@ -332,7 +332,7 @@
 <div class="subtitulo"><strong>Armá tu pedido</strong></div>
 
 <div id="buscador-wrap">
-  <input type="text" id="buscador" placeholder="Buscar por nombre o código" oninput="renderGrid()">
+  <input type="text" id="buscador" placeholder="Buscar por nombre o código" oninput="onBuscadorInput()">
 </div>
 <div id="tabs"></div>
 
@@ -554,6 +554,18 @@ function renderGrid(){
   // vos mismo configures en el panel admin (por defecto 0%, o sea que no se le suma nada).
   const sugerenciasProveedor = buscarEnListaProveedor(busqueda);
 
+  // Sumamos los resultados del catálogo interno (tabla "Producto" en Supabase) si ya
+  // terminó de responder para esta misma búsqueda, sin repetir códigos ya sugeridos.
+  if(terminoCatalogoVivo && normalizarCodigo(terminoCatalogoVivo) === normalizarCodigo(busqueda)){
+    const yaSugeridos = new Set(sugerenciasProveedor.map(s => normalizarCodigo(s.codigo)));
+    resultadosCatalogoVivo.forEach(r=>{
+      if(!yaSugeridos.has(normalizarCodigo(r.codigo)) && sugerenciasProveedor.length < 8){
+        sugerenciasProveedor.push(r);
+        yaSugeridos.add(normalizarCodigo(r.codigo));
+      }
+    });
+  }
+
   if(visibles.length === 0 && sugerenciasProveedor.length === 0){
     grid.innerHTML = "<p style='padding:20px;text-align:center;color:#888;'>No se encontraron productos.</p>";
     return;
@@ -723,6 +735,52 @@ function buscarEnListaProveedor(busqueda){
   return resultados;
 }
 
+// ===== CATÁLOGO INTERNO EN VIVO (comparte el mismo Supabase que catalogo-base.html) =====
+let resultadosCatalogoVivo = [];
+let terminoCatalogoVivo = "";
+let _debounceCatalogoVivo = null;
+
+// Se llama en cada tecleo del buscador: renderiza al toque con lo que ya hay,
+// y programa una consulta al catálogo interno un ratito después (para no saturar Supabase).
+function onBuscadorInput(){
+  renderGrid();
+  clearTimeout(_debounceCatalogoVivo);
+  const busqueda = document.getElementById("buscador").value;
+  if(busqueda.trim().length < 3) return;
+  _debounceCatalogoVivo = setTimeout(()=> buscarCatalogoVivo(busqueda), 400);
+}
+
+async function buscarCatalogoVivo(busqueda){
+  const term = busqueda.trim();
+  // El dólar lo carga catalogo-base.html; como comparten dominio, comparten localStorage.
+  const dolar = parseFloat(localStorage.getItem("valorDolarHada") || "0");
+  if(!dolar) return; // sin dólar configurado no podemos convertir el precio a pesos
+
+  const codigosCargados = new Set();
+  productos.forEach(p=>{
+    if(p.codigo) codigosCargados.add(normalizarCodigo(p.codigo));
+    if(Array.isArray(p.variantes)) p.variantes.forEach(v=>{ if(v.codigo) codigosCargados.add(normalizarCodigo(v.codigo)); });
+  });
+
+  const { data, error } = await sb.from("Producto")
+    .select("codigo, descripcion, precio_usd")
+    .or(`codigo.ilike.%${term}%,descripcion.ilike.%${term}%`)
+    .limit(8);
+  if(error || !data) return;
+
+  resultadosCatalogoVivo = data
+    .filter(p => p.codigo && !codigosCargados.has(normalizarCodigo(p.codigo)))
+    .map(p => {
+      const item = { codigo: p.codigo, d: p.descripcion || "", p: Math.round((p.precio_usd||0) * dolar) };
+      catalogoVivoCache[p.codigo] = { d: item.d, p: item.p }; // queda disponible para el carrito
+      return item;
+    });
+  terminoCatalogoVivo = busqueda;
+
+  // Solo repintar si el buscador todavía tiene la misma búsqueda (si no, ya no aplica)
+  if(document.getElementById("buscador").value === busqueda) renderGrid();
+}
+
 function actualizarBotonesCarrito(){
   document.querySelectorAll(".add-btn").forEach(btn=>{
     const id = btn.id.replace("add-btn-","");
@@ -770,10 +828,17 @@ function parseClaveCarrito(clave){
 
 // Dada una clave del carrito, devuelve el producto (si existe), el nombre a mostrar
 // y el precio unitario que corresponde (el propio de la variante, del proveedor o manual, si aplica).
+// Caché en memoria de resultados del catálogo interno (tabla "Producto" en Supabase),
+// consultado en vivo cuando se busca un código que no está en la lista estática.
+let catalogoVivoCache = {};
+function obtenerItemProveedor(codigo){
+  return LISTA_PRECIOS_PROVEEDOR[codigo] || catalogoVivoCache[codigo] || null;
+}
+
 function itemCarrito(clave){
   const info = parseClaveCarrito(clave);
   if(info.tipo === "proveedor"){
-    const item = LISTA_PRECIOS_PROVEEDOR[info.codigo];
+    const item = obtenerItemProveedor(info.codigo);
     if(!item) return null;
     return { p: { pack_size: 1 }, precio: conMargen(item.p), nombre: `${item.d} (${info.codigo})` };
   }
@@ -840,7 +905,8 @@ function agregarAlCarritoProveedor(codigoSeguro, codigo){
   if(!cart[clave]) cart[clave] = 0;
   cart[clave] += qty;
   guardarCarrito();
-  showToast(`${LISTA_PRECIOS_PROVEEDOR[codigo].d} agregado`);
+  const item = obtenerItemProveedor(codigo);
+  showToast(`${item ? item.d : codigo} agregado`);
 }
 
 function toggleColorPanel(id, idx){
