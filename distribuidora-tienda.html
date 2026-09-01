@@ -198,6 +198,15 @@
     opacity:0.6;
   }
 
+  #btn-catalogo{
+    position:fixed;top:14px;right:14px;z-index:40;
+    display:flex;align-items:center;justify-content:center;
+    background:#ffe600;color:#1a1a1a;text-decoration:none;
+    width:56px;height:56px;border-radius:50%;
+    box-shadow:0 4px 16px rgba(0,0,0,0.5);
+  }
+  #btn-catalogo svg{width:26px;height:26px;}
+
   #cart-bar{
     position:fixed;bottom:0;left:0;right:0;
     background:var(--negro);color:#fff;
@@ -317,6 +326,9 @@
 </header>
 
 <button id="btn-admin-flotante" onclick="abrirAdmin()">✏️</button>
+<a id="btn-catalogo" href="https://chelosm.github.io/S-M-Motos/catalogo-base.html" target="_blank" rel="noopener" title="Ir a Catálogo / Facturación">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h13l3 3v17H4z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+</a>
 <div class="subtitulo"><strong>Armá tu pedido</strong></div>
 
 <div id="buscador-wrap">
@@ -475,6 +487,9 @@ function coincideBusqueda(p, busqueda){
   if(Array.isArray(p.variantes)){
     p.variantes.forEach(v=> texto += ` ${v.modelo||''} ${v.codigo||''}`);
   }
+  // Coincidencia de código ignorando espacios y mayúsculas (ej: "cb738" encuentra "CB 738")
+  if(normalizarCodigo(texto).includes(normalizarCodigo(busqueda))) return true;
+
   texto = texto.toLowerCase();
   const partes = busqueda.toLowerCase().trim().split(/\s+/);
   return partes.every(parte => texto.includes(parte));
