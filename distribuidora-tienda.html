@@ -670,20 +670,37 @@ function renderGrid(){
   actualizarBotonesCarrito();
 }
 
+// Normaliza un código para comparar sin importar espacios ni mayúsculas/minúsculas.
+function normalizarCodigo(s){
+  return String(s).toUpperCase().replace(/\s+/g, "");
+}
+
+let _indiceProveedorCache = null;
+// Índice código-normalizado -> código real, para búsquedas exactas sin importar espacios.
+function indiceNormalizadoProveedor(){
+  if(!_indiceProveedorCache){
+    _indiceProveedorCache = {};
+    for(const codigo in LISTA_PRECIOS_PROVEEDOR){
+      _indiceProveedorCache[normalizarCodigo(codigo)] = codigo;
+    }
+  }
+  return _indiceProveedorCache;
+}
+
 // Busca en la lista de precios del proveedor códigos que coincidan con lo escrito,
 // y que todavía no estén cargados como producto (ni como código de una variante).
 function buscarEnListaProveedor(busqueda){
-  const term = busqueda.toLowerCase().trim();
+  const term = normalizarCodigo(busqueda);
   if(!term) return [];
   const codigosCargados = new Set();
   productos.forEach(p=>{
-    if(p.codigo) codigosCargados.add(p.codigo.toLowerCase());
-    if(Array.isArray(p.variantes)) p.variantes.forEach(v=>{ if(v.codigo) codigosCargados.add(v.codigo.toLowerCase()); });
+    if(p.codigo) codigosCargados.add(normalizarCodigo(p.codigo));
+    if(Array.isArray(p.variantes)) p.variantes.forEach(v=>{ if(v.codigo) codigosCargados.add(normalizarCodigo(v.codigo)); });
   });
   const resultados = [];
   for(const codigo in LISTA_PRECIOS_PROVEEDOR){
-    if(codigosCargados.has(codigo.toLowerCase())) continue;
-    if(codigo.toLowerCase().includes(term)){
+    if(codigosCargados.has(normalizarCodigo(codigo))) continue;
+    if(normalizarCodigo(codigo).includes(term)){
       resultados.push({ codigo, ...LISTA_PRECIOS_PROVEEDOR[codigo] });
       if(resultados.length >= 8) break;
     }
@@ -1120,7 +1137,8 @@ function buscarPrecioProveedor(){
   const codigo = campoCodigo.value.trim();
   hint.textContent = "";
   if(!codigo) return;
-  const item = LISTA_PRECIOS_PROVEEDOR[codigo] || LISTA_PRECIOS_PROVEEDOR[codigo.toUpperCase()];
+  const claveReal = indiceNormalizadoProveedor()[normalizarCodigo(codigo)];
+  const item = claveReal ? LISTA_PRECIOS_PROVEEDOR[claveReal] : null;
   if(!item){
     hint.textContent = "Código no encontrado en la lista de precios del proveedor.";
     return;
