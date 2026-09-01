@@ -535,7 +535,9 @@ function renderGrid(){
 
   // Las sugerencias de precio del proveedor son información interna (a veces precio de costo):
   // solo se muestran si entraste al panel admin, nunca al público que arma su presupuesto.
-  const sugerenciasProveedor = esAdmin ? buscarEnListaProveedor(busqueda) : [];
+  // El precio que se sugiere es el que vos cargaste (precio de venta) más el margen que
+  // vos mismo configures en el panel admin (por defecto 0%, o sea que no se le suma nada).
+  const sugerenciasProveedor = buscarEnListaProveedor(busqueda);
 
   if(visibles.length === 0 && sugerenciasProveedor.length === 0){
     grid.innerHTML = "<p style='padding:20px;text-align:center;color:#888;'>No se encontraron productos.</p>";
