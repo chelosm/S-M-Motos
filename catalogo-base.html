@@ -1028,7 +1028,7 @@
 
   function iniciarSesion() {
     const password = document.getElementById("password").value;
-    if (password === PASSWORD_MAYORISTA) {
+    if (password.toLowerCase() === PASSWORD_MAYORISTA.toLowerCase()) {
       logueado = true;
       localStorage.setItem("sesionSMMotos", "true");
       actualizarUI();
