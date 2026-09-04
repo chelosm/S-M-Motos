@@ -628,7 +628,7 @@
   </div>
 
   <div id="login-box">
-    <input type="password" id="password" placeholder="Contraseña mayorista">
+    <input type="password" id="password" placeholder="Contraseña">
     <button onclick="iniciarSesion()">Ingresar</button>
     <button onclick="cerrarSesion()" id="btn-salir" style="display:none; background:var(--metal-claro); color:var(--texto);">Salir</button>
     <span id="estado-login">Sin sesión — precios ocultos</span>
@@ -930,6 +930,8 @@
   }
 
   let logueado = false;
+  let esAdmin = false;
+  const PASSWORD_MAYORISTA = "smmotos1234";
   let PRODUCTOS = [];
   let valorDolar = 1;
   let margenPct = 30; // margen de ganancia por defecto, editable
@@ -1096,23 +1098,43 @@
      para no tener que reingresarla cada vez que se
      vuelve a entrar a la página.
      ============================================ */
-  const PASSWORD_MAYORISTA = "smmotos1234";
+  const ADMIN_EMAIL = "admin@smmotos.com"; // usuario fijo para el login de administrador
 
-  function iniciarSesion() {
+  async function iniciarSesion() {
     const password = document.getElementById("password").value;
+    if (!password) {
+      mostrarDebug("Escribí una contraseña.");
+      return;
+    }
+
+    // 1) Contraseña simple de mayorista (solo ver precios)
     if (password.toLowerCase() === PASSWORD_MAYORISTA.toLowerCase()) {
       logueado = true;
       localStorage.setItem("sesionSMMotos", "true");
       actualizarUI();
       renderTabla();
       mostrarDebug("Sesión iniciada correctamente.");
-    } else {
-      mostrarDebug("Contraseña incorrecta.");
+      return;
     }
+
+    // 2) Si no matcheó, probamos como admin real (puede agregar/modificar productos)
+    mostrarDebug("Verificando...");
+    const { error } = await db.auth.signInWithPassword({ email: ADMIN_EMAIL, password });
+    if (error) {
+      mostrarDebug("Contraseña incorrecta.");
+      return;
+    }
+    esAdmin = true;
+    logueado = true;
+    actualizarUI();
+    renderTabla();
+    mostrarDebug("Sesión de administrador iniciada.");
   }
 
-  function cerrarSesion() {
+  async function cerrarSesion() {
+    if (esAdmin) await db.auth.signOut();
     logueado = false;
+    esAdmin = false;
     localStorage.removeItem("sesionSMMotos");
     actualizarUI();
     renderTabla();
@@ -1129,10 +1151,10 @@
     const btnSalir = document.getElementById("btn-salir");
     const btnAdmin = document.getElementById("btn-admin-producto");
     if (logueado) {
-      estado.textContent = "Sesión activa";
+      estado.textContent = esAdmin ? "Sesión de administrador activa" : "Sesión activa";
       estado.classList.add("activo");
       btnSalir.style.display = "inline-block";
-      btnAdmin.style.display = "block";
+      btnAdmin.style.display = esAdmin ? "block" : "none";
     } else {
       estado.textContent = "Sin sesión — precios ocultos";
       estado.classList.remove("activo");
@@ -1142,10 +1164,14 @@
   }
 
   async function revisarSesionExistente() {
-    if (localStorage.getItem("sesionSMMotos") === "true") {
+    const { data } = await db.auth.getSession();
+    if (data && data.session) {
       logueado = true;
-      actualizarUI();
+      esAdmin = true;
+    } else if (localStorage.getItem("sesionSMMotos") === "true") {
+      logueado = true;
     }
+    actualizarUI();
     cargarConfigGuardada();
     await cargarProductos();
   }
