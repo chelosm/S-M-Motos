@@ -796,7 +796,7 @@ function onBuscadorInput(){
   renderGrid();
   clearTimeout(_debounceCatalogoVivo);
   const busqueda = document.getElementById("buscador").value;
-  if(busqueda.trim().length < 3) return;
+  if(busqueda.trim().length < 2) return;
   _debounceCatalogoVivo = setTimeout(()=> buscarCatalogoVivo(busqueda), 400);
 }
 
