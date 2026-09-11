@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>S-M Motos | Distribuidora Tienda</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
@@ -238,8 +239,8 @@
   .cart-item .info{font-size:0.85rem;flex:1;}
   .cart-item .del{color:var(--oferta);background:none;border:none;font-size:1.1rem;cursor:pointer;}
   .total-row{display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem;margin-top:10px;padding-top:10px;border-top:2px solid var(--negro);}
-  .sheet-actions{display:flex;gap:8px;margin-top:14px;}
-  .sheet-actions button{
+  .sheet-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+  .sheet-actions button{min-width:100px;
     flex:1;padding:11px;border-radius:8px;border:none;font-weight:700;cursor:pointer;
   }
   .btn-primario{background:var(--amarillo);}
@@ -363,6 +364,7 @@
     <div class="total-row"><span>Total</span><span id="cart-total-2">$0</span></div>
     <div class="sheet-actions">
       <button class="btn-secundario" onclick="vaciarCarrito()">Vaciar</button>
+      <button class="btn-secundario" onclick="exportarExcel()">📊 Excel</button>
       <button class="btn-primario" onclick="exportarImagen()">🖼️ Generar imagen y compartir</button>
     </div>
   </div>
@@ -1190,10 +1192,51 @@ function quitarDelCarrito(clave){
 }
 
 function vaciarCarrito(){
-  if(!confirm("¿Vaciar los productos que agregaste desde la tienda? (Lo que agregaste desde el catálogo no se borra acá, se vacía desde ahí)")) return;
+  if(!confirm("¿Vaciar todo el presupuesto? Se van a borrar todos los productos cargados, tanto de la tienda como del catálogo.")) return;
   cart = {};
   guardarCarrito();
+  guardarPresupuestoCompartido([]);
   renderCarrito();
+}
+
+function exportarExcel(){
+  const claves = Object.keys(cart);
+  const compartidos = itemsDelCatalogoCompartidos();
+  if(claves.length === 0 && compartidos.length === 0){
+    showToast("No hay productos en el presupuesto");
+    return;
+  }
+  const filas = [];
+  const fecha = new Date().toLocaleString('es-AR');
+  filas.push(["", "", "", fecha, ""]);
+  filas.push([]);
+  filas.push(["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]);
+
+  let total = 0;
+  claves.forEach(clave=>{
+    const it = itemCarrito(clave);
+    if(!it) return;
+    const unidades = cart[clave] * it.p.pack_size;
+    const subtotal = unidades * it.precio;
+    total += subtotal;
+    filas.push([unidades, it.p.codigo || "", it.nombre, money(it.precio), money(subtotal)]);
+  });
+  compartidos.forEach(it=>{
+    const subtotal = it.cantidad * it.precioUnitario;
+    total += subtotal;
+    filas.push([it.cantidad, it.codigo || "", it.descripcion, money(it.precioUnitario), money(subtotal)]);
+  });
+  filas.push([]);
+  filas.push(["", "", "", "TOTAL PRESUPUESTO =", money(total)]);
+
+  const hoja = XLSX.utils.aoa_to_sheet(filas);
+  hoja["!cols"] = [{wch:8},{wch:14},{wch:45},{wch:12},{wch:14}];
+
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, "Presupuesto");
+
+  const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
+  XLSX.writeFile(libro, "Presupuesto_" + sello + ".xlsx", { bookType: "xlsx" });
 }
 
 function exportarImagen(){
@@ -1278,9 +1321,7 @@ async function generarPaginasPresupuesto(paginas, index, archivos){
 
 function compartirArchivosPresupuesto(archivos){
   if(navigator.canShare && navigator.canShare({files:archivos})){
-    navigator.share({files:archivos, title:"Presupuesto S-M Motos"}).then(()=>{
-      vaciarCarritoSilencioso();
-    }).catch(()=>{});
+    navigator.share({files:archivos, title:"Presupuesto S-M Motos"}).catch(()=>{});
   } else {
     archivos.forEach((file,i)=>{
       setTimeout(()=>{
@@ -1294,7 +1335,6 @@ function compartirArchivosPresupuesto(archivos){
     setTimeout(()=>{
       window.open(`https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent("Hola! Te mando mi presupuesto de S-M Motos")}`, "_blank");
     }, archivos.length*400 + 600);
-    vaciarCarritoSilencioso();
   }
 }
 
