@@ -806,7 +806,6 @@ async function buscarCatalogoVivo(busqueda){
   const dolar = await obtenerDolarBlue();
   if(!dolar) return; // si fallo la API del dolar, no podemos convertir el precio a pesos
   const IVA_CATALOGO = IVA_TIENDA;
-  const margenCatalogo = parseFloat(localStorage.getItem("margenHada") || "30");
 
   const codigosCargados = new Set();
   productos.forEach(p=>{
@@ -823,10 +822,9 @@ async function buscarCatalogoVivo(busqueda){
   resultadosCatalogoVivo = data
     .filter(p => p.codigo && !codigosCargados.has(normalizarCodigo(p.codigo)))
     .map(p => {
-      // Mismo cálculo que catalogo-base.html: dólar -> costo con IVA -> venta sugerida con margen.
-      const costoConIva = (p.precio_usd||0) * dolar * (1 + IVA_CATALOGO);
-      const ventaSugerida = Math.round(costoConIva * (1 + margenCatalogo/100));
-      const item = { codigo: p.codigo, d: p.descripcion || "", p: ventaSugerida, esFinal: true };
+      // Precio mayorista sin ganancia: solo costo + IVA, igual que en el catálogo base.
+      const costoConIva = Math.round((p.precio_usd||0) * dolar * (1 + IVA_CATALOGO));
+      const item = { codigo: p.codigo, d: p.descripcion || "", p: costoConIva, esFinal: true };
       catalogoVivoCache[p.codigo] = { d: item.d, p: item.p, esFinal: true }; // queda disponible para el carrito
       return item;
     });
