@@ -665,6 +665,20 @@
   <label style="font-size:0.8rem; color:var(--texto-tenue); display:block; margin-bottom:4px;">Costo neto en USD (sin IVA)</label>
   <input type="number" id="editor-precio-usd" step="0.01" placeholder="Ej: 1.70" style="margin-bottom:16px;">
 
+  <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; cursor:pointer;">
+    <input type="checkbox" id="editor-tambien-tienda" onchange="toggleCamposTienda()" style="width:auto;">
+    <span>También mostrar en la tienda (necesita foto)</span>
+  </label>
+
+  <div id="editor-campos-tienda" style="display:none; margin-bottom:16px; padding:12px; background:var(--asfalto); border-radius:8px;">
+    <label style="font-size:0.8rem; color:var(--texto-tenue); display:block; margin-bottom:4px;">Rubro en la tienda</label>
+    <input type="text" id="editor-tienda-rubro" placeholder="Ej: Accesorios, Bulonería, Led..." style="margin-bottom:10px;">
+
+    <label style="font-size:0.8rem; color:var(--texto-tenue); display:block; margin-bottom:4px;">Foto</label>
+    <input type="file" id="editor-tienda-foto" accept="image/*" style="margin-bottom:4px;">
+    <div style="font-size:0.75rem; color:var(--texto-tenue);">El precio que vea el cliente en la tienda se calcula solo (costo + IVA), no hace falta cargarlo acá.</div>
+  </div>
+
   <div style="display:flex; gap:8px;">
     <button onclick="guardarProductoEditor()" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:800; padding:12px; border-radius:8px; cursor:pointer;">💾 Guardar</button>
     <button onclick="cerrarEditorProducto()" style="flex:1; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:8px; cursor:pointer;">Cancelar</button>
@@ -1255,9 +1269,18 @@
     document.getElementById("editor-descripcion").value = "";
     document.getElementById("editor-categoria").value = "";
     document.getElementById("editor-precio-usd").value = "";
+    document.getElementById("editor-tambien-tienda").checked = false;
+    document.getElementById("editor-tienda-rubro").value = "";
+    document.getElementById("editor-tienda-foto").value = "";
+    toggleCamposTienda();
     document.getElementById("editor-estado").textContent = "Buscá un código para editarlo, o cargá los datos de uno nuevo y guardá.";
     document.getElementById("fondo-editor").classList.add("abierto");
     document.getElementById("panel-editor").classList.add("abierto");
+  }
+
+  function toggleCamposTienda() {
+    const marcado = document.getElementById("editor-tambien-tienda").checked;
+    document.getElementById("editor-campos-tienda").style.display = marcado ? "block" : "none";
   }
 
   function cerrarEditorProducto() {
@@ -1324,11 +1347,59 @@
         });
         if (error) throw error;
       }
+
+      // Si tildaste "También mostrar en la tienda", lo creamos ahí también.
+      const tambienTienda = document.getElementById("editor-tambien-tienda").checked;
+      if (tambienTienda) {
+        await crearEnTienda(codigo, descripcion, precio_usd, estado);
+      }
+
       mostrarDebug("Producto guardado correctamente.");
       cerrarEditorProducto();
       await cargarProductos();
     } catch (err) {
       estado.textContent = "Error al guardar: " + (err.message || err);
+    }
+  }
+
+  async function crearEnTienda(codigo, descripcion, precio_usd, estado) {
+    const rubro = document.getElementById("editor-tienda-rubro").value.trim();
+    const fotoInput = document.getElementById("editor-tienda-foto");
+    const file = fotoInput.files[0];
+
+    if (!rubro || !file) {
+      estado.textContent = "Se guardó en el catálogo, pero para la tienda faltó el rubro o la foto — no se creó ahí.";
+      return;
+    }
+
+    // Ya existe en la tienda con ese código? No duplicamos.
+    const { data: existentes } = await db.from("DistribuidoraTienda").select("id").eq("codigo", codigo).limit(1);
+    if (existentes && existentes.length > 0) {
+      estado.textContent = "Guardado. Ese código ya existía en la tienda, no se duplicó.";
+      return;
+    }
+
+    const path = Date.now() + "_" + file.name;
+    const { error: errorFoto } = await db.storage.from("distribuidora-tienda").upload(path, file);
+    if (errorFoto) {
+      estado.textContent = "Se guardó en el catálogo, pero falló la subida de la foto para la tienda.";
+      return;
+    }
+    const { data: pub } = db.storage.from("distribuidora-tienda").getPublicUrl(path);
+
+    const costoConIva = precio_usd * valorDolar * (1 + IVA);
+    const { error: errorTienda } = await db.from("DistribuidoraTienda").insert({
+      nombre: descripcion,
+      codigo,
+      rubro,
+      precio: Math.round(costoConIva),
+      pack_size: 1,
+      oferta: false,
+      activo: true,
+      foto_url: pub.publicUrl
+    });
+    if (errorTienda) {
+      estado.textContent = "Se guardó en el catálogo, pero falló al crearlo en la tienda: " + errorTienda.message;
     }
   }
 
