@@ -816,11 +816,26 @@ async function buscarCatalogoVivo(busqueda){
 
   // Buscamos por código tanto con el texto tal cual como sin espacios (para que
   // "cb 1427" encuentre "CB1427" y viceversa), y por descripción con el texto tal cual.
-  const { data, error } = await sb.from("Producto")
+  // Primero un match EXACTO de código, para que no se pierda entre otros resultados
+  // que solo lo contienen como parte de una descripción más larga.
+  const { data: exactos } = await sb.from("Producto")
+    .select("codigo, descripcion, precio_usd")
+    .or(`codigo.ilike.${term},codigo.ilike.${termSinEspacios}`)
+    .limit(5);
+
+  const { data: parciales, error } = await sb.from("Producto")
     .select("codigo, descripcion, precio_usd")
     .or(`codigo.ilike.%${term}%,codigo.ilike.%${termSinEspacios}%,descripcion.ilike.%${term}%`)
     .limit(8);
-  if(error || !data) return;
+  if(error) return;
+
+  const vistos = new Set();
+  const data = [...(exactos||[]), ...(parciales||[])].filter(p=>{
+    const clave = normalizarCodigo(p.codigo||"") + "|" + p.descripcion;
+    if(vistos.has(clave)) return false;
+    vistos.add(clave);
+    return true;
+  }).slice(0, 8);
 
   resultadosCatalogoVivo = data
     .filter(p => p.codigo && !codigosCargados.has(normalizarCodigo(p.codigo)))
