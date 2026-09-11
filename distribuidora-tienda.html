@@ -524,7 +524,8 @@ async function obtenerDolarBlue(){
 
 function precioDe(p){
   if(p.precio_usd && dolarBlueCache){
-    return Math.round(p.precio_usd * dolarBlueCache * (1 + IVA_TIENDA));
+    const costoConIva = p.precio_usd * dolarBlueCache * (1 + IVA_TIENDA);
+    return Math.round(costoConIva * (1 + (margenSugerido||0)/100));
   }
   return p.precio;
 }
@@ -539,9 +540,33 @@ async function cargarProductos(){
     return;
   }
   productos = data || [];
+  await vincularCostosDelCatalogo();
   renderTabs();
   renderGrid();
   if(esAdmin) renderAdminLista();
+}
+
+// Unifica los precios: para cada producto de la tienda que tenga el mismo código
+// que uno del catálogo mayorista, usamos ESE costo (tabla "Producto") en vez del
+// precio fijo cargado a mano, así los dos lugares parten siempre del mismo número
+// y cada uno le suma su propio margen tal como ya lo hacía.
+async function vincularCostosDelCatalogo(){
+  const tieneCodigo = productos.some(p => p.codigo);
+  if(!tieneCodigo) return;
+
+  const { data, error } = await sb.from("Producto").select("codigo, precio_usd");
+  if(error || !data) return;
+
+  const costoPorCodigo = {};
+  data.forEach(row => {
+    if(row.codigo) costoPorCodigo[normalizarCodigo(row.codigo)] = row.precio_usd;
+  });
+
+  productos.forEach(p => {
+    if(!p.codigo) return;
+    const costo = costoPorCodigo[normalizarCodigo(p.codigo)];
+    if(costo != null) p.precio_usd = costo;
+  });
 }
 
 function renderTabs(){
@@ -885,7 +910,7 @@ function itemCarrito(clave){
     const v = p.variantes[info.varianteIdx];
     return { p, precio: v.precio, nombre: `${p.nombre} — ${v.modelo}${v.codigo ? ' (Cod: '+v.codigo+')' : ''}` };
   }
-  return { p, precio: p.precio, nombre: `${p.nombre}${info.color ? ' — '+info.color : ''}` };
+  return { p, precio: precioDe(p), nombre: `${p.nombre}${info.color ? ' — '+info.color : ''}` };
 }
 
 let customItems = JSON.parse(localStorage.getItem("dt_custom") || "{}");
