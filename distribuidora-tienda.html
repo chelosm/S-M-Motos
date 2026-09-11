@@ -524,8 +524,7 @@ async function obtenerDolarBlue(){
 
 function precioDe(p){
   if(p.precio_usd && dolarBlueCache){
-    const costoConIva = p.precio_usd * dolarBlueCache * (1 + IVA_TIENDA);
-    return Math.round(costoConIva * (1 + (margenSugerido||0)/100));
+    return Math.round(p.precio_usd * dolarBlueCache * (1 + IVA_TIENDA));
   }
   return p.precio;
 }
