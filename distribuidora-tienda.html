@@ -802,6 +802,7 @@ function onBuscadorInput(){
 
 async function buscarCatalogoVivo(busqueda){
   const term = busqueda.trim();
+  const termSinEspacios = term.replace(/\s+/g, "");
   // El dolar ahora se toma del dolar blue publico (mismo que usa precioDe), no del celular de cada uno.
   const dolar = await obtenerDolarBlue();
   if(!dolar) return; // si fallo la API del dolar, no podemos convertir el precio a pesos
@@ -813,9 +814,11 @@ async function buscarCatalogoVivo(busqueda){
     if(Array.isArray(p.variantes)) p.variantes.forEach(v=>{ if(v.codigo) codigosCargados.add(normalizarCodigo(v.codigo)); });
   });
 
+  // Buscamos por código tanto con el texto tal cual como sin espacios (para que
+  // "cb 1427" encuentre "CB1427" y viceversa), y por descripción con el texto tal cual.
   const { data, error } = await sb.from("Producto")
     .select("codigo, descripcion, precio_usd")
-    .or(`codigo.ilike.%${term}%,descripcion.ilike.%${term}%`)
+    .or(`codigo.ilike.%${term}%,codigo.ilike.%${termSinEspacios}%,descripcion.ilike.%${term}%`)
     .limit(8);
   if(error || !data) return;
 
