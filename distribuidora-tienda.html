@@ -385,6 +385,16 @@
         <input type="text" id="f-codigo" placeholder="Código del producto (opcional)" onchange="buscarPrecioProveedor()">
         <small id="f-codigo-hint" style="color:var(--gris);display:block;margin:-4px 0 8px;"></small>
         <input type="text" id="f-rubro" placeholder="Rubro (ej: Repuestos, Accesorios, LED, Bulonería)">
+
+        <label style="display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:700;">
+          <input type="checkbox" id="f-tambien-catalogo" onchange="toggleCamposCatalogo()" style="width:auto;">
+          También agregar al catálogo mayorista (necesita código, proveedor y costo)
+        </label>
+        <div id="f-campos-catalogo" style="display:none;background:#f8f7f3;border-radius:8px;padding:10px;margin-bottom:10px;">
+          <input type="text" id="f-catalogo-proveedor" placeholder="Proveedor (ej: HADA, LED, SM MOTOS)">
+          <input type="number" id="f-catalogo-costo-usd" step="0.01" placeholder="Costo neto en USD (sin IVA)">
+          <small style="color:var(--gris);display:block;">El precio que ve el cliente mayorista se calcula solo (costo + IVA); esto no cambia el precio de la tienda.</small>
+        </div>
         <input type="number" id="f-precio" placeholder="Precio por unidad ($) — si no tiene variantes de modelo">
         <input type="number" id="f-pack" placeholder="Unidades por pack (dejar 1 si es individual)" value="1">
         <label><input type="checkbox" id="f-oferta" style="width:auto;display:inline-block;"> Marcar como oferta</label>
@@ -1502,6 +1512,11 @@ function quitarVarianteTemp(idx){
   renderVariantesTemp();
 }
 
+function toggleCamposCatalogo(){
+  const marcado = document.getElementById("f-tambien-catalogo").checked;
+  document.getElementById("f-campos-catalogo").style.display = marcado ? "block" : "none";
+}
+
 async function agregarProducto(){
   const nombre = document.getElementById("f-nombre").value.trim();
   const codigo = document.getElementById("f-codigo").value.trim();
@@ -1540,10 +1555,39 @@ async function agregarProducto(){
     showToast("Error guardando producto");
     return;
   }
+
+  // Si tildó "También agregar al catálogo mayorista", lo creamos/actualizamos ahí también.
+  if(document.getElementById("f-tambien-catalogo").checked){
+    await sincronizarConCatalogoMayorista(codigo, nombre, rubro);
+  }
+
   const fueEdicion = !!editandoId;
   cancelarEdicion();
   showToast(fueEdicion ? "Producto actualizado" : "Producto guardado");
   cargarProductos();
+}
+
+async function sincronizarConCatalogoMayorista(codigo, nombre, rubro){
+  const proveedor = document.getElementById("f-catalogo-proveedor").value.trim();
+  const costoStr = document.getElementById("f-catalogo-costo-usd").value;
+
+  if(!codigo || !proveedor || costoStr === ""){
+    showToast("Se guardó en la tienda, pero para el catálogo mayorista faltó código, proveedor o costo — no se creó ahí.");
+    return;
+  }
+  const precio_usd = parseFloat(costoStr);
+  if(isNaN(precio_usd)){
+    showToast("Se guardó en la tienda, pero el costo en USD no es válido — no se creó en el catálogo mayorista.");
+    return;
+  }
+
+  const { data: existente } = await sb.from("Producto").select("id").ilike("codigo", codigo).limit(1);
+  if(existente && existente.length > 0){
+    await sb.from("Producto").update({ proveedor, descripcion: nombre, categoria: rubro, precio_usd }).eq("id", existente[0].id);
+  } else {
+    const nuevoId = "TIENDA-" + codigo;
+    await sb.from("Producto").insert({ id: nuevoId, codigo, proveedor, descripcion: nombre, categoria: rubro, precio_usd });
+  }
 }
 
 function editarProducto(id){
@@ -1573,6 +1617,10 @@ function cancelarEdicion(){
   document.getElementById("f-codigo").value = "";
   document.getElementById("f-codigo-hint").textContent = "";
   document.getElementById("f-rubro").value = "";
+  document.getElementById("f-tambien-catalogo").checked = false;
+  document.getElementById("f-catalogo-proveedor").value = "";
+  document.getElementById("f-catalogo-costo-usd").value = "";
+  toggleCamposCatalogo();
   document.getElementById("f-precio").value = "";
   document.getElementById("f-pack").value = "1";
   document.getElementById("f-oferta").checked = false;
