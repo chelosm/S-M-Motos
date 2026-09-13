@@ -665,6 +665,9 @@
   <label style="font-size:0.8rem; color:var(--texto-tenue); display:block; margin-bottom:4px;">Costo neto en USD (sin IVA)</label>
   <input type="number" id="editor-precio-usd" step="0.01" placeholder="Ej: 1.70" style="margin-bottom:16px;">
 
+  <label style="font-size:0.8rem; color:var(--texto-tenue); display:block; margin-bottom:4px;">Margen propio de este producto (%) — dejalo vacío para usar el margen general</label>
+  <input type="number" id="editor-margen-pct" step="1" placeholder="Ej: 20, 50, 100..." style="margin-bottom:16px;">
+
   <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; cursor:pointer;">
     <input type="checkbox" id="editor-tambien-tienda" onchange="toggleCamposTienda()" style="width:auto;">
     <span>También mostrar en la tienda (necesita foto)</span>
@@ -683,6 +686,7 @@
     <button onclick="guardarProductoEditor()" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:800; padding:12px; border-radius:8px; cursor:pointer;">💾 Guardar</button>
     <button onclick="cerrarEditorProducto()" style="flex:1; background:var(--metal-claro); color:var(--texto); border:none; font-weight:700; padding:12px; border-radius:8px; cursor:pointer;">Cancelar</button>
   </div>
+  <button id="editor-btn-eliminar" onclick="eliminarProductoEditor()" style="display:none; width:100%; margin-top:8px; background:var(--rojo-sinstock); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; cursor:pointer;">🗑️ Eliminar este producto</button>
 </div>
 
 <!-- Botón flotante del carrito -->
@@ -860,6 +864,10 @@
   let PRODUCTOS = [];
   let valorDolar = 1;
   let margenPct = 30; // margen de ganancia por defecto, editable
+
+  function margenDe(producto) {
+    return (producto.margen_pct != null && producto.margen_pct !== "") ? producto.margen_pct : margenPct;
+  }
   let mostrarCostos = true; // el "ojo": true = se ven costo y margen
 
   function toggleMostrarCostos() {
@@ -883,7 +891,7 @@
     while (true) {
       const { data, error } = await db
         .from("Producto")
-        .select("id, codigo, proveedor, descripcion, categoria, precio_usd")
+        .select("id, codigo, proveedor, descripcion, categoria, precio_usd, margen_pct")
         .order("codigo", { ascending: true })
         .range(desde, desde + TANDA - 1);
 
@@ -1147,7 +1155,7 @@
 
       const costoArs = p.precio_usd * valorDolar;
       const costoConIva = costoArs * (1 + IVA);
-      const ventaSugerido = costoConIva * (1 + margenPct / 100);
+      const ventaSugerido = costoConIva * (1 + margenDe(p) / 100);
 
       const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
@@ -1199,7 +1207,7 @@
 
     const costoArs = p.precio_usd * valorDolar;
     const costoConIva = costoArs * (1 + IVA);
-    const ventaSugerido = costoConIva * (1 + margenPct / 100);
+    const ventaSugerido = costoConIva * (1 + margenDe(p) / 100);
     const fmt = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
     let filasPrecio = "";
@@ -1211,7 +1219,7 @@
             <strong>$${fmt(costoConIva)}</strong>
           </div>
           <div style="display:flex; justify-content:space-between; padding:8px 0;">
-            <span style="color:var(--texto-tenue);">Venta Sugerido</span>
+            <span style="color:var(--texto-tenue);">Venta Sugerido${p.margen_pct != null && p.margen_pct !== "" ? ` (margen propio ${p.margen_pct}%)` : ""}</span>
             <strong style="color:var(--verde-stock);">$${fmt(redondearA50(ventaSugerido))}</strong>
           </div>
         `;
@@ -1269,6 +1277,8 @@
     document.getElementById("editor-descripcion").value = "";
     document.getElementById("editor-categoria").value = "";
     document.getElementById("editor-precio-usd").value = "";
+    document.getElementById("editor-margen-pct").value = "";
+    document.getElementById("editor-btn-eliminar").style.display = "none";
     document.getElementById("editor-tambien-tienda").checked = false;
     document.getElementById("editor-tienda-rubro").value = "";
     document.getElementById("editor-tienda-foto").value = "";
@@ -1303,6 +1313,8 @@
       document.getElementById("editor-descripcion").value = p.descripcion || "";
       document.getElementById("editor-categoria").value = p.categoria || "";
       document.getElementById("editor-precio-usd").value = p.precio_usd != null ? p.precio_usd : "";
+      document.getElementById("editor-margen-pct").value = (p.margen_pct != null && p.margen_pct !== "") ? p.margen_pct : "";
+      document.getElementById("editor-btn-eliminar").style.display = "block";
       estado.textContent = "✏️ Editando producto existente (" + p.codigo + "). Guardá para actualizarlo.";
     } else {
       productoEditandoId = null;
@@ -1311,6 +1323,8 @@
       document.getElementById("editor-descripcion").value = "";
       document.getElementById("editor-categoria").value = "";
       document.getElementById("editor-precio-usd").value = "";
+      document.getElementById("editor-margen-pct").value = "";
+      document.getElementById("editor-btn-eliminar").style.display = "none";
       estado.textContent = "🆕 No existe ese código — se va a crear como producto nuevo.";
     }
   }
@@ -1332,18 +1346,24 @@
       estado.textContent = "El costo en USD no es un número válido.";
       return;
     }
+    const margenStr = document.getElementById("editor-margen-pct").value;
+    const margen_pct = margenStr === "" ? null : parseFloat(margenStr);
+    if (margenStr !== "" && isNaN(margen_pct)) {
+      estado.textContent = "El margen propio no es un número válido.";
+      return;
+    }
 
     estado.textContent = "Guardando...";
     try {
       if (productoEditandoId) {
         const { error } = await db.from("Producto").update({
-          codigo, proveedor, descripcion, categoria, precio_usd
+          codigo, proveedor, descripcion, categoria, precio_usd, margen_pct
         }).eq("id", productoEditandoId);
         if (error) throw error;
       } else {
         const nuevoId = "WEB-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
         const { error } = await db.from("Producto").insert({
-          id: nuevoId, codigo, proveedor, descripcion, categoria, precio_usd
+          id: nuevoId, codigo, proveedor, descripcion, categoria, precio_usd, margen_pct
         });
         if (error) throw error;
       }
@@ -1359,6 +1379,24 @@
       await cargarProductos();
     } catch (err) {
       estado.textContent = "Error al guardar: " + (err.message || err);
+    }
+  }
+
+  async function eliminarProductoEditor() {
+    if (!productoEditandoId) return;
+    const codigo = document.getElementById("editor-codigo").value;
+    const estado = document.getElementById("editor-estado");
+    if (!confirm("¿Seguro que querés eliminar el producto \"" + codigo + "\"? Esto no se puede deshacer.")) return;
+
+    estado.textContent = "Eliminando...";
+    try {
+      const { error } = await db.from("Producto").delete().eq("id", productoEditandoId);
+      if (error) throw error;
+      mostrarDebug("Producto eliminado.");
+      cerrarEditorProducto();
+      await cargarProductos();
+    } catch (err) {
+      estado.textContent = "Error al eliminar: " + (err.message || err);
     }
   }
 
@@ -1440,7 +1478,7 @@
     if (modoPresupuesto === "mayorista") {
       return Math.round(costoConIva * 100) / 100; // solo costo+IVA, sin margen
     }
-    return redondearA50(costoConIva * (1 + margenPct / 100)); // con margen
+    return redondearA50(costoConIva * (1 + margenDe(producto) / 100)); // con margen
   }
 
   function guardarPresupuesto() {
@@ -1970,7 +2008,7 @@
 
     const costoArs = producto.precio_usd * valorDolar;
     const costoConIva = costoArs * (1 + IVA);
-    const ventaSugerido = redondearA50(costoConIva * (1 + margenPct / 100));
+    const ventaSugerido = redondearA50(costoConIva * (1 + margenDe(producto) / 100));
 
     const resultado = await pedirFormaPago(cantidad, ventaSugerido);
     if (!resultado) return; // canceló la elección de pago: no se registra la venta
