@@ -188,7 +188,7 @@
         <div id="listaClientes"></div>
         <div class="totalGeneral" id="totalGeneral"></div>
         <div style="border-top:1px solid var(--gris-borde);margin-top:14px;padding-top:12px;">
-          <button class="btn" style="width:100%;background:#fff;color:var(--negro);border:1px solid var(--gris-borde);" onclick="exportarExcelViaje()">📊 Exportar Excel (viaje / rango de fechas)</button>
+          <button class="btn" style="width:100%;background:#fff;color:var(--negro);border:1px solid var(--gris-borde);" onclick="exportarExcelClientes()">📊 Exportar Excel (clientes y saldos)</button>
         </div>
       </div>
     </div>
@@ -1384,97 +1384,30 @@ async function ajustarSaldoProveedor(){
   await cargarProveedores();
 }
 
-/* ================= EXPORTAR EXCEL DE UN VIAJE (RANGO DE FECHAS) ================= */
-/* Arma una planilla igual a la de siempre (Cliente, Saldo anterior, Venta,
-   Depósito, Cheque, Echeq, Pago, Saldo, Observaciones) pero solo con los
-   movimientos de un período (ej. un viaje), y agrega al final la comisión
-   de Marce calculada sobre lo efectivamente cobrado en ese período. */
-async function exportarExcelViaje(){
-  const fechaDesde = prompt('Fecha desde (el primer día del viaje). Formato: AAAA-MM-DD, ej 2026-09-01');
-  if(fechaDesde === null || !fechaDesde.trim()) return;
-  const fechaHasta = prompt('Fecha hasta (el último día del viaje). Formato: AAAA-MM-DD, ej 2026-09-10', fechaDesde);
-  if(fechaHasta === null || !fechaHasta.trim()) return;
-  const comisionTexto = prompt('Porcentaje de comisión de Marce sobre lo cobrado:', '15');
-  if(comisionTexto === null) return;
-  const comisionPct = parseFloat(comisionTexto.replace(',','.')) || 0;
-  const gananciaTexto = prompt('Tu porcentaje de ganancia sobre lo cobrado:', '15');
-  if(gananciaTexto === null) return;
-  const gananciaPct = parseFloat(gananciaTexto.replace(',','.')) || 0;
-  const depositadoTexto = prompt('¿Cuánto efectivo depositaste VOS en el banco durante este viaje? (si no depositaste nada, poné 0)', '0');
-  if(depositadoTexto === null) return;
-  const depositadoPorMi = parsearMoneda(depositadoTexto);
+/* ================= EXPORTAR EXCEL: CLIENTES Y SALDOS ================= */
+/* Simple: descarga un Excel con cada cliente y su saldo actual,
+   igual que la lista que ya ves en pantalla — sin fechas ni cálculos extra. */
+function exportarExcelClientes(){
+  if(!clientes.length){ alert('Todavía no hay clientes cargados.'); return; }
 
-  // Traemos TODOS los movimientos de todos los clientes, ordenados cronológicamente,
-  // para poder calcular el saldo anterior a la fecha de inicio del viaje.
-  const {data: movs, error} = await sb.from('movimientos')
-    .select('cliente_id, fecha, venta, deposito, cheque, echeq, pago, saldo, observaciones')
-    .order('fecha', {ascending:true})
-    .order('created_at', {ascending:true});
-  if(error){ alert('Error al traer los movimientos: ' + error.message); return; }
+  const filas = [...clientes]
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre))
+    .map(c => [c.nombre, c.saldo || 0]);
 
-  const porCliente = {};
-  (movs||[]).forEach(m=>{
-    if(!porCliente[m.cliente_id]) porCliente[m.cliente_id] = { saldoAntes: 0, dentro: [], huboAntes:false };
-    const reg = porCliente[m.cliente_id];
-    if(m.fecha < fechaDesde){
-      reg.saldoAntes = m.saldo; // el último anterior al rango queda como saldo previo
-      reg.huboAntes = true;
-    } else if(m.fecha <= fechaHasta){
-      reg.dentro.push(m);
-    }
-  });
-
-  const filas = [];
-  let totalVenta=0, totalDeposito=0, totalCheque=0, totalEcheq=0, totalPago=0;
-
-  clientes.forEach(c=>{
-    const reg = porCliente[c.id];
-    if(!reg || reg.dentro.length === 0) return; // solo clientes con actividad en el viaje
-    let venta=0, deposito=0, cheque=0, echeq=0, pago=0;
-    const obs = [];
-    reg.dentro.forEach(m=>{
-      venta += Number(m.venta)||0;
-      deposito += Number(m.deposito)||0;
-      cheque += Number(m.cheque)||0;
-      echeq += Number(m.echeq)||0;
-      pago += Number(m.pago)||0;
-      if(m.observaciones) obs.push(m.observaciones);
-    });
-    const saldoFinal = reg.dentro[reg.dentro.length-1].saldo;
-    filas.push([c.nombre, reg.saldoAntes, venta, deposito, cheque, echeq, pago, saldoFinal, obs.join(' | ')]);
-    totalVenta+=venta; totalDeposito+=deposito; totalCheque+=cheque; totalEcheq+=echeq; totalPago+=pago;
-  });
-
-  if(filas.length === 0){ alert('No hay movimientos cargados en ese rango de fechas.'); return; }
-
-  filas.sort((a,b)=>a[0].localeCompare(b[0]));
-
-  const totalCobrado = totalDeposito + totalCheque + totalEcheq + totalPago;
-  const comisionMonto = totalCobrado * (comisionPct/100);
-  const gananciaMonto = totalCobrado * (gananciaPct/100);
-  const aPagarAlDueño = totalCobrado - comisionMonto - gananciaMonto;
-  const efectivoEnMano = totalPago - depositadoPorMi;
+  const total = filas.reduce((acc, f) => acc + f[1], 0);
 
   const hoja = [
-    ["CLIENTES","SALDO ANTERIOR","VENTA","DEPOSITO","CHEQUE","ECHEQ","PAGO","SALDO","OBSERVACIONES"],
+    ["CLIENTES", "SALDO"],
     ...filas,
     [],
-    ["TOTAL","", totalVenta, totalDeposito, totalCheque, totalEcheq, totalPago, "", ""],
-    [],
-    ["Total cobrado (Depósito+Cheque+Echeq+Pago)", "", "", "", "", "", "", totalCobrado, ""],
-    [`Comisión Marce (${comisionPct}% de lo cobrado)`, "", "", "", "", "", "", -comisionMonto, ""],
-    [`Tu ganancia (${gananciaPct}% de lo cobrado)`, "", "", "", "", "", "", -gananciaMonto, ""],
-    ["A PAGAR AL DUEÑO", "", "", "", "", "", "", aPagarAlDueño, ""],
-    [],
-    ["Efectivo cobrado (PAGO)", "", "", "", "", "", "", totalPago, ""],
-    ["Depositado por mí en el banco", "", "", "", "", "", "", -depositadoPorMi, ""],
-    ["EFECTIVO EN MANO", "", "", "", "", "", "", efectivoEnMano, ""]
+    ["TOTAL", total]
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(hoja);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Viaje");
-  XLSX.writeFile(wb, `viaje_${fechaDesde}_a_${fechaHasta}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, "Clientes");
+  const fechaHoy = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `clientes_saldos_${fechaHoy}.xlsx`);
 }
 
 </script>
