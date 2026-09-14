@@ -415,11 +415,12 @@
         <div class="variante-add-box">
           <div class="fila">
             <input type="text" id="f-variante-modelo" placeholder="Modelo (ej: Transmisión 428H)">
-            <input type="text" id="f-variante-codigo" placeholder="Código">
+            <input type="text" id="f-variante-codigo" placeholder="Código" oninput="variantePrecioUsdTemp=null" onchange="buscarPrecioProveedorVariante()">
           </div>
           <div class="fila">
             <input type="number" id="f-variante-precio" placeholder="Precio de este modelo ($)">
           </div>
+          <small id="f-variante-hint" style="color:var(--gris);display:block;margin:-4px 0 4px;"></small>
           <button type="button" onclick="agregarVarianteTemp()" id="btn-agregar-variante">+ Agregar variante</button>
         </div>
 
@@ -487,6 +488,7 @@ let rubroActivo = "";
 let editandoId = null;
 let coloresTemp = []; // colores que se están cargando/editando en el form admin
 let variantesTemp = []; // variantes de modelo que se están cargando/editando en el form admin
+let variantePrecioUsdTemp = null; // costo en USD detectado al buscar el código de la variante actual
 let chipAbierto = {}; // {productoId: indiceColorAbierto}
 let modeloAbierto = {}; // {productoId: indiceVarianteAbierto}
 
@@ -561,7 +563,7 @@ async function cargarProductos(){
 // precio fijo cargado a mano, así los dos lugares parten siempre del mismo número
 // y cada uno le suma su propio margen tal como ya lo hacía.
 async function vincularCostosDelCatalogo(){
-  const tieneCodigo = productos.some(p => p.codigo);
+  const tieneCodigo = productos.some(p => p.codigo || (Array.isArray(p.variantes) && p.variantes.some(v=>v.codigo)));
   if(!tieneCodigo) return;
 
   const { data, error } = await sb.from("Producto").select("codigo, precio_usd");
@@ -573,9 +575,17 @@ async function vincularCostosDelCatalogo(){
   });
 
   productos.forEach(p => {
-    if(!p.codigo) return;
-    const costo = costoPorCodigo[normalizarCodigo(p.codigo)];
-    if(costo != null) p.precio_usd = costo;
+    if(p.codigo){
+      const costo = costoPorCodigo[normalizarCodigo(p.codigo)];
+      if(costo != null) p.precio_usd = costo;
+    }
+    if(Array.isArray(p.variantes)){
+      p.variantes.forEach(v => {
+        if(!v.codigo) return;
+        const costo = costoPorCodigo[normalizarCodigo(v.codigo)];
+        if(costo != null) v.precio_usd = costo;
+      });
+    }
   });
 }
 
@@ -673,7 +683,7 @@ function renderGrid(){
         return `<div class="modelo-panel${idxModeloAbierto===idx?' open':''}" id="panel-modelo-${p.id}-${idx}">
           <div class="nombre-modelo">${v.modelo}</div>
           ${v.codigo ? `<div class="codigo-modelo">Cod: ${v.codigo}</div>` : ''}
-          <div class="precio-modelo">${money(v.precio)} c/u</div>
+          <div class="precio-modelo">${money(precioVariante(v))} c/u</div>
           <div class="qty-row">
             <button onclick="cambiarQty('modelo-${p.id}-${idx}',-1)">-</button>
             <input type="number" id="qty-modelo-${p.id}-${idx}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
@@ -946,7 +956,7 @@ function itemCarrito(clave){
   if(!p) return null;
   if(info.tipo === "variante" && p.variantes && p.variantes[info.varianteIdx]){
     const v = p.variantes[info.varianteIdx];
-    return { p, precio: v.precio, nombre: `${p.nombre} — ${v.modelo}${v.codigo ? ' (Cod: '+v.codigo+')' : ''}` };
+    return { p, precio: precioVariante(v), nombre: `${p.nombre} — ${v.modelo}${v.codigo ? ' (Cod: '+v.codigo+')' : ''}` };
   }
   return { p, precio: precioDe(p), nombre: `${p.nombre}${info.color ? ' — '+info.color : ''}` };
 }
@@ -1484,6 +1494,46 @@ async function buscarPrecioProveedor(){
     : `Precio de lista (catalogo): ${money(costoConIva)} — ${prod.descripcion}`;
 }
 
+async function buscarPrecioProveedorVariante(){
+  const campoCodigo = document.getElementById("f-variante-codigo");
+  const hint = document.getElementById("f-variante-hint");
+  const codigo = campoCodigo.value.trim();
+  variantePrecioUsdTemp = null;
+  hint.textContent = "";
+  if(!codigo) return;
+  hint.textContent = "Buscando en el catalogo...";
+  const { data, error } = await sb.from("Producto")
+    .select("codigo, descripcion, precio_usd")
+    .ilike("codigo", codigo)
+    .limit(1);
+  if(error || !data || data.length === 0){
+    hint.textContent = "Codigo no encontrado en el catalogo (tabla Producto).";
+    return;
+  }
+  const dolar = await obtenerDolarBlue();
+  if(!dolar){
+    hint.textContent = "No se pudo obtener el dolar blue en este momento.";
+    return;
+  }
+  const prod = data[0];
+  variantePrecioUsdTemp = prod.precio_usd;
+  const costoConIva = Math.round((prod.precio_usd||0) * dolar * (1 + IVA_TIENDA));
+  const campoPrecio = document.getElementById("f-variante-precio");
+  const campoModelo = document.getElementById("f-variante-modelo");
+  const precioSugerido = conMargen(costoConIva);
+  campoPrecio.value = precioSugerido;
+  if(!campoModelo.value && prod.descripcion) campoModelo.value = prod.descripcion;
+  hint.textContent = `Costo: ${money(costoConIva)}${margenSugerido ? ' + '+margenSugerido+'% = '+money(precioSugerido) : ''} — se va a actualizar solo si cambia el costo o el dolar.`;
+}
+
+function precioVariante(v){
+  if(v.precio_usd && dolarBlueCache){
+    const costoConIva = Math.round(v.precio_usd * dolarBlueCache * (1 + IVA_TIENDA));
+    return conMargen(costoConIva);
+  }
+  return v.precio;
+}
+
 async function subirFoto(file){
   const path = `${Date.now()}_${file.name}`;
   const { error: upErr } = await sb.storage.from(BUCKET).upload(path, file);
@@ -1498,7 +1548,7 @@ function renderVariantesTemp(){
   variantesTemp.forEach((v, idx)=>{
     const tag = document.createElement("div");
     tag.className = "variante-tag";
-    tag.innerHTML = `<div class="info"><b>${v.modelo}</b>${v.codigo?' &middot; Cod: '+v.codigo:''}<br>${money(v.precio)} c/u</div>
+    tag.innerHTML = `<div class="info"><b>${v.modelo}</b>${v.codigo?' &middot; Cod: '+v.codigo:''}<br>${money(precioVariante(v))} c/u</div>
       <button type="button" onclick="quitarVarianteTemp(${idx})">✕</button>`;
     cont.appendChild(tag);
   });
@@ -1513,10 +1563,14 @@ function agregarVarianteTemp(){
     showToast("Completá modelo y precio de la variante");
     return;
   }
-  variantesTemp.push({ modelo, codigo, precio });
+  const nuevaVariante = { modelo, codigo, precio };
+  if(codigo && variantePrecioUsdTemp != null) nuevaVariante.precio_usd = variantePrecioUsdTemp;
+  variantesTemp.push(nuevaVariante);
   document.getElementById("f-variante-modelo").value = "";
   document.getElementById("f-variante-codigo").value = "";
   document.getElementById("f-variante-precio").value = "";
+  document.getElementById("f-variante-hint").textContent = "";
+  variantePrecioUsdTemp = null;
   renderVariantesTemp();
 }
 
