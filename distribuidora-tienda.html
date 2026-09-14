@@ -1279,7 +1279,7 @@ function renderSelectorCamion(){
 }
 
 async function toggleEnCamion(id, div){
-  const p = productos.find(x=>x.id===id);
+  const p = productos.find(x=>String(x.id)===String(id));
   if(!p) return;
   const nuevoValor = !p.en_camion;
   div.classList.toggle("marcada", nuevoValor);
@@ -1293,12 +1293,16 @@ async function toggleEnCamion(id, div){
 }
 
 function agregarDesdeCamion(id){
-  const p = productos.find(x=>x.id===id);
-  if(!p) return;
-  if(!cart[id]) cart[id] = 0;
-  cart[id] += 1;
-  guardarCarrito();
-  showToast(`${p.nombre} agregado al presupuesto`);
+  try {
+    const p = productos.find(x=>String(x.id)===String(id));
+    if(!p) { showToast("No se encontró el producto"); return; }
+    if(!cart[id]) cart[id] = 0;
+    cart[id] += 1;
+    guardarCarrito();
+    showToast(`${p.nombre} agregado al presupuesto`);
+  } catch(e){
+    showToast("Error al agregar: " + e.message);
+  }
 }
 
 async function destildarTodoElCamion(){
