@@ -805,7 +805,7 @@
       <input type="text" id="venta-manual-descripcion" placeholder="Producto vendido (manual)" style="width:100%; margin-bottom:8px; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
       <div style="display:flex; gap:8px;">
         <input type="number" id="venta-manual-cantidad" placeholder="Cant." value="1" min="1" style="width:70px; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
-        <input type="number" id="venta-manual-precio" placeholder="Precio $" min="0" style="flex:1; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+        <input type="text" inputmode="numeric" id="venta-manual-precio" placeholder="Precio $" oninput="formatearMonto(this)" style="flex:1; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
         <button onclick="agregarVentaManual()" style="background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:8px 14px; border-radius:5px;">Agregar</button>
       </div>
     </div>
@@ -2025,10 +2025,19 @@
     mostrarDebug("Venta registrada: " + producto.codigo);
   }
 
+  // Le pone puntos de miles mientras escribís en un campo de monto (ej: 50000 -> 50.000)
+  function formatearMonto(input) {
+    const soloNumeros = input.value.replace(/\D/g, "");
+    input.value = soloNumeros ? parseInt(soloNumeros, 10).toLocaleString("es-AR") : "";
+  }
+  function valorSinPuntos(input) {
+    return parseFloat(input.value.replace(/\D/g, "")) || NaN;
+  }
+
   async function agregarVentaManual() {
     const desc = document.getElementById("venta-manual-descripcion").value.trim();
     const cant = Math.max(1, parseInt(document.getElementById("venta-manual-cantidad").value) || 1);
-    const precio = parseFloat(document.getElementById("venta-manual-precio").value);
+    const precio = valorSinPuntos(document.getElementById("venta-manual-precio"));
 
     if (!desc) { alert("Escribí una descripción para lo vendido."); return; }
     if (isNaN(precio) || precio < 0) { alert("Ingresá un precio válido."); return; }
