@@ -586,7 +586,7 @@ function renderTabs(){
     cont.innerHTML = "";
     return;
   }
-  let html = `<button class="${rubroActivo===''?'activo':''}" onclick="filtrarRubro('')">Todos</button>`;
+  let html = `<button class="${rubroActivo===''?'activo':''}" onclick="filtrarRubro('')">Destacados</button>`;
   rubros.forEach(r=>{
     html += `<button class="${rubroActivo===r?'activo':''}" onclick="filtrarRubro('${r.replace(/'/g,"\\'")}')">${r}</button>`;
   });
@@ -603,7 +603,13 @@ function renderGrid(){
   const grid = document.getElementById("grid");
   const busqueda = document.getElementById("buscador").value;
   let visibles = productos.filter(p => p.activo !== false);
-  if(rubroActivo) visibles = visibles.filter(p => p.rubro === rubroActivo);
+  if(rubroActivo){
+    visibles = visibles.filter(p => p.rubro === rubroActivo);
+  } else if(!busqueda.trim()){
+    // En "Destacados" sin buscar nada, mostramos solo los destacados (oferta) para que cargue
+    // más rápido — para ver el resto, hay que elegir una categoría o buscar algo.
+    visibles = visibles.filter(p => p.oferta);
+  }
   visibles = visibles.filter(p => coincideBusqueda(p, busqueda));
   // Los productos en oferta suben arriba de todo; el resto mantiene su orden habitual.
   visibles.sort((a, b) => (b.oferta ? 1 : 0) - (a.oferta ? 1 : 0));
@@ -627,7 +633,10 @@ function renderGrid(){
   }
 
   if(visibles.length === 0 && sugerenciasProveedor.length === 0){
-    grid.innerHTML = "<p style='padding:20px;text-align:center;color:#888;'>No se encontraron productos.</p>";
+    const msg = (!rubroActivo && !busqueda.trim())
+      ? "Todavía no hay productos destacados. Elegí una categoría arriba, o buscá algo."
+      : "No se encontraron productos.";
+    grid.innerHTML = `<p style='padding:20px;text-align:center;color:#888;'>${msg}</p>`;
     return;
   }
   grid.innerHTML = "";
