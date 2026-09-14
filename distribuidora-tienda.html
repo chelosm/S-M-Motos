@@ -206,6 +206,16 @@
     cursor:pointer;display:flex;align-items:center;justify-content:center;
     opacity:0.35;
   }
+  #btn-vercamion-flotante{
+    position:fixed;top:38px;left:46px;z-index:40;
+    background:rgba(0,0,0,0.18);color:#fff;border:none;
+    width:22px;height:22px;border-radius:50%;font-size:0.7rem;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    opacity:0.35;
+  }
+  #btn-vercamion-flotante.activo{
+    background:var(--amarillo,#ffe600);opacity:1;
+  }
   #camion-grid{
     display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-top:10px;
   }
@@ -224,6 +234,11 @@
   #camion-grid .miniatura .nombre{
     position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:#fff;
     font-size:0.62rem;padding:2px 3px;line-height:1.1;
+  }
+  #camion-grid .miniatura .btn-agregar-camion{
+    position:absolute;top:2px;left:2px;background:var(--amarillo,#ffe600);color:#1a1a1a;
+    border:none;width:22px;height:22px;border-radius:50%;font-size:0.8rem;font-weight:700;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
   }
 
   #btn-catalogo{
@@ -355,6 +370,7 @@
 
 <button id="btn-admin-flotante" onclick="abrirAdmin()">✏️</button>
 <button id="btn-camion-flotante" onclick="abrirSelectorCamion()" title="🚚">•</button>
+<button id="btn-vercamion-flotante" onclick="toggleVerCamion()" title="Ver camión">•</button>
 <a id="btn-catalogo" href="https://chelosm.github.io/S-M-Motos/catalogo-base.html" target="_blank" rel="noopener" title="Ir a Catálogo / Facturación">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h13l3 3v17H4z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
 </a>
@@ -402,7 +418,9 @@
   <div class="sheet">
     <button class="cerrar-x" onclick="cerrarSelectorCamion()">✕</button>
     <h2>🚚 ¿Qué llevás este mes?</h2>
-    <p style="color:var(--gris);font-size:0.85rem;margin-top:-6px;">Tocá las fotos de lo que cargaste en el camión. Se guarda solo, no hace falta ningún botón más.</p>
+    <p style="color:var(--gris);font-size:0.85rem;margin-top:-6px;">Buscá por nombre o tocá la foto para marcarlo. El botón ➕ lo agrega directo al presupuesto.</p>
+    <input type="text" id="camion-buscador" placeholder="Buscar por nombre... ej: cable embrague interno" oninput="renderSelectorCamion()" style="width:100%;margin-bottom:8px;">
+    <button type="button" onclick="destildarTodoElCamion()" style="background:#eee;border:none;border-radius:8px;padding:8px 12px;font-size:0.8rem;cursor:pointer;margin-bottom:8px;">Destildar todas</button>
     <div id="camion-grid"></div>
   </div>
 </div>
@@ -627,17 +645,12 @@ async function vincularCostosDelCatalogo(){
 
 function renderTabs(){
   const cont = document.getElementById("tabs");
-  const activos = productos.filter(p=>p.activo!==false);
-  const rubros = [...new Set(activos.map(p=>p.rubro).filter(Boolean))].sort();
-  const hayEnCamion = activos.some(p=>p.en_camion);
-  if(rubros.length === 0 && !hayEnCamion){
+  const rubros = [...new Set(productos.filter(p=>p.activo!==false).map(p=>p.rubro).filter(Boolean))].sort();
+  if(rubros.length === 0){
     cont.innerHTML = "";
     return;
   }
   let html = `<button class="${rubroActivo===''?'activo':''}" onclick="filtrarRubro('')">Destacados</button>`;
-  if(hayEnCamion){
-    html += `<button class="${rubroActivo==='__camion__'?'activo':''}" onclick="filtrarRubro('__camion__')">🚚 En el camión</button>`;
-  }
   rubros.forEach(r=>{
     html += `<button class="${rubroActivo===r?'activo':''}" onclick="filtrarRubro('${r.replace(/'/g,"\\'")}')">${r}</button>`;
   });
@@ -654,11 +667,11 @@ function renderGrid(){
   const grid = document.getElementById("grid");
   const busqueda = document.getElementById("buscador").value;
   let visibles = productos.filter(p => p.activo !== false);
-  if(busqueda.trim()){
+  if(verSoloCamion){
+    visibles = visibles.filter(p => p.en_camion);
+  } else if(busqueda.trim()){
     // Si hay una búsqueda activa, ignoramos la pestaña/categoría y buscamos en todo
     // el catálogo de la tienda (incluye productos sin categoría asignada).
-  } else if(rubroActivo === "__camion__"){
-    visibles = visibles.filter(p => p.en_camion);
   } else if(rubroActivo){
     visibles = visibles.filter(p => p.rubro === rubroActivo);
   } else {
@@ -1244,17 +1257,23 @@ function cerrarSelectorCamion(){
 
 function renderSelectorCamion(){
   const cont = document.getElementById("camion-grid");
-  const conFoto = productos.filter(p => p.activo !== false && p.foto_url);
+  const busqueda = document.getElementById("camion-buscador").value;
+  let conFoto = productos.filter(p => p.activo !== false && p.foto_url);
+  if(busqueda.trim()) conFoto = conFoto.filter(p => coincideBusqueda(p, busqueda));
   if(conFoto.length === 0){
-    cont.innerHTML = "<p style='color:#888;'>No hay productos con foto todavía.</p>";
+    cont.innerHTML = "<p style='color:#888;'>No se encontraron productos con foto.</p>";
     return;
   }
   cont.innerHTML = "";
   conFoto.forEach(p=>{
     const div = document.createElement("div");
     div.className = "miniatura" + (p.en_camion ? " marcada" : "");
-    div.innerHTML = `<img src="${p.foto_url}" alt="${p.nombre}"><div class="check">✓</div><div class="nombre">${p.nombre}</div>`;
-    div.onclick = () => toggleEnCamion(p.id, div);
+    div.innerHTML = `
+      <img src="${p.foto_url}" alt="${p.nombre}" onclick="toggleEnCamion('${p.id}', this.parentElement)">
+      <div class="check">✓</div>
+      <div class="nombre">${p.nombre}</div>
+      <button type="button" class="btn-agregar-camion" onclick="event.stopPropagation(); agregarDesdeCamion('${p.id}')">➕</button>
+    `;
     cont.appendChild(div);
   });
 }
@@ -1271,6 +1290,38 @@ async function toggleEnCamion(id, div){
     div.classList.toggle("marcada", !nuevoValor);
     showToast("No se pudo guardar, probá de nuevo");
   }
+}
+
+function agregarDesdeCamion(id){
+  const p = productos.find(x=>x.id===id);
+  if(!p) return;
+  if(!cart[id]) cart[id] = 0;
+  cart[id] += 1;
+  guardarCarrito();
+  showToast(`${p.nombre} agregado al presupuesto`);
+}
+
+async function destildarTodoElCamion(){
+  const marcados = productos.filter(p => p.en_camion);
+  if(marcados.length === 0){
+    showToast("No hay nada tildado");
+    return;
+  }
+  if(!confirm(`¿Destildar los ${marcados.length} productos marcados como "en el camión"?`)) return;
+  marcados.forEach(p => p.en_camion = false);
+  renderSelectorCamion();
+  const ids = marcados.map(p => p.id);
+  const { error } = await sb.from("DistribuidoraTienda").update({ en_camion: false }).in("id", ids);
+  if(error) showToast("Hubo un problema guardando los cambios");
+}
+
+// Segundo puntito: filtra la grilla principal a solo lo marcado como "en camión",
+// sin agregar ninguna pestaña visible — para mostrarle al cliente sin que note nada raro.
+let verSoloCamion = false;
+function toggleVerCamion(){
+  verSoloCamion = !verSoloCamion;
+  document.getElementById("btn-vercamion-flotante").classList.toggle("activo", verSoloCamion);
+  renderGrid();
 }
 
 function renderCarrito(){
