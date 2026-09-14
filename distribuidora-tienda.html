@@ -199,6 +199,32 @@
     cursor:pointer;display:flex;align-items:center;justify-content:center;
     opacity:0.6;
   }
+  #btn-camion-flotante{
+    position:fixed;top:10px;left:46px;z-index:40;
+    background:rgba(0,0,0,0.18);color:#fff;border:none;
+    width:22px;height:22px;border-radius:50%;font-size:0.7rem;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    opacity:0.35;
+  }
+  #camion-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-top:10px;
+  }
+  #camion-grid .miniatura{
+    position:relative;aspect-ratio:1/1;border-radius:8px;overflow:hidden;cursor:pointer;
+    border:2px solid transparent;
+  }
+  #camion-grid .miniatura img{width:100%;height:100%;object-fit:cover;display:block;}
+  #camion-grid .miniatura.marcada{border-color:var(--amarillo,#ffe600);}
+  #camion-grid .miniatura .check{
+    position:absolute;top:2px;right:2px;background:var(--amarillo,#ffe600);color:#1a1a1a;
+    width:20px;height:20px;border-radius:50%;display:none;align-items:center;justify-content:center;
+    font-size:0.75rem;font-weight:700;
+  }
+  #camion-grid .miniatura.marcada .check{display:flex;}
+  #camion-grid .miniatura .nombre{
+    position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:#fff;
+    font-size:0.62rem;padding:2px 3px;line-height:1.1;
+  }
 
   #btn-catalogo{
     position:fixed;top:14px;right:14px;z-index:40;
@@ -223,11 +249,11 @@
     padding:9px 16px;font-weight:700;cursor:pointer;
   }
 
-  #cart-panel, #admin-panel{
+  #cart-panel, #admin-panel, #camion-panel{
     display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
     z-index:50;align-items:flex-end;justify-content:center;
   }
-  #cart-panel.open, #admin-panel.open{display:flex;}
+  #cart-panel.open, #admin-panel.open, #camion-panel.open{display:flex;}
   .sheet{
     background:#fff;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;
     border-radius:16px 16px 0 0;padding:18px;
@@ -315,7 +341,7 @@
   ============================================ */
   @media (min-width: 900px) {
     #grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));}
-    #cart-panel, #admin-panel{align-items:center;}
+    #cart-panel, #admin-panel, #camion-panel{align-items:center;}
     .sheet{border-radius:16px;max-height:80vh;}
   }
 </style>
@@ -328,6 +354,7 @@
 </header>
 
 <button id="btn-admin-flotante" onclick="abrirAdmin()">✏️</button>
+<button id="btn-camion-flotante" onclick="abrirSelectorCamion()" title="🚚">•</button>
 <a id="btn-catalogo" href="https://chelosm.github.io/S-M-Motos/catalogo-base.html" target="_blank" rel="noopener" title="Ir a Catálogo / Facturación">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h13l3 3v17H4z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
 </a>
@@ -368,6 +395,15 @@
       <button class="btn-secundario" onclick="exportarExcel()">📊 Excel</button>
       <button class="btn-primario" onclick="exportarImagen()">🖼️ Generar imagen y compartir</button>
     </div>
+  </div>
+</div>
+
+<div id="camion-panel" onclick="if(event.target===this) cerrarSelectorCamion()">
+  <div class="sheet">
+    <button class="cerrar-x" onclick="cerrarSelectorCamion()">✕</button>
+    <h2>🚚 ¿Qué llevás este mes?</h2>
+    <p style="color:var(--gris);font-size:0.85rem;margin-top:-6px;">Tocá las fotos de lo que cargaste en el camión. Se guarda solo, no hace falta ningún botón más.</p>
+    <div id="camion-grid"></div>
   </div>
 </div>
 
@@ -591,12 +627,17 @@ async function vincularCostosDelCatalogo(){
 
 function renderTabs(){
   const cont = document.getElementById("tabs");
-  const rubros = [...new Set(productos.filter(p=>p.activo!==false).map(p=>p.rubro).filter(Boolean))].sort();
-  if(rubros.length === 0){
+  const activos = productos.filter(p=>p.activo!==false);
+  const rubros = [...new Set(activos.map(p=>p.rubro).filter(Boolean))].sort();
+  const hayEnCamion = activos.some(p=>p.en_camion);
+  if(rubros.length === 0 && !hayEnCamion){
     cont.innerHTML = "";
     return;
   }
   let html = `<button class="${rubroActivo===''?'activo':''}" onclick="filtrarRubro('')">Destacados</button>`;
+  if(hayEnCamion){
+    html += `<button class="${rubroActivo==='__camion__'?'activo':''}" onclick="filtrarRubro('__camion__')">🚚 En el camión</button>`;
+  }
   rubros.forEach(r=>{
     html += `<button class="${rubroActivo===r?'activo':''}" onclick="filtrarRubro('${r.replace(/'/g,"\\'")}')">${r}</button>`;
   });
@@ -616,6 +657,8 @@ function renderGrid(){
   if(busqueda.trim()){
     // Si hay una búsqueda activa, ignoramos la pestaña/categoría y buscamos en todo
     // el catálogo de la tienda (incluye productos sin categoría asignada).
+  } else if(rubroActivo === "__camion__"){
+    visibles = visibles.filter(p => p.en_camion);
   } else if(rubroActivo){
     visibles = visibles.filter(p => p.rubro === rubroActivo);
   } else {
@@ -1175,9 +1218,59 @@ function abrirCarrito(){
 function cerrarModales(){
   document.getElementById("cart-panel").classList.remove("open");
   document.getElementById("admin-panel").classList.remove("open");
+  document.getElementById("camion-panel").classList.remove("open");
 }
 function abrirAdmin(){
   document.getElementById("admin-panel").classList.add("open");
+}
+
+function abrirSelectorCamion(){
+  if(!esAdmin){
+    const pass = prompt("Contraseña de administrador:");
+    if(pass === null) return;
+    if(pass !== ADMIN_PASS){
+      showToast("Contraseña incorrecta");
+      return;
+    }
+    esAdmin = true;
+  }
+  renderSelectorCamion();
+  document.getElementById("camion-panel").classList.add("open");
+}
+
+function cerrarSelectorCamion(){
+  document.getElementById("camion-panel").classList.remove("open");
+}
+
+function renderSelectorCamion(){
+  const cont = document.getElementById("camion-grid");
+  const conFoto = productos.filter(p => p.activo !== false && p.foto_url);
+  if(conFoto.length === 0){
+    cont.innerHTML = "<p style='color:#888;'>No hay productos con foto todavía.</p>";
+    return;
+  }
+  cont.innerHTML = "";
+  conFoto.forEach(p=>{
+    const div = document.createElement("div");
+    div.className = "miniatura" + (p.en_camion ? " marcada" : "");
+    div.innerHTML = `<img src="${p.foto_url}" alt="${p.nombre}"><div class="check">✓</div><div class="nombre">${p.nombre}</div>`;
+    div.onclick = () => toggleEnCamion(p.id, div);
+    cont.appendChild(div);
+  });
+}
+
+async function toggleEnCamion(id, div){
+  const p = productos.find(x=>x.id===id);
+  if(!p) return;
+  const nuevoValor = !p.en_camion;
+  div.classList.toggle("marcada", nuevoValor);
+  p.en_camion = nuevoValor; // optimista: se ve al toque, se confirma con la base abajo
+  const { error } = await sb.from("DistribuidoraTienda").update({ en_camion: nuevoValor }).eq("id", id);
+  if(error){
+    p.en_camion = !nuevoValor;
+    div.classList.toggle("marcada", !nuevoValor);
+    showToast("No se pudo guardar, probá de nuevo");
+  }
 }
 
 function renderCarrito(){
