@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Taller · Clientes y Presupuestos</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg: #14181c;
+    --panel: #1c2228;
+    --panel-2: #232a31;
+    --line: #2d3540;
+    --text: #e8ecef;
+    --text-dim: #9aa5ad;
+    --accent: #e8862c;
+    --accent-dim: #6b4a26;
+    --danger: #c0453a;
+    --ok: #4a9d6e;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:60px;
+  }
+  header{
+    padding:18px 16px 14px;
+    border-bottom:1px solid var(--line);
+    position:sticky;
+    top:0;
+    background:var(--bg);
+    z-index:10;
+  }
+  header h1{
+    margin:0;
+    font-size:19px;
+    font-weight:700;
+    letter-spacing:-0.2px;
+  }
+  header .sub{
+    color:var(--text-dim);
+    font-size:13px;
+    margin-top:2px;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:0 14px;}
+  .search-row{
+    display:flex;
+    gap:8px;
+    margin:14px 0;
+  }
+  input, select, textarea{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:15px;
+    width:100%;
+    font-family:inherit;
+  }
+  input:focus, select:focus, textarea:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+  button{
+    font-family:inherit;
+    font-size:14px;
+    font-weight:600;
+    border:none;
+    border-radius:8px;
+    padding:10px 14px;
+    cursor:pointer;
+  }
+  .btn-primary{background:var(--accent); color:#1a1206;}
+  .btn-primary:active{opacity:0.85;}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--text);}
+  .btn-danger{background:transparent; border:1px solid var(--danger); color:var(--danger);}
+  .btn-sm{padding:6px 10px; font-size:13px;}
+  .btn-block{width:100%;}
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px;
+    margin-bottom:10px;
+  }
+  .client-card{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    cursor:pointer;
+  }
+  .client-name{font-size:16px; font-weight:600;}
+  .client-meta{color:var(--text-dim); font-size:13px; margin-top:2px;}
+  .chevron{color:var(--text-dim); font-size:20px;}
+  .empty{
+    text-align:center;
+    color:var(--text-dim);
+    padding:40px 20px;
+    font-size:14px;
+  }
+  .hidden{display:none !important;}
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .back-btn{
+    color:var(--accent);
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    background:none;
+    border:none;
+    padding:4px 0;
+  }
+  .section-title{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    color:var(--text-dim);
+    margin:22px 0 8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .moto-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px;
+    margin-bottom:10px;
+  }
+  .moto-title{font-weight:700; font-size:15px;}
+  .moto-sub{color:var(--text-dim); font-size:13px; margin-top:2px;}
+  .moto-actions{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .row-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    padding:9px 0;
+    border-bottom:1px solid var(--line);
+    gap:10px;
+  }
+  .row-item:last-child{border-bottom:none;}
+  .row-item .desc{font-size:14px;}
+  .row-item .date{color:var(--text-dim); font-size:12px; margin-top:2px;}
+  .row-item .amount{font-weight:600; white-space:nowrap; font-size:14px;}
+  .estado-tag{
+    font-size:11px;
+    padding:2px 8px;
+    border-radius:20px;
+    display:inline-block;
+    margin-top:4px;
+  }
+  .estado-pendiente{background:#3a2f1a; color:#e8b34c;}
+  .estado-aprobado{background:#1a3a2a; color:#5fc98a;}
+  .estado-rechazado{background:#3a1a1a; color:#e07a7a;}
+  .modal-bg{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.6);
+    display:flex; align-items:flex-end;
+    z-index:100;
+  }
+  .modal{
+    background:var(--panel);
+    width:100%;
+    max-height:88vh;
+    overflow-y:auto;
+    border-radius:16px 16px 0 0;
+    padding:20px 16px 24px;
+  }
+  .modal h2{margin:0 0 16px; font-size:17px;}
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block;
+    font-size:12px;
+    color:var(--text-dim);
+    margin-bottom:5px;
+  }
+  .field-row{display:flex; gap:8px;}
+  .field-row .field{flex:1;}
+  .modal-actions{
+    display:flex;
+    gap:8px;
+    margin-top:18px;
+  }
+  .modal-actions button{flex:1;}
+  .item-row{
+    display:flex;
+    gap:6px;
+    margin-bottom:8px;
+    align-items:center;
+  }
+  .item-row input:nth-child(1){flex:3;}
+  .item-row input:nth-child(2){flex:1;}
+  .item-row input:nth-child(3){flex:1.4;}
+  .item-remove{
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    font-size:18px;
+    padding:0 4px;
+    cursor:pointer;
+  }
+  .total-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:16px;
+    font-weight:700;
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px solid var(--line);
+  }
+  .toast{
+    position:fixed;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    padding:10px 16px;
+    border-radius:8px;
+    font-size:13px;
+    z-index:200;
+    opacity:0;
+    transition:opacity 0.25s;
+    pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+  .config-notice{
+    background:#3a1a1a;
+    border:1px solid var(--danger);
+    color:#e8b0aa;
+    padding:12px 14px;
+    border-radius:8px;
+    font-size:13px;
+    margin:14px 0;
+    line-height:1.5;
+  }
+  .icon-btn{
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    font-size:20px;
+    cursor:pointer;
+    padding:4px 6px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>🔧 Taller</h1>
+    <div class="sub" id="headerSub">Clientes, motos y presupuestos</div>
+  </div>
+</header>
+
+<div class="wrap" id="app">
+
+  <div id="configNotice" class="config-notice hidden">
+    Falta configurar la conexión a la base de datos. Abrí este archivo y completá
+    <code>SUPABASE_URL</code> y <code>SUPABASE_ANON_KEY</code> al principio del &lt;script&gt;
+    (son los mismos datos que usás en cuenta-corriente.html).
+  </div>
+
+  <!-- VISTA: LISTA DE CLIENTES -->
+  <div id="viewClientes">
+    <div class="search-row">
+      <input type="text" id="buscarCliente" placeholder="Buscar cliente...">
+      <button class="btn-primary" onclick="abrirModalCliente()">+ Cliente</button>
+    </div>
+    <div id="listaClientes"></div>
+  </div>
+
+  <!-- VISTA: DETALLE DE CLIENTE (motos) -->
+  <div id="viewCliente" class="hidden">
+    <div class="topbar">
+      <button class="back-btn" onclick="volverALista()">← Clientes</button>
+    </div>
+    <div class="card" id="clienteHeader"></div>
+
+    <div class="section-title">
+      <span>Motos</span>
+      <button class="btn-primary btn-sm" onclick="abrirModalMoto()">+ Moto</button>
+    </div>
+    <div id="listaMotos"></div>
+  </div>
+
+  <!-- VISTA: DETALLE DE MOTO (historial + presupuestos) -->
+  <div id="viewMoto" class="hidden">
+    <div class="topbar">
+      <button class="back-btn" onclick="volverACliente()">← <span id="volverClienteNombre"></span></button>
+    </div>
+    <div class="card" id="motoHeader"></div>
+
+    <div class="section-title">
+      <span>Presupuestos</span>
+      <button class="btn-primary btn-sm" onclick="abrirModalPresupuesto()">+ Presupuesto</button>
+    </div>
+    <div id="listaPresupuestos"></div>
+
+    <div class="section-title">
+      <span>Trabajos realizados</span>
+      <button class="btn-primary btn-sm" onclick="abrirModalTrabajo()">+ Trabajo</button>
+    </div>
+    <div id="listaTrabajos"></div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="modalContainer"></div>
+
+<script>
+/* ======================================================
+   CONFIGURACIÓN — completar con los mismos datos que usás
+   en cuenta-corriente.html (mismo proyecto de Supabase)
+   ====================================================== */
+const SUPABASE_URL = "PEGAR_ACA_TU_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "PEGAR_ACA_TU_SUPABASE_ANON_KEY";
+
+/* ======================================================
+   Tablas necesarias en Supabase (ejecutar una sola vez
+   en el SQL Editor de tu proyecto):
+
+   create table taller_clientes (
+     id uuid primary key default gen_random_uuid(),
+     nombre text not null,
+     telefono text,
+     created_at timestamptz default now()
+   );
+
+   create table taller_motos (
+     id uuid primary key default gen_random_uuid(),
+     cliente_id uuid references taller_clientes(id) on delete cascade,
+     marca text,
+     modelo text,
+     anio text,
+     patente text,
+     observaciones text,
+     created_at timestamptz default now()
+   );
+
+   create table taller_trabajos (
+     id uuid primary key default gen_random_uuid(),
+     moto_id uuid references taller_motos(id) on delete cascade,
+     fecha date not null,
+     descripcion text not null,
+     costo numeric,
+     created_at timestamptz default now()
+   );
+
+   create table taller_presupuestos (
+     id uuid primary key default gen_random_uuid(),
+     moto_id uuid references taller_motos(id) on delete cascade,
+     fecha date not null,
+     items jsonb not null,
+     total numeric not null,
+     estado text default 'pendiente',
+     created_at timestamptz default now()
+   );
+
+   -- si usás Row Level Security, agregá políticas que permitan
+   -- select/insert/update/delete (igual que en tus otras tablas).
+   ====================================================== */
+
+let supabase;
+let dbReady = false;
+try {
+  if (SUPABASE_URL.startsWith("http")) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    dbReady = true;
+  }
+} catch(e) { dbReady = false; }
+
+let clientes = [];
+let motos = [];
+let trabajos = [];
+let presupuestos = [];
+
+let clienteActual = null;
+let motoActual = null;
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function fmtMoney(n){
+  n = Number(n)||0;
+  return "$" + n.toLocaleString('es-AR', {maximumFractionDigits:0});
+}
+function fmtDate(d){
+  if(!d) return '';
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+async function cargarTodo(){
+  if(!dbReady){
+    document.getElementById('configNotice').classList.remove('hidden');
+    return;
+  }
+  const [c, m, t, p] = await Promise.all([
+    supabase.from('taller_clientes').select('*').order('nombre'),
+    supabase.from('taller_motos').select('*'),
+    supabase.from('taller_trabajos').select('*').order('fecha', {ascending:false}),
+    supabase.from('taller_presupuestos').select('*').order('fecha', {ascending:false})
+  ]);
+  clientes = c.data || [];
+  motos = m.data || [];
+  trabajos = t.data || [];
+  presupuestos = p.data || [];
+  renderClientes();
+}
+
+/* ---------- VISTA CLIENTES ---------- */
+function renderClientes(){
+  const filtro = (document.getElementById('buscarCliente').value || '').toLowerCase();
+  const cont = document.getElementById('listaClientes');
+  const filtrados = clientes.filter(c => c.nombre.toLowerCase().includes(filtro));
+  if(filtrados.length === 0){
+    cont.innerHTML = `<div class="empty">${clientes.length===0 ? 'Todavía no agregaste clientes.' : 'No hay resultados.'}</div>`;
+    return;
+  }
+  cont.innerHTML = filtrados.map(c => {
+    const nMotos = motos.filter(m => m.cliente_id === c.id).length;
+    return `
+      <div class="card client-card" onclick="verCliente('${c.id}')">
+        <div>
+          <div class="client-name">${escapeHtml(c.nombre)}</div>
+          <div class="client-meta">${nMotos} moto${nMotos===1?'':'s'}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
+        </div>
+        <div class="chevron">›</div>
+      </div>`;
+  }).join('');
+}
+document.getElementById('buscarCliente').addEventListener('input', renderClientes);
+
+function volverALista(){
+  clienteActual = null;
+  document.getElementById('viewCliente').classList.add('hidden');
+  document.getElementById('viewClientes').classList.remove('hidden');
+  renderClientes();
+}
+
+/* ---------- VISTA CLIENTE (motos) ---------- */
+function verCliente(id){
+  clienteActual = clientes.find(c => c.id === id);
+  document.getElementById('viewClientes').classList.add('hidden');
+  document.getElementById('viewCliente').classList.remove('hidden');
+  document.getElementById('clienteHeader').innerHTML = `
+    <div class="client-name">${escapeHtml(clienteActual.nombre)}</div>
+    ${clienteActual.telefono ? `<div class="client-meta">📞 ${escapeHtml(clienteActual.telefono)}</div>` : ''}
+    <div style="margin-top:10px; display:flex; gap:8px;">
+      <button class="btn-ghost btn-sm" onclick="abrirModalCliente('${clienteActual.id}')">Editar</button>
+      <button class="btn-danger btn-sm" onclick="eliminarCliente('${clienteActual.id}')">Eliminar cliente</button>
+    </div>`;
+  renderMotos();
+}
+
+function renderMotos(){
+  const lista = motos.filter(m => m.cliente_id === clienteActual.id);
+  const cont = document.getElementById('listaMotos');
+  if(lista.length === 0){
+    cont.innerHTML = `<div class="empty">Sin motos cargadas todavía.</div>`;
+    return;
+  }
+  cont.innerHTML = lista.map(m => `
+    <div class="moto-card">
+      <div class="moto-title">${escapeHtml(m.marca||'')} ${escapeHtml(m.modelo||'')} ${m.anio ? '· '+escapeHtml(m.anio) : ''}</div>
+      <div class="moto-sub">${m.patente ? 'Patente: '+escapeHtml(m.patente) : 'Sin patente cargada'}</div>
+      ${m.observaciones ? `<div class="moto-sub">${escapeHtml(m.observaciones)}</div>` : ''}
+      <div class="moto-actions">
+        <button class="btn-ghost btn-sm" onclick="verMoto('${m.id}')">Ver historial</button>
+        <button class="btn-ghost btn-sm" onclick="abrirModalMoto('${m.id}')">Editar</button>
+        <button class="btn-danger btn-sm" onclick="eliminarMoto('${m.id}')">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+
+/* ---------- VISTA MOTO (presupuestos + trabajos) ---------- */
+function verMoto(id){
+  motoActual = motos.find(m => m.id === id);
+  document.getElementById('viewCliente').classList.add('hidden');
+  document.getElementById('viewMoto').classList.remove('hidden');
+  document.getElementById('volverClienteNombre').textContent = clienteActual.nombre;
+  document.getElementById('motoHeader').innerHTML = `
+    <div class="moto-title">${escapeHtml(motoActual.marca||'')} ${escapeHtml(motoActual.modelo||'')} ${motoActual.anio ? '· '+escapeHtml(motoActual.anio) : ''}</div>
+    <div class="moto-sub">${motoActual.patente ? 'Patente: '+escapeHtml(motoActual.patente) : 'Sin patente cargada'}</div>
+    <div class="moto-sub">Cliente: ${escapeHtml(clienteActual.nombre)}</div>`;
+  renderPresupuestos();
+  renderTrabajos();
+}
+
+function volverACliente(){
+  motoActual = null;
+  document.getElementById('viewMoto').classList.add('hidden');
+  document.getElementById('viewCliente').classList.remove('hidden');
+  renderMotos();
+}
+
+function renderPresupuestos(){
+  const lista = presupuestos.filter(p => p.moto_id === motoActual.id);
+  const cont = document.getElementById('listaPresupuestos');
+  if(lista.length === 0){
+    cont.innerHTML = `<div class="empty">Sin presupuestos todavía.</div>`;
+    return;
+  }
+  cont.innerHTML = lista.map(p => `
+    <div class="card">
+      <div class="row-item" style="border:none; padding:0;">
+        <div>
+          <div class="date">${fmtDate(p.fecha)}</div>
+          <div class="estado-tag estado-${p.estado}">${p.estado}</div>
+        </div>
+        <div class="amount">${fmtMoney(p.total)}</div>
+      </div>
+      <div style="margin-top:10px; font-size:13px; color:var(--text-dim);">
+        ${(p.items||[]).map(it => `${escapeHtml(it.desc)} (x${it.cant}) — ${fmtMoney(it.precio*it.cant)}`).join('<br>')}
+      </div>
+      <div class="moto-actions">
+        <button class="btn-ghost btn-sm" onclick="exportarPresupuesto('${p.id}')">Exportar Excel</button>
+        <button class="btn-ghost btn-sm" onclick="cambiarEstadoPresupuesto('${p.id}')">Cambiar estado</button>
+        <button class="btn-danger btn-sm" onclick="eliminarPresupuesto('${p.id}')">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderTrabajos(){
+  const lista = trabajos.filter(t => t.moto_id === motoActual.id);
+  const cont = document.getElementById('listaTrabajos');
+  if(lista.length === 0){
+    cont.innerHTML = `<div class="empty">Sin trabajos registrados todavía.</div>`;
+    return;
+  }
+  cont.innerHTML = `<div class="card">` + lista.map(t => `
+    <div class="row-item">
+      <div>
+        <div class="desc">${escapeHtml(t.descripcion)}</div>
+        <div class="date">${fmtDate(t.fecha)}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="amount">${t.costo ? fmtMoney(t.costo) : ''}</div>
+        <button class="icon-btn" onclick="eliminarTrabajo('${t.id}')" title="Eliminar">✕</button>
+      </div>
+    </div>`).join('') + `</div>`;
+}
+
+/* ---------- MODALES ---------- */
+function cerrarModal(){
+  document.getElementById('modalContainer').innerHTML = '';
+}
+
+function abrirModalCliente(id){
+  const editando = clientes.find(c => c.id === id);
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this) cerrarModal()">
+      <div class="modal">
+        <h2>${editando ? 'Editar cliente' : 'Nuevo cliente'}</h2>
+        <div class="field">
+          <label>Nombre</label>
+          <input id="fNombre" type="text" value="${editando ? escapeHtml(editando.nombre) : ''}">
+        </div>
+        <div class="field">
+          <label>Teléfono (opcional)</label>
+          <input id="fTelefono" type="tel" value="${editando ? escapeHtml(editando.telefono||'') : ''}">
+        </div>
+        <div class="modal-actions">
+          <button class="btn-ghost" onclick="cerrarModal()">Cancelar</button>
+          <button class="btn-primary" onclick="guardarCliente(${editando ? "'"+editando.id+"'" : 'null'})">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function guardarCliente(id){
+  const nombre = document.getElementById('fNombre').value.trim();
+  const telefono = document.getElementById('fTelefono').value.trim();
+  if(!nombre){ showToast('Falta el nombre'); return; }
+  if(id){
+    await supabase.from('taller_clientes').update({nombre, telefono}).eq('id', id);
+  } else {
+    await supabase.from('taller_clientes').insert({nombre, telefono});
+  }
+  cerrarModal();
+  await cargarTodo();
+  showToast('Guardado');
+}
+
+async function eliminarCliente(id){
+  if(!confirm('¿Eliminar este cliente y todas sus motos, trabajos y presupuestos?')) return;
+  await supabase.from('taller_clientes').delete().eq('id', id);
+  await cargarTodo();
+  volverALista();
+  showToast('Cliente eliminado');
+}
+
+function abrirModalMoto(id){
+  const editando = motos.find(m => m.id === id);
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this) cerrarModal()">
+      <div class="modal">
+        <h2>${editando ? 'Editar moto' : 'Nueva moto'}</h2>
+        <div class="field-row">
+          <div class="field">
+            <label>Marca</label>
+            <input id="fMarca" type="text" value="${editando ? escapeHtml(editando.marca||'') : ''}">
+          </div>
+          <div class="field">
+            <label>Modelo</label>
+            <input id="fModelo" type="text" value="${editando ? escapeHtml(editando.modelo||'') : ''}">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Año</label>
+            <input id="fAnio" type="text" value="${editando ? escapeHtml(editando.anio||'') : ''}">
+          </div>
+          <div class="field">
+            <label>Patente</label>
+            <input id="fPatente" type="text" value="${editando ? escapeHtml(editando.patente||'') : ''}">
+          </div>
+        </div>
+        <div class="field">
+          <label>Observaciones (opcional)</label>
+          <textarea id="fObs" rows="2">${editando ? escapeHtml(editando.observaciones||'') : ''}</textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-ghost" onclick="cerrarModal()">Cancelar</button>
+          <button class="btn-primary" onclick="guardarMoto(${editando ? "'"+editando.id+"'" : 'null'})">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function guardarMoto(id){
+  const data = {
+    cliente_id: clienteActual.id,
+    marca: document.getElementById('fMarca').value.trim(),
+    modelo: document.getElementById('fModelo').value.trim(),
+    anio: document.getElementById('fAnio').value.trim(),
+    patente: document.getElementById('fPatente').value.trim(),
+    observaciones: document.getElementById('fObs').value.trim()
+  };
+  if(id){
+    await supabase.from('taller_motos').update(data).eq('id', id);
+  } else {
+    await supabase.from('taller_motos').insert(data);
+  }
+  cerrarModal();
+  await cargarTodo();
+  clienteActual = clientes.find(c => c.id === clienteActual.id);
+  renderMotos();
+  showToast('Guardado');
+}
+
+async function eliminarMoto(id){
+  if(!confirm('¿Eliminar esta moto y su historial?')) return;
+  await supabase.from('taller_motos').delete().eq('id', id);
+  await cargarTodo();
+  renderMotos();
+  showToast('Moto eliminada');
+}
+
+function abrirModalTrabajo(){
+  const hoy = new Date().toISOString().slice(0,10);
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this) cerrarModal()">
+      <div class="modal">
+        <h2>Registrar trabajo realizado</h2>
+        <div class="field">
+          <label>Fecha</label>
+          <input id="fFecha" type="date" value="${hoy}">
+        </div>
+        <div class="field">
+          <label>Descripción (ej: se cambió rulemán de rueda delantera)</label>
+          <textarea id="fDesc" rows="2"></textarea>
+        </div>
+        <div class="field">
+          <label>Costo (opcional)</label>
+          <input id="fCosto" type="number" placeholder="0">
+        </div>
+        <div class="modal-actions">
+          <button class="btn-ghost" onclick="cerrarModal()">Cancelar</button>
+          <button class="btn-primary" onclick="guardarTrabajo()">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function guardarTrabajo(){
+  const fecha = document.getElementById('fFecha').value;
+  const descripcion = document.getElementById('fDesc').value.trim();
+  const costo = document.getElementById('fCosto').value;
+  if(!fecha || !descripcion){ showToast('Completá fecha y descripción'); return; }
+  await supabase.from('taller_trabajos').insert({
+    moto_id: motoActual.id, fecha, descripcion, costo: costo ? Number(costo) : null
+  });
+  cerrarModal();
+  await cargarTodo();
+  motoActual = motos.find(m => m.id === motoActual.id);
+  renderTrabajos();
+  showToast('Trabajo registrado');
+}
+
+async function eliminarTrabajo(id){
+  if(!confirm('¿Eliminar este trabajo del historial?')) return;
+  await supabase.from('taller_trabajos').delete().eq('id', id);
+  await cargarTodo();
+  renderTrabajos();
+}
+
+let itemCounter = 0;
+function abrirModalPresupuesto(){
+  const hoy = new Date().toISOString().slice(0,10);
+  itemCounter = 0;
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this) cerrarModal()">
+      <div class="modal">
+        <h2>Nuevo presupuesto</h2>
+        <div class="field">
+          <label>Fecha</label>
+          <input id="fFechaP" type="date" value="${hoy}">
+        </div>
+        <div class="field">
+          <label>Ítems</label>
+          <div id="itemsContainer"></div>
+          <button class="btn-ghost btn-sm" style="margin-top:6px;" onclick="agregarItemPresupuesto()">+ Agregar ítem</button>
+        </div>
+        <div class="total-row">
+          <span>Total</span>
+          <span id="totalPresupuesto">$0</span>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-ghost" onclick="cerrarModal()">Cancelar</button>
+          <button class="btn-primary" onclick="guardarPresupuesto()">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  agregarItemPresupuesto();
+}
+
+function agregarItemPresupuesto(){
+  itemCounter++;
+  const id = 'item'+itemCounter;
+  const cont = document.getElementById('itemsContainer');
+  const div = document.createElement('div');
+  div.className = 'item-row';
+  div.id = id;
+  div.innerHTML = `
+    <input type="text" placeholder="Descripción" oninput="recalcularTotal()">
+    <input type="number" placeholder="Cant." value="1" oninput="recalcularTotal()">
+    <input type="number" placeholder="Precio unit." oninput="recalcularTotal()">
+    <button class="item-remove" onclick="document.getElementById('${id}').remove(); recalcularTotal();">✕</button>`;
+  cont.appendChild(div);
+}
+
+function leerItemsPresupuesto(){
+  const rows = document.querySelectorAll('#itemsContainer .item-row');
+  const items = [];
+  rows.forEach(r => {
+    const inputs = r.querySelectorAll('input');
+    const desc = inputs[0].value.trim();
+    const cant = Number(inputs[1].value)||0;
+    const precio = Number(inputs[2].value)||0;
+    if(desc) items.push({desc, cant, precio});
+  });
+  return items;
+}
+
+function recalcularTotal(){
+  const items = leerItemsPresupuesto();
+  const total = items.reduce((acc,it) => acc + it.cant*it.precio, 0);
+  document.getElementById('totalPresupuesto').textContent = fmtMoney(total);
+}
+
+async function guardarPresupuesto(){
+  const fecha = document.getElementById('fFechaP').value;
+  const items = leerItemsPresupuesto();
+  if(!fecha || items.length === 0){ showToast('Completá fecha y al menos un ítem'); return; }
+  const total = items.reduce((acc,it) => acc + it.cant*it.precio, 0);
+  await supabase.from('taller_presupuestos').insert({
+    moto_id: motoActual.id, fecha, items, total, estado: 'pendiente'
+  });
+  cerrarModal();
+  await cargarTodo();
+  motoActual = motos.find(m => m.id === motoActual.id);
+  renderPresupuestos();
+  showToast('Presupuesto guardado');
+}
+
+async function cambiarEstadoPresupuesto(id){
+  const p = presupuestos.find(x => x.id === id);
+  const orden = ['pendiente','aprobado','rechazado'];
+  const siguiente = orden[(orden.indexOf(p.estado)+1) % orden.length];
+  await supabase.from('taller_presupuestos').update({estado: siguiente}).eq('id', id);
+  await cargarTodo();
+  motoActual = motos.find(m => m.id === motoActual.id);
+  renderPresupuestos();
+}
+
+async function eliminarPresupuesto(id){
+  if(!confirm('¿Eliminar este presupuesto?')) return;
+  await supabase.from('taller_presupuestos').delete().eq('id', id);
+  await cargarTodo();
+  renderPresupuestos();
+}
+
+function exportarPresupuesto(id){
+  const p = presupuestos.find(x => x.id === id);
+  const moto = motos.find(m => m.id === p.moto_id);
+  const cliente = clientes.find(c => c.id === moto.cliente_id);
+
+  const encabezado = [
+    ['Presupuesto'],
+    ['Cliente', cliente.nombre],
+    ['Moto', `${moto.marca||''} ${moto.modelo||''} ${moto.anio||''}`.trim()],
+    ['Patente', moto.patente||''],
+    ['Fecha', fmtDate(p.fecha)],
+    [],
+    ['Descripción','Cantidad','Precio unitario','Subtotal']
+  ];
+  const filas = p.items.map(it => [it.desc, it.cant, it.precio, it.cant*it.precio]);
+  const pie = [[], ['','','Total', p.total]];
+
+  const data = [...encabezado, ...filas, ...pie];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:35},{wch:10},{wch:14},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Presupuesto');
+  const nombreArchivo = `Presupuesto_${cliente.nombre.replace(/\s+/g,'_')}_${p.fecha}.xlsx`;
+  XLSX.writeFile(wb, nombreArchivo);
+}
+
+function escapeHtml(str){
+  if(str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+cargarTodo();
+</script>
+</body>
+</html>
