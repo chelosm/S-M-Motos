@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prueba 2</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body style="background:#14181c; color:#fff; font-family:sans-serif; padding:30px; text-align:center;">
+  <h1>Prueba 2</h1>
+  <p id="estadoLibs">Cargando...</p>
+  <button data-action="probar" style="background:#e8862c; color:#000; font-size:20px; padding:20px 30px; border:none; border-radius:10px;">
+    TOCAME (delegado)
+  </button>
+  <p id="resultado" style="margin-top:30px; font-size:18px;"></p>
+
+  <script>
+    document.getElementById('estadoLibs').textContent =
+      'Supabase: ' + (typeof window.supabase !== 'undefined' ? 'cargó OK' : 'NO cargó') +
+      ' | XLSX: ' + (typeof window.XLSX !== 'undefined' ? 'cargó OK' : 'NO cargó');
+
+    document.body.addEventListener('click', function(e){
+      var btn = e.target.closest('[data-action]');
+      if(!btn) return;
+      document.getElementById('resultado').textContent = '✅ FUNCIONÓ (delegado) - ' + new Date().toLocaleTimeString();
+    });
+  </script>
+</body>
+</html>
