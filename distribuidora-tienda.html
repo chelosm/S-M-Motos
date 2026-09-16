@@ -380,7 +380,7 @@
 
 <div id="cart-bar">
   <div>
-    <span>🧾 <b id="cart-count">0</b> items &middot; <b id="cart-total">$0</b></span>
+    <span>🧾 Presupuesto</span>
     <button onclick="abrirCarrito()">Ver presupuesto</button>
   </div>
 </div>
@@ -1204,19 +1204,9 @@ function quitarDeCompartido(id){
 }
 
 function actualizarBarra(){
-  let count = 0, total = 0;
-  Object.keys(cart).forEach(clave=>{
-    const it = itemCarrito(clave);
-    if(!it) return;
-    count += cart[clave];
-    total += cart[clave] * it.p.pack_size * it.precio;
-  });
-  itemsDelCatalogoCompartidos().forEach(it=>{
-    count += it.cantidad;
-    total += it.cantidad * it.precioUnitario;
-  });
-  document.getElementById("cart-count").textContent = count;
-  document.getElementById("cart-total").textContent = money(total);
+  // La barra de abajo ya no muestra cantidad/total (podía verse distinto al total
+  // real del presupuesto compartido). El botón "Ver presupuesto" sigue mostrando
+  // el detalle correcto siempre.
 }
 
 function abrirCarrito(){
