@@ -635,10 +635,6 @@ function abrirModalMoto(id){
           '<div class="field"><label>Año</label><input id="fAnio" type="text" value="' + (editando ? escapeAttr(editando.anio||'') : '') + '"></div>' +
           '<div class="field"><label>Patente</label><input id="fPatente" type="text" value="' + (editando ? escapeAttr(editando.patente||'') : '') + '"></div>' +
         '</div>' +
-        '<div class="field">' +
-          '<label>Observaciones (opcional)</label>' +
-          '<textarea id="fObs" rows="2">' + (editando ? escapeHtml(editando.observaciones||'') : '') + '</textarea>' +
-        '</div>' +
         '<div class="modal-actions">' +
           '<button class="btn-ghost" data-action="cerrar-modal">Cancelar</button>' +
           '<button class="btn-primary" data-action="guardar-moto" data-id="' + (editando ? editando.id : '') + '">Guardar</button>' +
@@ -653,8 +649,7 @@ function guardarMoto(id){
     marca: document.getElementById('fMarca').value.trim(),
     modelo: document.getElementById('fModelo').value.trim(),
     anio: document.getElementById('fAnio').value.trim(),
-    patente: document.getElementById('fPatente').value.trim(),
-    observaciones: document.getElementById('fObs').value.trim()
+    patente: document.getElementById('fPatente').value.trim()
   };
   const promesa = id
     ? db.from('taller_motos').update(data).eq('id', id)
@@ -731,8 +726,9 @@ function abrirModalPresupuesto(){
       '<div class="modal">' +
         '<h2>Nuevo presupuesto</h2>' +
         '<div class="field"><label>Fecha</label><input id="fFechaP" type="date" value="' + hoy + '"></div>' +
+        '<div class="field"><label>Mano de obra (opcional)</label><input id="fManoObra" type="number" placeholder="0" data-role="item-input"></div>' +
         '<div class="field">' +
-          '<label>Ítems</label>' +
+          '<label>Repuestos</label>' +
           '<div id="itemsContainer"></div>' +
           '<button class="btn-ghost btn-sm" style="margin-top:6px;" data-action="agregar-item">+ Agregar ítem</button>' +
         '</div>' +
@@ -774,9 +770,15 @@ function leerItemsPresupuesto(){
   return items;
 }
 
+function leerManoObra(){
+  const el = document.getElementById('fManoObra');
+  return el ? (Number(el.value)||0) : 0;
+}
+
 function recalcularTotal(){
   const items = leerItemsPresupuesto();
-  const total = items.reduce(function(acc,it){ return acc + it.cant*it.precio; }, 0);
+  const manoObra = leerManoObra();
+  const total = items.reduce(function(acc,it){ return acc + it.cant*it.precio; }, manoObra);
   const el = document.getElementById('totalPresupuesto');
   if(el) el.textContent = fmtMoney(total);
 }
@@ -784,7 +786,9 @@ function recalcularTotal(){
 function guardarPresupuesto(){
   const fecha = document.getElementById('fFechaP').value;
   const items = leerItemsPresupuesto();
-  if(!fecha || items.length === 0){ showToast('Completá fecha y al menos un ítem'); return; }
+  const manoObra = leerManoObra();
+  if(!fecha || (items.length === 0 && manoObra === 0)){ showToast('Completá fecha y al menos un ítem o la mano de obra'); return; }
+  if(manoObra > 0){ items.unshift({desc: 'Mano de obra', cant: 1, precio: manoObra}); }
   const total = items.reduce(function(acc,it){ return acc + it.cant*it.precio; }, 0);
   db.from('taller_presupuestos').insert({
     moto_id: motoActual.id, fecha: fecha, items: items, total: total, estado: 'pendiente'
