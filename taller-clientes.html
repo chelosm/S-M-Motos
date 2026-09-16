@@ -276,7 +276,7 @@
   <div id="viewClientes">
     <div class="search-row">
       <input type="text" id="buscarCliente" placeholder="Buscar cliente...">
-      <button class="btn-primary" onclick="abrirModalCliente()">+ Cliente</button>
+      <button class="btn-primary" data-action="nuevo-cliente">+ Cliente</button>
     </div>
     <div id="listaClientes"></div>
   </div>
@@ -284,13 +284,13 @@
   <!-- VISTA: DETALLE DE CLIENTE (motos) -->
   <div id="viewCliente" class="hidden">
     <div class="topbar">
-      <button class="back-btn" onclick="volverALista()">← Clientes</button>
+      <button class="back-btn" data-action="volver-lista">← Clientes</button>
     </div>
     <div class="card" id="clienteHeader"></div>
 
     <div class="section-title">
       <span>Motos</span>
-      <button class="btn-primary btn-sm" onclick="abrirModalMoto()">+ Moto</button>
+      <button class="btn-primary btn-sm" data-action="nueva-moto">+ Moto</button>
     </div>
     <div id="listaMotos"></div>
   </div>
@@ -298,19 +298,19 @@
   <!-- VISTA: DETALLE DE MOTO (historial + presupuestos) -->
   <div id="viewMoto" class="hidden">
     <div class="topbar">
-      <button class="back-btn" onclick="volverACliente()">← <span id="volverClienteNombre"></span></button>
+      <button class="back-btn" data-action="volver-cliente">← <span id="volverClienteNombre"></span></button>
     </div>
     <div class="card" id="motoHeader"></div>
 
     <div class="section-title">
       <span>Presupuestos</span>
-      <button class="btn-primary btn-sm" onclick="abrirModalPresupuesto()">+ Presupuesto</button>
+      <button class="btn-primary btn-sm" data-action="nuevo-presupuesto">+ Presupuesto</button>
     </div>
     <div id="listaPresupuestos"></div>
 
     <div class="section-title">
       <span>Trabajos realizados</span>
-      <button class="btn-primary btn-sm" onclick="abrirModalTrabajo()">+ Trabajo</button>
+      <button class="btn-primary btn-sm" data-action="nuevo-trabajo">+ Trabajo</button>
     </div>
     <div id="listaTrabajos"></div>
   </div>
@@ -328,12 +328,12 @@
 const SUPABASE_URL = "https://lzozlxxcnkqznnuueuxd.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_pX8-nV0ceP1Q5CWPl2baiA_S9BSCDq6";
 
-window.onerror = function(msg, url, line, col, error){
+window.addEventListener('error', function(e){
   var d = document.createElement('div');
   d.style.cssText = 'background:#c0453a;color:#fff;padding:12px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;';
-  d.textContent = 'ERROR: ' + msg + ' (línea ' + line + ')';
+  d.textContent = 'ERROR: ' + e.message + ' (línea ' + e.lineno + ')';
   document.body.prepend(d);
-};
+});
 
 /* ======================================================
    Tablas necesarias en Supabase (ejecutar una sola vez
@@ -401,7 +401,7 @@ function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 1800);
+  setTimeout(function(){ t.classList.remove('show'); }, 1800);
 }
 
 function fmtMoney(n){
@@ -410,47 +410,47 @@ function fmtMoney(n){
 }
 function fmtDate(d){
   if(!d) return '';
-  const [y,m,day] = d.split('-');
-  return `${day}/${m}/${y}`;
+  const partes = d.split('-');
+  return partes[2] + '/' + partes[1] + '/' + partes[0];
 }
 
-async function cargarTodo(){
+function cargarTodo(){
   if(!dbReady){
     document.getElementById('configNotice').classList.remove('hidden');
-    return;
+    return Promise.resolve();
   }
-  const [c, m, t, p] = await Promise.all([
+  return Promise.all([
     supabase.from('taller_clientes').select('*').order('nombre'),
     supabase.from('taller_motos').select('*'),
     supabase.from('taller_trabajos').select('*').order('fecha', {ascending:false}),
     supabase.from('taller_presupuestos').select('*').order('fecha', {ascending:false})
-  ]);
-  clientes = c.data || [];
-  motos = m.data || [];
-  trabajos = t.data || [];
-  presupuestos = p.data || [];
-  renderClientes();
+  ]).then(function(resultados){
+    clientes = resultados[0].data || [];
+    motos = resultados[1].data || [];
+    trabajos = resultados[2].data || [];
+    presupuestos = resultados[3].data || [];
+    renderClientes();
+  });
 }
 
 /* ---------- VISTA CLIENTES ---------- */
 function renderClientes(){
   const filtro = (document.getElementById('buscarCliente').value || '').toLowerCase();
   const cont = document.getElementById('listaClientes');
-  const filtrados = clientes.filter(c => c.nombre.toLowerCase().includes(filtro));
+  const filtrados = clientes.filter(function(c){ return c.nombre.toLowerCase().indexOf(filtro) !== -1; });
   if(filtrados.length === 0){
-    cont.innerHTML = `<div class="empty">${clientes.length===0 ? 'Todavía no agregaste clientes.' : 'No hay resultados.'}</div>`;
+    cont.innerHTML = '<div class="empty">' + (clientes.length===0 ? 'Todavía no agregaste clientes.' : 'No hay resultados.') + '</div>';
     return;
   }
-  cont.innerHTML = filtrados.map(c => {
-    const nMotos = motos.filter(m => m.cliente_id === c.id).length;
-    return `
-      <div class="card client-card" onclick="verCliente('${c.id}')">
-        <div>
-          <div class="client-name">${escapeHtml(c.nombre)}</div>
-          <div class="client-meta">${nMotos} moto${nMotos===1?'':'s'}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
-        </div>
-        <div class="chevron">›</div>
-      </div>`;
+  cont.innerHTML = filtrados.map(function(c){
+    const nMotos = motos.filter(function(m){ return m.cliente_id === c.id; }).length;
+    return '<div class="card client-card" data-action="ver-cliente" data-id="' + c.id + '">' +
+      '<div>' +
+        '<div class="client-name">' + escapeHtml(c.nombre) + '</div>' +
+        '<div class="client-meta">' + nMotos + ' moto' + (nMotos===1?'':'s') + (c.telefono ? ' · ' + escapeHtml(c.telefono) : '') + '</div>' +
+      '</div>' +
+      '<div class="chevron">›</div>' +
+    '</div>';
   }).join('');
 }
 document.getElementById('buscarCliente').addEventListener('input', renderClientes);
@@ -464,49 +464,50 @@ function volverALista(){
 
 /* ---------- VISTA CLIENTE (motos) ---------- */
 function verCliente(id){
-  clienteActual = clientes.find(c => c.id === id);
+  clienteActual = clientes.find(function(c){ return c.id === id; });
   document.getElementById('viewClientes').classList.add('hidden');
   document.getElementById('viewCliente').classList.remove('hidden');
-  document.getElementById('clienteHeader').innerHTML = `
-    <div class="client-name">${escapeHtml(clienteActual.nombre)}</div>
-    ${clienteActual.telefono ? `<div class="client-meta">📞 ${escapeHtml(clienteActual.telefono)}</div>` : ''}
-    <div style="margin-top:10px; display:flex; gap:8px;">
-      <button class="btn-ghost btn-sm" onclick="abrirModalCliente('${clienteActual.id}')">Editar</button>
-      <button class="btn-danger btn-sm" onclick="eliminarCliente('${clienteActual.id}')">Eliminar cliente</button>
-    </div>`;
+  document.getElementById('clienteHeader').innerHTML =
+    '<div class="client-name">' + escapeHtml(clienteActual.nombre) + '</div>' +
+    (clienteActual.telefono ? '<div class="client-meta">📞 ' + escapeHtml(clienteActual.telefono) + '</div>' : '') +
+    '<div style="margin-top:10px; display:flex; gap:8px;">' +
+      '<button class="btn-ghost btn-sm" data-action="editar-cliente" data-id="' + clienteActual.id + '">Editar</button>' +
+      '<button class="btn-danger btn-sm" data-action="eliminar-cliente" data-id="' + clienteActual.id + '">Eliminar cliente</button>' +
+    '</div>';
   renderMotos();
 }
 
 function renderMotos(){
-  const lista = motos.filter(m => m.cliente_id === clienteActual.id);
+  const lista = motos.filter(function(m){ return m.cliente_id === clienteActual.id; });
   const cont = document.getElementById('listaMotos');
   if(lista.length === 0){
-    cont.innerHTML = `<div class="empty">Sin motos cargadas todavía.</div>`;
+    cont.innerHTML = '<div class="empty">Sin motos cargadas todavía.</div>';
     return;
   }
-  cont.innerHTML = lista.map(m => `
-    <div class="moto-card">
-      <div class="moto-title">${escapeHtml(m.marca||'')} ${escapeHtml(m.modelo||'')} ${m.anio ? '· '+escapeHtml(m.anio) : ''}</div>
-      <div class="moto-sub">${m.patente ? 'Patente: '+escapeHtml(m.patente) : 'Sin patente cargada'}</div>
-      ${m.observaciones ? `<div class="moto-sub">${escapeHtml(m.observaciones)}</div>` : ''}
-      <div class="moto-actions">
-        <button class="btn-ghost btn-sm" onclick="verMoto('${m.id}')">Ver historial</button>
-        <button class="btn-ghost btn-sm" onclick="abrirModalMoto('${m.id}')">Editar</button>
-        <button class="btn-danger btn-sm" onclick="eliminarMoto('${m.id}')">Eliminar</button>
-      </div>
-    </div>`).join('');
+  cont.innerHTML = lista.map(function(m){
+    return '<div class="moto-card">' +
+      '<div class="moto-title">' + escapeHtml(m.marca||'') + ' ' + escapeHtml(m.modelo||'') + ' ' + (m.anio ? '· '+escapeHtml(m.anio) : '') + '</div>' +
+      '<div class="moto-sub">' + (m.patente ? 'Patente: '+escapeHtml(m.patente) : 'Sin patente cargada') + '</div>' +
+      (m.observaciones ? '<div class="moto-sub">' + escapeHtml(m.observaciones) + '</div>' : '') +
+      '<div class="moto-actions">' +
+        '<button class="btn-ghost btn-sm" data-action="ver-moto" data-id="' + m.id + '">Ver historial</button>' +
+        '<button class="btn-ghost btn-sm" data-action="editar-moto" data-id="' + m.id + '">Editar</button>' +
+        '<button class="btn-danger btn-sm" data-action="eliminar-moto" data-id="' + m.id + '">Eliminar</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 /* ---------- VISTA MOTO (presupuestos + trabajos) ---------- */
 function verMoto(id){
-  motoActual = motos.find(m => m.id === id);
+  motoActual = motos.find(function(m){ return m.id === id; });
   document.getElementById('viewCliente').classList.add('hidden');
   document.getElementById('viewMoto').classList.remove('hidden');
   document.getElementById('volverClienteNombre').textContent = clienteActual.nombre;
-  document.getElementById('motoHeader').innerHTML = `
-    <div class="moto-title">${escapeHtml(motoActual.marca||'')} ${escapeHtml(motoActual.modelo||'')} ${motoActual.anio ? '· '+escapeHtml(motoActual.anio) : ''}</div>
-    <div class="moto-sub">${motoActual.patente ? 'Patente: '+escapeHtml(motoActual.patente) : 'Sin patente cargada'}</div>
-    <div class="moto-sub">Cliente: ${escapeHtml(clienteActual.nombre)}</div>`;
+  document.getElementById('motoHeader').innerHTML =
+    '<div class="moto-title">' + escapeHtml(motoActual.marca||'') + ' ' + escapeHtml(motoActual.modelo||'') + ' ' + (motoActual.anio ? '· '+escapeHtml(motoActual.anio) : '') + '</div>' +
+    '<div class="moto-sub">' + (motoActual.patente ? 'Patente: '+escapeHtml(motoActual.patente) : 'Sin patente cargada') + '</div>' +
+    '<div class="moto-sub">Cliente: ' + escapeHtml(clienteActual.nombre) + '</div>';
   renderPresupuestos();
   renderTrabajos();
 }
@@ -519,50 +520,53 @@ function volverACliente(){
 }
 
 function renderPresupuestos(){
-  const lista = presupuestos.filter(p => p.moto_id === motoActual.id);
+  const lista = presupuestos.filter(function(p){ return p.moto_id === motoActual.id; });
   const cont = document.getElementById('listaPresupuestos');
   if(lista.length === 0){
-    cont.innerHTML = `<div class="empty">Sin presupuestos todavía.</div>`;
+    cont.innerHTML = '<div class="empty">Sin presupuestos todavía.</div>';
     return;
   }
-  cont.innerHTML = lista.map(p => `
-    <div class="card">
-      <div class="row-item" style="border:none; padding:0;">
-        <div>
-          <div class="date">${fmtDate(p.fecha)}</div>
-          <div class="estado-tag estado-${p.estado}">${p.estado}</div>
-        </div>
-        <div class="amount">${fmtMoney(p.total)}</div>
-      </div>
-      <div style="margin-top:10px; font-size:13px; color:var(--text-dim);">
-        ${(p.items||[]).map(it => `${escapeHtml(it.desc)} (x${it.cant}) — ${fmtMoney(it.precio*it.cant)}`).join('<br>')}
-      </div>
-      <div class="moto-actions">
-        <button class="btn-ghost btn-sm" onclick="exportarPresupuesto('${p.id}')">Exportar Excel</button>
-        <button class="btn-ghost btn-sm" onclick="cambiarEstadoPresupuesto('${p.id}')">Cambiar estado</button>
-        <button class="btn-danger btn-sm" onclick="eliminarPresupuesto('${p.id}')">Eliminar</button>
-      </div>
-    </div>`).join('');
+  cont.innerHTML = lista.map(function(p){
+    const items = (p.items||[]).map(function(it){
+      return escapeHtml(it.desc) + ' (x' + it.cant + ') — ' + fmtMoney(it.precio*it.cant);
+    }).join('<br>');
+    return '<div class="card">' +
+      '<div class="row-item" style="border:none; padding:0;">' +
+        '<div>' +
+          '<div class="date">' + fmtDate(p.fecha) + '</div>' +
+          '<div class="estado-tag estado-' + p.estado + '">' + p.estado + '</div>' +
+        '</div>' +
+        '<div class="amount">' + fmtMoney(p.total) + '</div>' +
+      '</div>' +
+      '<div style="margin-top:10px; font-size:13px; color:var(--text-dim);">' + items + '</div>' +
+      '<div class="moto-actions">' +
+        '<button class="btn-ghost btn-sm" data-action="exportar-presupuesto" data-id="' + p.id + '">Exportar Excel</button>' +
+        '<button class="btn-ghost btn-sm" data-action="cambiar-estado-presupuesto" data-id="' + p.id + '">Cambiar estado</button>' +
+        '<button class="btn-danger btn-sm" data-action="eliminar-presupuesto" data-id="' + p.id + '">Eliminar</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 function renderTrabajos(){
-  const lista = trabajos.filter(t => t.moto_id === motoActual.id);
+  const lista = trabajos.filter(function(t){ return t.moto_id === motoActual.id; });
   const cont = document.getElementById('listaTrabajos');
   if(lista.length === 0){
-    cont.innerHTML = `<div class="empty">Sin trabajos registrados todavía.</div>`;
+    cont.innerHTML = '<div class="empty">Sin trabajos registrados todavía.</div>';
     return;
   }
-  cont.innerHTML = `<div class="card">` + lista.map(t => `
-    <div class="row-item">
-      <div>
-        <div class="desc">${escapeHtml(t.descripcion)}</div>
-        <div class="date">${fmtDate(t.fecha)}</div>
-      </div>
-      <div style="text-align:right;">
-        <div class="amount">${t.costo ? fmtMoney(t.costo) : ''}</div>
-        <button class="icon-btn" onclick="eliminarTrabajo('${t.id}')" title="Eliminar">✕</button>
-      </div>
-    </div>`).join('') + `</div>`;
+  cont.innerHTML = '<div class="card">' + lista.map(function(t){
+    return '<div class="row-item">' +
+      '<div>' +
+        '<div class="desc">' + escapeHtml(t.descripcion) + '</div>' +
+        '<div class="date">' + fmtDate(t.fecha) + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;">' +
+        '<div class="amount">' + (t.costo ? fmtMoney(t.costo) : '') + '</div>' +
+        '<button class="icon-btn" data-action="eliminar-trabajo" data-id="' + t.id + '" title="Eliminar">✕</button>' +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
 }
 
 /* ---------- MODALES ---------- */
@@ -571,88 +575,79 @@ function cerrarModal(){
 }
 
 function abrirModalCliente(id){
-  const editando = clientes.find(c => c.id === id);
-  document.getElementById('modalContainer').innerHTML = `
-    <div class="modal-bg" onclick="if(event.target===this) cerrarModal()">
-      <div class="modal">
-        <h2>${editando ? 'Editar cliente' : 'Nuevo cliente'}</h2>
-        <div class="field">
-          <label>Nombre</label>
-          <input id="fNombre" type="text" value="${editando ? escapeHtml(editando.nombre) : ''}">
-        </div>
-        <div class="field">
-          <label>Teléfono (opcional)</label>
-          <input id="fTelefono" type="tel" value="${editando ? escapeHtml(editando.telefono||'') : ''}">
-        </div>
-        <div class="modal-actions">
-          <button class="btn-ghost" onclick="cerrarModal()">Cancelar</button>
-          <button class="btn-primary" onclick="guardarCliente(${editando ? "'"+editando.id+"'" : 'null'})">Guardar</button>
-        </div>
-      </div>
-    </div>`;
+  const editando = clientes.find(function(c){ return c.id === id; });
+  document.getElementById('modalContainer').innerHTML =
+    '<div class="modal-bg" data-action="cerrar-modal-bg">' +
+      '<div class="modal">' +
+        '<h2>' + (editando ? 'Editar cliente' : 'Nuevo cliente') + '</h2>' +
+        '<div class="field">' +
+          '<label>Nombre</label>' +
+          '<input id="fNombre" type="text" value="' + (editando ? escapeAttr(editando.nombre) : '') + '">' +
+        '</div>' +
+        '<div class="field">' +
+          '<label>Teléfono (opcional)</label>' +
+          '<input id="fTelefono" type="tel" value="' + (editando ? escapeAttr(editando.telefono||'') : '') + '">' +
+        '</div>' +
+        '<div class="modal-actions">' +
+          '<button class="btn-ghost" data-action="cerrar-modal">Cancelar</button>' +
+          '<button class="btn-primary" data-action="guardar-cliente" data-id="' + (editando ? editando.id : '') + '">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
 }
 
-async function guardarCliente(id){
+function guardarCliente(id){
   const nombre = document.getElementById('fNombre').value.trim();
   const telefono = document.getElementById('fTelefono').value.trim();
   if(!nombre){ showToast('Falta el nombre'); return; }
-  if(id){
-    await supabase.from('taller_clientes').update({nombre, telefono}).eq('id', id);
-  } else {
-    await supabase.from('taller_clientes').insert({nombre, telefono});
-  }
-  cerrarModal();
-  await cargarTodo();
-  showToast('Guardado');
+  const promesa = id
+    ? supabase.from('taller_clientes').update({nombre: nombre, telefono: telefono}).eq('id', id)
+    : supabase.from('taller_clientes').insert({nombre: nombre, telefono: telefono});
+  promesa.then(function(){
+    cerrarModal();
+    return cargarTodo();
+  }).then(function(){
+    showToast('Guardado');
+  });
 }
 
-async function eliminarCliente(id){
+function eliminarCliente(id){
   if(!confirm('¿Eliminar este cliente y todas sus motos, trabajos y presupuestos?')) return;
-  await supabase.from('taller_clientes').delete().eq('id', id);
-  await cargarTodo();
-  volverALista();
-  showToast('Cliente eliminado');
+  supabase.from('taller_clientes').delete().eq('id', id).then(function(){
+    return cargarTodo();
+  }).then(function(){
+    volverALista();
+    showToast('Cliente eliminado');
+  });
 }
 
 function abrirModalMoto(id){
-  const editando = motos.find(m => m.id === id);
-  document.getElementById('modalContainer').innerHTML = `
-    <div class="modal-bg" onclick="if(event.target===this) cerrarModal()">
-      <div class="modal">
-        <h2>${editando ? 'Editar moto' : 'Nueva moto'}</h2>
-        <div class="field-row">
-          <div class="field">
-            <label>Marca</label>
-            <input id="fMarca" type="text" value="${editando ? escapeHtml(editando.marca||'') : ''}">
-          </div>
-          <div class="field">
-            <label>Modelo</label>
-            <input id="fModelo" type="text" value="${editando ? escapeHtml(editando.modelo||'') : ''}">
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label>Año</label>
-            <input id="fAnio" type="text" value="${editando ? escapeHtml(editando.anio||'') : ''}">
-          </div>
-          <div class="field">
-            <label>Patente</label>
-            <input id="fPatente" type="text" value="${editando ? escapeHtml(editando.patente||'') : ''}">
-          </div>
-        </div>
-        <div class="field">
-          <label>Observaciones (opcional)</label>
-          <textarea id="fObs" rows="2">${editando ? escapeHtml(editando.observaciones||'') : ''}</textarea>
-        </div>
-        <div class="modal-actions">
-          <button class="btn-ghost" onclick="cerrarModal()">Cancelar</button>
-          <button class="btn-primary" onclick="guardarMoto(${editando ? "'"+editando.id+"'" : 'null'})">Guardar</button>
-        </div>
-      </div>
-    </div>`;
+  const editando = motos.find(function(m){ return m.id === id; });
+  document.getElementById('modalContainer').innerHTML =
+    '<div class="modal-bg" data-action="cerrar-modal-bg">' +
+      '<div class="modal">' +
+        '<h2>' + (editando ? 'Editar moto' : 'Nueva moto') + '</h2>' +
+        '<div class="field-row">' +
+          '<div class="field"><label>Marca</label><input id="fMarca" type="text" value="' + (editando ? escapeAttr(editando.marca||'') : '') + '"></div>' +
+          '<div class="field"><label>Modelo</label><input id="fModelo" type="text" value="' + (editando ? escapeAttr(editando.modelo||'') : '') + '"></div>' +
+        '</div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label>Año</label><input id="fAnio" type="text" value="' + (editando ? escapeAttr(editando.anio||'') : '') + '"></div>' +
+          '<div class="field"><label>Patente</label><input id="fPatente" type="text" value="' + (editando ? escapeAttr(editando.patente||'') : '') + '"></div>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label>Observaciones (opcional)</label>' +
+          '<textarea id="fObs" rows="2">' + (editando ? escapeHtml(editando.observaciones||'') : '') + '</textarea>' +
+        '</div>' +
+        '<div class="modal-actions">' +
+          '<button class="btn-ghost" data-action="cerrar-modal">Cancelar</button>' +
+          '<button class="btn-primary" data-action="guardar-moto" data-id="' + (editando ? editando.id : '') + '">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
 }
 
-async function guardarMoto(id){
+function guardarMoto(id){
   const data = {
     cliente_id: clienteActual.id,
     marca: document.getElementById('fMarca').value.trim(),
@@ -661,101 +656,93 @@ async function guardarMoto(id){
     patente: document.getElementById('fPatente').value.trim(),
     observaciones: document.getElementById('fObs').value.trim()
   };
-  if(id){
-    await supabase.from('taller_motos').update(data).eq('id', id);
-  } else {
-    await supabase.from('taller_motos').insert(data);
-  }
-  cerrarModal();
-  await cargarTodo();
-  clienteActual = clientes.find(c => c.id === clienteActual.id);
-  renderMotos();
-  showToast('Guardado');
+  const promesa = id
+    ? supabase.from('taller_motos').update(data).eq('id', id)
+    : supabase.from('taller_motos').insert(data);
+  promesa.then(function(){
+    cerrarModal();
+    return cargarTodo();
+  }).then(function(){
+    clienteActual = clientes.find(function(c){ return c.id === clienteActual.id; });
+    renderMotos();
+    showToast('Guardado');
+  });
 }
 
-async function eliminarMoto(id){
+function eliminarMoto(id){
   if(!confirm('¿Eliminar esta moto y su historial?')) return;
-  await supabase.from('taller_motos').delete().eq('id', id);
-  await cargarTodo();
-  renderMotos();
-  showToast('Moto eliminada');
+  supabase.from('taller_motos').delete().eq('id', id).then(function(){
+    return cargarTodo();
+  }).then(function(){
+    renderMotos();
+    showToast('Moto eliminada');
+  });
 }
 
 function abrirModalTrabajo(){
   const hoy = new Date().toISOString().slice(0,10);
-  document.getElementById('modalContainer').innerHTML = `
-    <div class="modal-bg" onclick="if(event.target===this) cerrarModal()">
-      <div class="modal">
-        <h2>Registrar trabajo realizado</h2>
-        <div class="field">
-          <label>Fecha</label>
-          <input id="fFecha" type="date" value="${hoy}">
-        </div>
-        <div class="field">
-          <label>Descripción (ej: se cambió rulemán de rueda delantera)</label>
-          <textarea id="fDesc" rows="2"></textarea>
-        </div>
-        <div class="field">
-          <label>Costo (opcional)</label>
-          <input id="fCosto" type="number" placeholder="0">
-        </div>
-        <div class="modal-actions">
-          <button class="btn-ghost" onclick="cerrarModal()">Cancelar</button>
-          <button class="btn-primary" onclick="guardarTrabajo()">Guardar</button>
-        </div>
-      </div>
-    </div>`;
+  document.getElementById('modalContainer').innerHTML =
+    '<div class="modal-bg" data-action="cerrar-modal-bg">' +
+      '<div class="modal">' +
+        '<h2>Registrar trabajo realizado</h2>' +
+        '<div class="field"><label>Fecha</label><input id="fFecha" type="date" value="' + hoy + '"></div>' +
+        '<div class="field"><label>Descripción (ej: se cambió rulemán de rueda delantera)</label><textarea id="fDesc" rows="2"></textarea></div>' +
+        '<div class="field"><label>Costo (opcional)</label><input id="fCosto" type="number" placeholder="0"></div>' +
+        '<div class="modal-actions">' +
+          '<button class="btn-ghost" data-action="cerrar-modal">Cancelar</button>' +
+          '<button class="btn-primary" data-action="guardar-trabajo">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
 }
 
-async function guardarTrabajo(){
+function guardarTrabajo(){
   const fecha = document.getElementById('fFecha').value;
   const descripcion = document.getElementById('fDesc').value.trim();
   const costo = document.getElementById('fCosto').value;
   if(!fecha || !descripcion){ showToast('Completá fecha y descripción'); return; }
-  await supabase.from('taller_trabajos').insert({
-    moto_id: motoActual.id, fecha, descripcion, costo: costo ? Number(costo) : null
+  supabase.from('taller_trabajos').insert({
+    moto_id: motoActual.id, fecha: fecha, descripcion: descripcion, costo: costo ? Number(costo) : null
+  }).then(function(){
+    cerrarModal();
+    return cargarTodo();
+  }).then(function(){
+    motoActual = motos.find(function(m){ return m.id === motoActual.id; });
+    renderTrabajos();
+    showToast('Trabajo registrado');
   });
-  cerrarModal();
-  await cargarTodo();
-  motoActual = motos.find(m => m.id === motoActual.id);
-  renderTrabajos();
-  showToast('Trabajo registrado');
 }
 
-async function eliminarTrabajo(id){
+function eliminarTrabajo(id){
   if(!confirm('¿Eliminar este trabajo del historial?')) return;
-  await supabase.from('taller_trabajos').delete().eq('id', id);
-  await cargarTodo();
-  renderTrabajos();
+  supabase.from('taller_trabajos').delete().eq('id', id).then(function(){
+    return cargarTodo();
+  }).then(function(){
+    renderTrabajos();
+  });
 }
 
 let itemCounter = 0;
 function abrirModalPresupuesto(){
   const hoy = new Date().toISOString().slice(0,10);
   itemCounter = 0;
-  document.getElementById('modalContainer').innerHTML = `
-    <div class="modal-bg" onclick="if(event.target===this) cerrarModal()">
-      <div class="modal">
-        <h2>Nuevo presupuesto</h2>
-        <div class="field">
-          <label>Fecha</label>
-          <input id="fFechaP" type="date" value="${hoy}">
-        </div>
-        <div class="field">
-          <label>Ítems</label>
-          <div id="itemsContainer"></div>
-          <button class="btn-ghost btn-sm" style="margin-top:6px;" onclick="agregarItemPresupuesto()">+ Agregar ítem</button>
-        </div>
-        <div class="total-row">
-          <span>Total</span>
-          <span id="totalPresupuesto">$0</span>
-        </div>
-        <div class="modal-actions">
-          <button class="btn-ghost" onclick="cerrarModal()">Cancelar</button>
-          <button class="btn-primary" onclick="guardarPresupuesto()">Guardar</button>
-        </div>
-      </div>
-    </div>`;
+  document.getElementById('modalContainer').innerHTML =
+    '<div class="modal-bg" data-action="cerrar-modal-bg">' +
+      '<div class="modal">' +
+        '<h2>Nuevo presupuesto</h2>' +
+        '<div class="field"><label>Fecha</label><input id="fFechaP" type="date" value="' + hoy + '"></div>' +
+        '<div class="field">' +
+          '<label>Ítems</label>' +
+          '<div id="itemsContainer"></div>' +
+          '<button class="btn-ghost btn-sm" style="margin-top:6px;" data-action="agregar-item">+ Agregar ítem</button>' +
+        '</div>' +
+        '<div class="total-row"><span>Total</span><span id="totalPresupuesto">$0</span></div>' +
+        '<div class="modal-actions">' +
+          '<button class="btn-ghost" data-action="cerrar-modal">Cancelar</button>' +
+          '<button class="btn-primary" data-action="guardar-presupuesto">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
   agregarItemPresupuesto();
 }
 
@@ -766,97 +753,150 @@ function agregarItemPresupuesto(){
   const div = document.createElement('div');
   div.className = 'item-row';
   div.id = id;
-  div.innerHTML = `
-    <input type="text" placeholder="Descripción" oninput="recalcularTotal()">
-    <input type="number" placeholder="Cant." value="1" oninput="recalcularTotal()">
-    <input type="number" placeholder="Precio unit." oninput="recalcularTotal()">
-    <button class="item-remove" onclick="document.getElementById('${id}').remove(); recalcularTotal();">✕</button>`;
+  div.innerHTML =
+    '<input type="text" placeholder="Descripción" data-role="item-input">' +
+    '<input type="number" placeholder="Cant." value="1" data-role="item-input">' +
+    '<input type="number" placeholder="Precio unit." data-role="item-input">' +
+    '<button class="item-remove" data-action="quitar-item" data-id="' + id + '">✕</button>';
   cont.appendChild(div);
 }
 
 function leerItemsPresupuesto(){
   const rows = document.querySelectorAll('#itemsContainer .item-row');
   const items = [];
-  rows.forEach(r => {
+  rows.forEach(function(r){
     const inputs = r.querySelectorAll('input');
     const desc = inputs[0].value.trim();
     const cant = Number(inputs[1].value)||0;
     const precio = Number(inputs[2].value)||0;
-    if(desc) items.push({desc, cant, precio});
+    if(desc) items.push({desc: desc, cant: cant, precio: precio});
   });
   return items;
 }
 
 function recalcularTotal(){
   const items = leerItemsPresupuesto();
-  const total = items.reduce((acc,it) => acc + it.cant*it.precio, 0);
-  document.getElementById('totalPresupuesto').textContent = fmtMoney(total);
+  const total = items.reduce(function(acc,it){ return acc + it.cant*it.precio; }, 0);
+  const el = document.getElementById('totalPresupuesto');
+  if(el) el.textContent = fmtMoney(total);
 }
 
-async function guardarPresupuesto(){
+function guardarPresupuesto(){
   const fecha = document.getElementById('fFechaP').value;
   const items = leerItemsPresupuesto();
   if(!fecha || items.length === 0){ showToast('Completá fecha y al menos un ítem'); return; }
-  const total = items.reduce((acc,it) => acc + it.cant*it.precio, 0);
-  await supabase.from('taller_presupuestos').insert({
-    moto_id: motoActual.id, fecha, items, total, estado: 'pendiente'
+  const total = items.reduce(function(acc,it){ return acc + it.cant*it.precio; }, 0);
+  supabase.from('taller_presupuestos').insert({
+    moto_id: motoActual.id, fecha: fecha, items: items, total: total, estado: 'pendiente'
+  }).then(function(){
+    cerrarModal();
+    return cargarTodo();
+  }).then(function(){
+    motoActual = motos.find(function(m){ return m.id === motoActual.id; });
+    renderPresupuestos();
+    showToast('Presupuesto guardado');
   });
-  cerrarModal();
-  await cargarTodo();
-  motoActual = motos.find(m => m.id === motoActual.id);
-  renderPresupuestos();
-  showToast('Presupuesto guardado');
 }
 
-async function cambiarEstadoPresupuesto(id){
-  const p = presupuestos.find(x => x.id === id);
+function cambiarEstadoPresupuesto(id){
+  const p = presupuestos.find(function(x){ return x.id === id; });
   const orden = ['pendiente','aprobado','rechazado'];
   const siguiente = orden[(orden.indexOf(p.estado)+1) % orden.length];
-  await supabase.from('taller_presupuestos').update({estado: siguiente}).eq('id', id);
-  await cargarTodo();
-  motoActual = motos.find(m => m.id === motoActual.id);
-  renderPresupuestos();
+  supabase.from('taller_presupuestos').update({estado: siguiente}).eq('id', id).then(function(){
+    return cargarTodo();
+  }).then(function(){
+    motoActual = motos.find(function(m){ return m.id === motoActual.id; });
+    renderPresupuestos();
+  });
 }
 
-async function eliminarPresupuesto(id){
+function eliminarPresupuesto(id){
   if(!confirm('¿Eliminar este presupuesto?')) return;
-  await supabase.from('taller_presupuestos').delete().eq('id', id);
-  await cargarTodo();
-  renderPresupuestos();
+  supabase.from('taller_presupuestos').delete().eq('id', id).then(function(){
+    return cargarTodo();
+  }).then(function(){
+    renderPresupuestos();
+  });
 }
 
 function exportarPresupuesto(id){
-  const p = presupuestos.find(x => x.id === id);
-  const moto = motos.find(m => m.id === p.moto_id);
-  const cliente = clientes.find(c => c.id === moto.cliente_id);
+  const p = presupuestos.find(function(x){ return x.id === id; });
+  const moto = motos.find(function(m){ return m.id === p.moto_id; });
+  const cliente = clientes.find(function(c){ return c.id === moto.cliente_id; });
 
   const encabezado = [
     ['Presupuesto'],
     ['Cliente', cliente.nombre],
-    ['Moto', `${moto.marca||''} ${moto.modelo||''} ${moto.anio||''}`.trim()],
+    ['Moto', (moto.marca||'') + ' ' + (moto.modelo||'') + ' ' + (moto.anio||'')],
     ['Patente', moto.patente||''],
     ['Fecha', fmtDate(p.fecha)],
     [],
     ['Descripción','Cantidad','Precio unitario','Subtotal']
   ];
-  const filas = p.items.map(it => [it.desc, it.cant, it.precio, it.cant*it.precio]);
+  const filas = p.items.map(function(it){ return [it.desc, it.cant, it.precio, it.cant*it.precio]; });
   const pie = [[], ['','','Total', p.total]];
 
-  const data = [...encabezado, ...filas, ...pie];
+  const data = encabezado.concat(filas).concat(pie);
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [{wch:35},{wch:10},{wch:14},{wch:14}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Presupuesto');
-  const nombreArchivo = `Presupuesto_${cliente.nombre.replace(/\s+/g,'_')}_${p.fecha}.xlsx`;
+  const nombreArchivo = 'Presupuesto_' + cliente.nombre.replace(/\s+/g,'_') + '_' + p.fecha + '.xlsx';
   XLSX.writeFile(wb, nombreArchivo);
 }
 
 function escapeHtml(str){
   if(str === null || str === undefined) return '';
   return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escapeAttr(str){
+  if(str === null || str === undefined) return '';
+  return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+
+/* ---------- MANEJO DE CLICS (delegado, sin onclick inline) ---------- */
+document.body.addEventListener('click', function(e){
+  const bg = e.target.closest('.modal-bg');
+  if(bg && e.target === bg){ cerrarModal(); return; }
+
+  const btn = e.target.closest('[data-action]');
+  if(!btn) return;
+  const action = btn.dataset.action;
+  const id = btn.dataset.id;
+
+  if(action === 'nuevo-cliente') abrirModalCliente();
+  else if(action === 'editar-cliente') abrirModalCliente(id);
+  else if(action === 'eliminar-cliente') eliminarCliente(id);
+  else if(action === 'volver-lista') volverALista();
+  else if(action === 'ver-cliente') verCliente(id);
+  else if(action === 'nueva-moto') abrirModalMoto();
+  else if(action === 'editar-moto') abrirModalMoto(id);
+  else if(action === 'eliminar-moto') eliminarMoto(id);
+  else if(action === 'ver-moto') verMoto(id);
+  else if(action === 'volver-cliente') volverACliente();
+  else if(action === 'nuevo-presupuesto') abrirModalPresupuesto();
+  else if(action === 'exportar-presupuesto') exportarPresupuesto(id);
+  else if(action === 'cambiar-estado-presupuesto') cambiarEstadoPresupuesto(id);
+  else if(action === 'eliminar-presupuesto') eliminarPresupuesto(id);
+  else if(action === 'nuevo-trabajo') abrirModalTrabajo();
+  else if(action === 'eliminar-trabajo') eliminarTrabajo(id);
+  else if(action === 'cerrar-modal') cerrarModal();
+  else if(action === 'guardar-cliente') guardarCliente(id || null);
+  else if(action === 'guardar-moto') guardarMoto(id || null);
+  else if(action === 'guardar-trabajo') guardarTrabajo();
+  else if(action === 'guardar-presupuesto') guardarPresupuesto();
+  else if(action === 'agregar-item') agregarItemPresupuesto();
+  else if(action === 'quitar-item'){ const el = document.getElementById(id); if(el) el.remove(); recalcularTotal(); }
+});
+
+document.body.addEventListener('input', function(e){
+  if(e.target.dataset && e.target.dataset.role === 'item-input'){
+    recalcularTotal();
+  }
+});
 
 cargarTodo();
 </script>
