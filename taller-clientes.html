@@ -328,6 +328,13 @@
 const SUPABASE_URL = "https://lzozlxxcnkqznnuueuxd.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_pX8-nV0ceP1Q5CWPl2baiA_S9BSCDq6";
 
+window.onerror = function(msg, url, line, col, error){
+  var d = document.createElement('div');
+  d.style.cssText = 'background:#c0453a;color:#fff;padding:12px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;';
+  d.textContent = 'ERROR: ' + msg + ' (línea ' + line + ')';
+  document.body.prepend(d);
+};
+
 /* ======================================================
    Tablas necesarias en Supabase (ejecutar una sola vez
    en el SQL Editor de tu proyecto):
