@@ -640,7 +640,7 @@ async function vincularCostosDelCatalogo(){
 
 function renderTabs(){
   const cont = document.getElementById("tabs");
-  const rubros = [...new Set(productos.filter(p=>p.activo!==false).map(p=>p.rubro).filter(Boolean))].sort();
+  const rubros = [...new Set(productos.filter(p=>p.activo!==false && p.foto_url).map(p=>p.rubro).filter(Boolean))].sort();
   if(rubros.length === 0){
     cont.innerHTML = "";
     return;
@@ -666,13 +666,13 @@ function renderGrid(){
     visibles = visibles.filter(p => p.en_camion);
   } else if(busqueda.trim()){
     // Si hay una búsqueda activa, ignoramos la pestaña/categoría y buscamos en todo
-    // el catálogo de la tienda (incluye productos sin categoría asignada).
+    // el catálogo de la tienda (incluye productos sin foto y sin categoría asignada).
   } else if(rubroActivo){
-    visibles = visibles.filter(p => p.rubro === rubroActivo);
+    visibles = visibles.filter(p => p.rubro === rubroActivo && p.foto_url);
   } else {
     // En "Destacados" sin buscar nada, mostramos solo los destacados (oferta) para que cargue
     // más rápido — para ver el resto, hay que elegir una categoría o buscar algo.
-    visibles = visibles.filter(p => p.oferta);
+    visibles = visibles.filter(p => p.oferta && p.foto_url);
   }
   visibles = visibles.filter(p => coincideBusqueda(p, busqueda));
   // Los productos en oferta suben arriba de todo; el resto mantiene su orden habitual.
