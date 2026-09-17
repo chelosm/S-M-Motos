@@ -1572,6 +1572,21 @@
     renderPresupuesto();
   }
 
+  async function editarCantidadPresupuesto(id) {
+    const item = PRESUPUESTO.find(i => i.id === id);
+    if (!item) return;
+    const respuesta = await pedirNumero("Nueva cantidad para \"" + item.descripcion + "\":", String(item.cantidad));
+    if (respuesta === null) return;
+    const nuevaCantidad = parseInt(respuesta);
+    if (isNaN(nuevaCantidad) || nuevaCantidad <= 0) {
+      alert("Cantidad inválida.");
+      return;
+    }
+    item.cantidad = nuevaCantidad;
+    guardarPresupuesto();
+    renderPresupuesto();
+  }
+
   function recalcularPreciosPresupuesto() {
     let recalculados = 0;
     PRESUPUESTO.forEach(item => {
@@ -1644,6 +1659,7 @@
             <div class="desc">${item.descripcion}</div>
           </div>
           <div class="subtotal">$${fmt(sub)}</div>
+          <button class="btn-quitar" style="color:var(--verde-stock);" onclick="editarCantidadPresupuesto('${item.id.replace(/'/g,"\\'")}')">🔢</button>
           <button class="btn-quitar" style="color:var(--amarillo);" onclick="editarPrecioPresupuesto('${item.id.replace(/'/g,"\\'")}')">✏️</button>
           <button class="btn-quitar" onclick="quitarDePresupuesto('${item.id.replace(/'/g,"\\'")}')">✕</button>
         </div>
