@@ -1554,6 +1554,17 @@
   function quitarDePresupuesto(id) {
     PRESUPUESTO = PRESUPUESTO.filter(item => item.id !== id);
     guardarPresupuesto();
+    // Si el ítem se había agregado desde la tienda (distribuidora-tienda.html), esa
+    // página lo guarda también en su propio carrito. Si no lo sacamos de ahí también,
+    // la tienda lo vuelve a agregar sola la próxima vez que se actualice.
+    if (id.startsWith("tienda-")) {
+      const clave = id.slice("tienda-".length);
+      try {
+        const cartTienda = JSON.parse(localStorage.getItem("dt_cart") || "{}");
+        delete cartTienda[clave];
+        localStorage.setItem("dt_cart", JSON.stringify(cartTienda));
+      } catch (e) { /* si esto falla, al menos ya se sacó del presupuesto compartido */ }
+    }
     renderPresupuesto();
   }
 
