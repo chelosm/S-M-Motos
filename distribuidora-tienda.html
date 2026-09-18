@@ -631,13 +631,22 @@ async function vincularCostosDelCatalogo(){
   const tieneCodigo = productos.some(p => p.codigo || (Array.isArray(p.variantes) && p.variantes.some(v=>v.codigo)));
   if(!tieneCodigo) return;
 
-  const { data, error } = await sb.from("Producto").select("codigo, precio_usd");
-  if(error || !data) return;
-
+  // El catálogo mayorista tiene miles de productos, y Supabase por defecto solo
+  // trae 1000 filas por consulta. Los traemos en tandas hasta tenerlos todos.
   const costoPorCodigo = {};
-  data.forEach(row => {
-    if(row.codigo) costoPorCodigo[normalizarCodigo(row.codigo)] = row.precio_usd;
-  });
+  const TANDA = 1000;
+  let desde = 0;
+  while(true){
+    const { data, error } = await sb.from("Producto")
+      .select("codigo, precio_usd")
+      .range(desde, desde + TANDA - 1);
+    if(error || !data) break;
+    data.forEach(row => {
+      if(row.codigo) costoPorCodigo[normalizarCodigo(row.codigo)] = row.precio_usd;
+    });
+    if(data.length < TANDA) break; // ya no hay más filas
+    desde += TANDA;
+  }
 
   productos.forEach(p => {
     if(p.codigo){
@@ -652,6 +661,9 @@ async function vincularCostosDelCatalogo(){
       });
     }
   });
+
+  const debugEl = document.getElementById("debug-dolar");
+  if(debugEl) debugEl.textContent += " · Catálogo cruzado: " + Object.keys(costoPorCodigo).length + " códigos";
 }
 
 function renderTabs(){
