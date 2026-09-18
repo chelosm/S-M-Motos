@@ -574,6 +574,17 @@ let dolarBlueCache = null;
 
 async function obtenerDolarBlue(){
   if(dolarBlueCache) return dolarBlueCache;
+
+  // Usamos el mismo dólar que cargás a mano en la web (catalogo-base.html), así el
+  // costo de los productos vinculados por código coincide siempre en los dos lugares.
+  const dolarWeb = parseFloat(localStorage.getItem("valorDolarHada"));
+  if(dolarWeb > 0){
+    dolarBlueCache = dolarWeb;
+    return dolarBlueCache;
+  }
+
+  // Si todavía no se cargó ningún dólar en la web desde este navegador, usamos
+  // el dólar blue en vivo como respaldo para que la tienda no se quede sin precios.
   try{
     const res = await fetch("https://dolarapi.com/v1/dolares/blue");
     const data = await res.json();
