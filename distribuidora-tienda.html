@@ -374,6 +374,7 @@
 <div id="buscador-wrap">
   <input type="text" id="buscador" placeholder="Buscar por nombre o código" oninput="onBuscadorInput()">
 </div>
+<div id="debug-dolar" style="text-align:center; font-size:0.75rem; color:#999; padding:4px;"></div>
 <div id="tabs"></div>
 
 <div id="grid">Cargando productos...</div>
@@ -578,8 +579,10 @@ async function obtenerDolarBlue(){
   // Usamos el mismo dólar que cargás a mano en la web (catalogo-base.html), así el
   // costo de los productos vinculados por código coincide siempre en los dos lugares.
   const dolarWeb = parseFloat(localStorage.getItem("valorDolarHada"));
+  const debugEl = document.getElementById("debug-dolar");
   if(dolarWeb > 0){
     dolarBlueCache = dolarWeb;
+    if(debugEl) debugEl.textContent = "💲 Dólar usado: " + dolarBlueCache + " (de la web)";
     return dolarBlueCache;
   }
 
@@ -589,8 +592,10 @@ async function obtenerDolarBlue(){
     const res = await fetch("https://dolarapi.com/v1/dolares/blue");
     const data = await res.json();
     dolarBlueCache = Math.max(data.compra, data.venta);
+    if(debugEl) debugEl.textContent = "💲 Dólar usado: " + dolarBlueCache + " (en vivo, no encontró el de la web)";
   }catch(e){
     dolarBlueCache = 0; // si falla la API, no rompe la pagina
+    if(debugEl) debugEl.textContent = "💲 No se pudo obtener ningún dólar";
   }
   return dolarBlueCache;
 }
