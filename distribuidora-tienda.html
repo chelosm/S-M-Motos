@@ -1908,6 +1908,26 @@ async function abrirAumentoMasivo(){
   cargarProductos();
 }
 
+// ===== ACTUALIZACIÓN AUTOMÁTICA =====
+// Cada 30 segundos volvemos a traer los productos y el dólar desde
+// Supabase/la web, así la tienda se mantiene al día sola, sin que
+// haga falta refrescar la página a mano. No tocamos lo que el
+// usuario esté escribiendo (buscador) ni cerramos paneles abiertos.
+setInterval(() => {
+  dolarBlueCache = null; // fuerza a releer el dólar guardado en localStorage
+  cargarProductos();
+}, 30000);
+
+// Si el usuario cambia el dólar en la web (catalogo-base.html) en OTRA
+// pestaña del mismo navegador, este evento avisa al instante (sin
+// esperar los 30 segundos) y actualizamos los precios ya mismo.
+window.addEventListener("storage", (e) => {
+  if(e.key === "valorDolarHada"){
+    dolarBlueCache = null;
+    cargarProductos();
+  }
+});
+
 // ===== INIT =====
 cargarProductos();
 actualizarBarra();
