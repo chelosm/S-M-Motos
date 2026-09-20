@@ -780,8 +780,10 @@ function renderGrid(){
       // lo que hacía la imagen muy larga cuando había muchos modelos. Ahora se
       // muestra un solo botón que abre una ventana aparte para elegir el modelo
       // (esto no afecta a los productos con colores, que siguen igual).
-      const textoBoton = idxModeloAbierto !== undefined ? p.variantes[idxModeloAbierto].modelo : "Elegí el modelo";
-      const botonSelector = `<button type="button" class="btn-elegir-modelo" onclick="abrirSelectorModelo(${p.id})">🔽 ${textoBoton}</button>`;
+      // El botón siempre dice "Elegí el modelo" (no repite el nombre ya elegido,
+      // que se ve justo abajo en el precio) — así también queda claro que se
+      // puede volver a tocar para cambiar de modelo.
+      const botonSelector = `<button type="button" class="btn-elegir-modelo" onclick="abrirSelectorModelo(${p.id})">🔽 Elegí el modelo</button>`;
       const paneles = p.variantes.map((v,idx)=>{
         const claveV = claveCarritoVariante(p.id, idx);
         return `<div class="modelo-panel${idxModeloAbierto===idx?' open':''}" id="panel-modelo-${p.id}-${idx}">
