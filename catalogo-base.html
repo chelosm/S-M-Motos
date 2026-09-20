@@ -1809,6 +1809,7 @@
       return `
         <tr style="background:${fondoFila};">
           <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.cantidad}</td>
+          <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.codigo || ""}</td>
           <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.descripcion}</td>
           <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111; text-align:right;">$${fmt(item.precioUnitario)}</td>
           <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111; text-align:right;">$${fmt(sub)}</td>
@@ -1845,6 +1846,7 @@
           <thead>
             <tr style="background:#111111;">
               <th style="padding:8px; text-align:left; background:#111111; color:#ffffff;">Cant.</th>
+              <th style="padding:8px; text-align:left; background:#111111; color:#ffffff;">Código</th>
               <th style="padding:8px; text-align:left; background:#111111; color:#ffffff;">Descripción</th>
               <th style="padding:8px; text-align:right; background:#111111; color:#ffffff;">P. Unit.</th>
               <th style="padding:8px; text-align:right; background:#111111; color:#ffffff;">Subtotal</th>

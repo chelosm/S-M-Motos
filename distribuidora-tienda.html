@@ -1475,10 +1475,10 @@ function exportarImagen(){
   }
   const itemsPropios = claves.map(clave=>{
     const it = itemCarrito(clave);
-    return it ? {p: it.p, nombre: it.nombre, precio: it.precio, cantidad: cart[clave]} : null;
+    return it ? {p: it.p, codigo: (it.p && it.p.codigo) || "", nombre: it.nombre, precio: it.precio, cantidad: cart[clave]} : null;
   }).filter(Boolean);
   const itemsCompartidos = compartidos.map(it=> ({
-    p: { pack_size: 1 }, nombre: it.descripcion, precio: it.precioUnitario, cantidad: it.cantidad
+    p: { pack_size: 1 }, codigo: it.codigo || "", nombre: it.descripcion, precio: it.precioUnitario, cantidad: it.cantidad
   }));
   const items = [...itemsPropios, ...itemsCompartidos];
 
@@ -1509,6 +1509,7 @@ async function generarPaginasPresupuesto(paginas, index, archivos){
     const subtotal = unidades * it.precio;
     filas += `<tr style="background:${i%2===0?'#ffffff':'#f5f5f5'};">
       <td style="padding:9px 6px;text-align:center;border-bottom:1px solid #eee;">${unidades}</td>
+      <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.codigo || ""}</td>
       <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.nombre}</td>
       <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;">${money(it.precio)}</td>
       <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;font-weight:700;">${money(subtotal)}</td>
@@ -1527,6 +1528,7 @@ async function generarPaginasPresupuesto(paginas, index, archivos){
       <thead>
         <tr style="background:#161616;color:#fff;">
           <th style="padding:9px 6px;text-align:center;">CANT.</th>
+          <th style="padding:9px 6px;text-align:left;">CÓDIGO</th>
           <th style="padding:9px 6px;text-align:left;">DESCRIPCIÓN</th>
           <th style="padding:9px 6px;text-align:right;">P. UNIT.</th>
           <th style="padding:9px 6px;text-align:right;">SUBTOTAL</th>
