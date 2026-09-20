@@ -1506,6 +1506,11 @@
     modoPresupuesto = modo;
     localStorage.setItem("modoPresupuestoSMMotos", modo);
     actualizarBotonesModo();
+    // Antes había que tocar "Recalcular precios" aparte después de cambiar el
+    // modo, y si no te acordabas de tocarlo, los productos que ya estaban
+    // cargados se quedaban con el precio del modo anterior — por eso parecía
+    // que "Minorista" no hacía nada. Ahora se recalcula solo, al toque.
+    recalcularPreciosPresupuesto();
   }
 
   function actualizarBotonesModo() {
