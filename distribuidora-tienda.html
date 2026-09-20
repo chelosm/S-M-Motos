@@ -183,6 +183,16 @@
   }
   .chip-modelo.activo{background:var(--amarillo);border-color:var(--amarillo-fuerte);}
   .chip-modelo.en-carrito{border-color:var(--verde-fuerte);color:var(--verde-fuerte);}
+  .btn-elegir-modelo{
+    width:100%;background:#f4f2ec;border:1px solid var(--borde);border-radius:8px;
+    padding:9px 12px;font-size:0.85rem;font-weight:700;cursor:pointer;margin-top:2px;
+    text-align:left;
+  }
+  .item-selector-modelo{
+    display:block;width:100%;background:#f4f2ec;border:1px solid var(--borde);border-radius:8px;
+    padding:11px 12px;font-size:0.9rem;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;
+  }
+  .item-selector-modelo.en-carrito{border-color:var(--verde-fuerte);color:var(--verde-fuerte);}
   .modelo-panel{
     display:none;background:#f8f7f3;border-radius:8px;padding:8px;
     margin-top:4px;font-size:0.8rem;
@@ -259,11 +269,11 @@
     padding:9px 16px;font-weight:700;cursor:pointer;
   }
 
-  #cart-panel, #admin-panel, #camion-panel{
+  #cart-panel, #admin-panel, #camion-panel, #selector-modelo-panel{
     display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
     z-index:50;align-items:flex-end;justify-content:center;
   }
-  #cart-panel.open, #admin-panel.open, #camion-panel.open{display:flex;}
+  #cart-panel.open, #admin-panel.open, #camion-panel.open, #selector-modelo-panel.open{display:flex;}
   .sheet{
     background:#fff;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;
     border-radius:16px 16px 0 0;padding:18px;
@@ -407,6 +417,14 @@
       <button class="btn-secundario" onclick="exportarExcel()">📊 Excel</button>
       <button class="btn-primario" onclick="exportarImagen()">🖼️ Generar imagen y compartir</button>
     </div>
+  </div>
+</div>
+
+<div id="selector-modelo-panel" onclick="if(event.target===this) cerrarSelectorModelo()">
+  <div class="sheet">
+    <button class="cerrar-x" onclick="cerrarSelectorModelo()">✕</button>
+    <h2>Elegí el modelo</h2>
+    <div id="selector-modelo-lista"></div>
   </div>
 </div>
 
@@ -758,12 +776,12 @@ function renderGrid(){
       } else {
         precioMostrado = `<div class="precio" style="color:var(--gris);font-size:0.85rem;">Tocá un modelo para ver el precio</div>`;
       }
-      const thumbs = p.variantes.map((v,idx)=>{
-        const claveV = claveCarritoVariante(p.id, idx);
-        const enCarrito = !!cart[claveV];
-        return `<button type="button" class="chip-modelo${idxModeloAbierto===idx?' activo':''}${enCarrito?' en-carrito':''}"
-          onclick="toggleModeloPanel(${p.id},${idx})">${v.modelo}${enCarrito?' ✓':''}</button>`;
-      }).join("");
+      // Antes acá se mostraban TODOS los modelos en chips, uno al lado del otro,
+      // lo que hacía la imagen muy larga cuando había muchos modelos. Ahora se
+      // muestra un solo botón que abre una ventana aparte para elegir el modelo
+      // (esto no afecta a los productos con colores, que siguen igual).
+      const textoBoton = idxModeloAbierto !== undefined ? p.variantes[idxModeloAbierto].modelo : "Elegí el modelo";
+      const botonSelector = `<button type="button" class="btn-elegir-modelo" onclick="abrirSelectorModelo(${p.id})">🔽 ${textoBoton}</button>`;
       const paneles = p.variantes.map((v,idx)=>{
         const claveV = claveCarritoVariante(p.id, idx);
         return `<div class="modelo-panel${idxModeloAbierto===idx?' open':''}" id="panel-modelo-${p.id}-${idx}">
@@ -778,7 +796,7 @@ function renderGrid(){
           <button class="add-btn${cart[claveV]?' en-carrito':''}" onclick="agregarAlCarritoVariante(${p.id},${idx})">${cart[claveV]?'✓ En presupuesto':'Agregar'}</button>
         </div>`;
       }).join("");
-      bloqueSeleccion = `<div class="modelos-row">${thumbs}</div>${paneles}`;
+      bloqueSeleccion = `${botonSelector}${paneles}`;
     } else if(tieneColores){
       const idxAbierto = chipAbierto[p.id];
       const chips = p.colores.map((c,idx)=>{
@@ -1110,6 +1128,29 @@ function toggleModeloPanel(id, idx){
   renderGrid();
 }
 
+// Ventana aparte para elegir el modelo, en vez de mostrar todos los modelos
+// como chips debajo de la foto (eso hacía la tarjeta muy larga).
+function abrirSelectorModelo(id){
+  const p = productos.find(x=>x.id===id);
+  if(!p || !Array.isArray(p.variantes)) return;
+  const cont = document.getElementById("selector-modelo-lista");
+  cont.innerHTML = p.variantes.map((v,idx)=>{
+    const claveV = claveCarritoVariante(id, idx);
+    const enCarrito = !!cart[claveV];
+    return `<button type="button" class="item-selector-modelo${enCarrito?' en-carrito':''}"
+      onclick="elegirModeloDesdeSelector(${id},${idx})">${v.modelo}${enCarrito?' ✓ (en presupuesto)':''}</button>`;
+  }).join("");
+  document.getElementById("selector-modelo-panel").classList.add("open");
+}
+function cerrarSelectorModelo(){
+  document.getElementById("selector-modelo-panel").classList.remove("open");
+}
+function elegirModeloDesdeSelector(id, idx){
+  modeloAbierto[id] = idx;
+  cerrarSelectorModelo();
+  renderGrid();
+}
+
 function agregarAlCarritoColor(id, idx){
   const p = productos.find(x=>x.id===id);
   const color = p.colores[idx];
@@ -1252,6 +1293,7 @@ function cerrarModales(){
   document.getElementById("cart-panel").classList.remove("open");
   document.getElementById("admin-panel").classList.remove("open");
   document.getElementById("camion-panel").classList.remove("open");
+  document.getElementById("selector-modelo-panel").classList.remove("open");
 }
 function abrirAdmin(){
   document.getElementById("admin-panel").classList.add("open");
