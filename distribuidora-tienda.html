@@ -1183,7 +1183,7 @@ function sincronizarPresupuestoCompartido(){
     if(!it) return null;
     return {
       id: "tienda-" + clave,
-      codigo: "",
+      codigo: (it.p && it.p.codigo) || "",
       descripcion: it.nombre,
       cantidad: cart[clave] * (it.p.pack_size || 1),
       precioUnitario: it.precio,
@@ -1355,7 +1355,7 @@ function renderCarrito(){
     const div = document.createElement("div");
     div.className = "cart-item";
     div.innerHTML = `
-      <div class="info"><b>${nombre}</b><br>
+      <div class="info"><b>${nombre}</b> ${p.codigo?'<span style="color:#999;">['+p.codigo+']</span>':''}<br>
       ${p.pack_size>1 ? unidades+' unid. ('+cantidad+' pack(s))' : cantidad+' unid.'} &middot;
       <input type="number" class="precio-editable" value="${precio}" min="0"
         onchange="editarPrecioCarrito('${claveJs}', this.value)"> c/u &middot; <b>Total: ${money(subtotal)}</b>
@@ -1375,7 +1375,7 @@ function renderCarrito(){
     const div = document.createElement("div");
     div.className = "cart-item";
     div.innerHTML = `
-      <div class="info"><b>${it.descripcion}</b> <small style="color:var(--gris);">(del catálogo)</small><br>
+      <div class="info"><b>${it.descripcion}</b> ${it.codigo?'<span style="color:#999;">['+it.codigo+']</span>':''} <small style="color:var(--gris);">(del catálogo)</small><br>
       ${it.cantidad} unid. &middot;
       <input type="number" class="precio-editable" value="${it.precioUnitario}" min="0"
         onchange="editarPrecioCompartido('${idJs}', this.value)"> c/u &middot; <b>Total: ${money(subtotal)}</b>
