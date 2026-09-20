@@ -1121,13 +1121,17 @@ function abrirSelectorModelo(id){
   const p = productos.find(x=>x.id===id);
   if(!p || !Array.isArray(p.variantes)) return;
   const cont = document.getElementById("selector-modelo-lista");
+  const packTxt = p.pack_size > 1
+    ? `<div class="codigo-modelo">Pack de ${p.pack_size} unidades &middot; cada + o - suma un pack entero</div>`
+    : '';
   cont.innerHTML = p.variantes.map((v,idx)=>{
     const claveV = claveCarritoVariante(id, idx);
     const enCarrito = !!cart[claveV];
     return `<div class="fila-selector-modelo">
       <div class="nombre-modelo">${v.modelo}</div>
       ${v.codigo ? `<div class="codigo-modelo">Cod: ${v.codigo}</div>` : ''}
-      <div class="precio-modelo">${money(precioVariante(v))} c/u</div>
+      <div class="precio-modelo">${money(precioVariante(v))} c/u${p.pack_size>1 ? ' &middot; '+money(precioVariante(v)*p.pack_size)+' el pack' : ''}</div>
+      ${packTxt}
       <div class="qty-row">
         <button type="button" onclick="cambiarQty('selmodelo-${id}-${idx}',-1)">-</button>
         <input type="number" id="qty-selmodelo-${id}-${idx}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
