@@ -1454,12 +1454,19 @@
     cargarProductos();
   }, 30000);
 
-  // Si el dólar o el margen se cambian en OTRA pestaña del mismo
-  // navegador (por ejemplo la tienda), esto avisa al instante.
+  // Si el dólar, el margen o el presupuesto se cambian en OTRA pestaña del
+  // mismo navegador (por ejemplo la tienda), esto avisa al instante.
   window.addEventListener("storage", (e) => {
     if (e.key === "valorDolarHada" || e.key === "margenHada") {
       cargarConfigGuardada();
       renderTabla();
+    }
+    if (e.key === "presupuestoSMMotos") {
+      sincronizarPresupuestoDesdeStorage();
+      actualizarContadorPresupuesto();
+      if (document.getElementById("overlay-presupuesto").classList.contains("abierto")) {
+        renderPresupuesto();
+      }
     }
   });
 
@@ -1473,6 +1480,18 @@
      ============================================ */
   let PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
   let contadorManual = 0;
+
+  // La tienda (distribuidora-tienda.html) agrega y modifica ítems escribiendo
+  // directo en este mismo localStorage compartido. Como esta página guarda
+  // el presupuesto en la variable PRESUPUESTO al abrir, si se agregaron cosas
+  // desde la tienda mientras esta pestaña ya estaba abierta, se perdían al
+  // exportar. Esta función vuelve a leer lo último guardado antes de mostrar
+  // o exportar el presupuesto.
+  function sincronizarPresupuestoDesdeStorage() {
+    try {
+      PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
+    } catch (e) { /* si falla, seguimos con lo que ya había en memoria */ }
+  }
   let modoPresupuesto = localStorage.getItem("modoPresupuestoSMMotos") || "minorista";
 
   function cambiarModoPresupuesto(modo) {
@@ -1654,6 +1673,7 @@
   }
 
   function abrirPresupuesto() {
+    sincronizarPresupuestoDesdeStorage();
     renderPresupuesto();
     actualizarBotonesModo();
     document.getElementById("overlay-presupuesto").classList.add("abierto");
@@ -1709,6 +1729,7 @@
   }
 
   function exportarPresupuestoExcel() {
+    sincronizarPresupuestoDesdeStorage();
     if (PRESUPUESTO.length === 0) {
       alert("Todavía no agregaste nada al presupuesto.");
       return;
@@ -1816,6 +1837,7 @@
   }
 
   async function generarImagenPresupuesto() {
+    sincronizarPresupuestoDesdeStorage();
     if (PRESUPUESTO.length === 0) {
       alert("Todavía no agregaste nada al presupuesto.");
       return;
