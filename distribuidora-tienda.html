@@ -193,6 +193,13 @@
     padding:11px 12px;font-size:0.9rem;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;
   }
   .item-selector-modelo.en-carrito{border-color:var(--verde-fuerte);color:var(--verde-fuerte);}
+  .fila-selector-modelo{
+    background:#f8f7f3;border:1px solid var(--borde);border-radius:8px;
+    padding:10px;margin-bottom:10px;font-size:0.85rem;
+  }
+  .fila-selector-modelo .nombre-modelo{font-weight:700;margin-bottom:2px;}
+  .fila-selector-modelo .codigo-modelo{color:var(--gris);font-size:0.75rem;margin-bottom:4px;}
+  .fila-selector-modelo .precio-modelo{font-weight:700;margin-bottom:6px;}
   .modelo-panel{
     display:none;background:#f8f7f3;border-radius:8px;padding:8px;
     margin-top:4px;font-size:0.8rem;
@@ -769,36 +776,14 @@ function renderGrid(){
     let precioMostrado = `<div class="precio">${money(precioDe(p))} c/u</div>${packTxt}`;
 
     if(tieneVariantes){
-      const idxModeloAbierto = modeloAbierto[p.id];
-      if(idxModeloAbierto !== undefined){
-        const vSel = p.variantes[idxModeloAbierto];
-        precioMostrado = `<div class="precio">${vSel.modelo} — ${money(vSel.precio)} c/u</div>`;
-      } else {
-        precioMostrado = `<div class="precio" style="color:var(--gris);font-size:0.85rem;">Tocá un modelo para ver el precio</div>`;
-      }
-      // Antes acá se mostraban TODOS los modelos en chips, uno al lado del otro,
-      // lo que hacía la imagen muy larga cuando había muchos modelos. Ahora se
-      // muestra un solo botón que abre una ventana aparte para elegir el modelo
-      // (esto no afecta a los productos con colores, que siguen igual).
-      // El botón siempre dice "Elegí el modelo" (no repite el nombre ya elegido,
-      // que se ve justo abajo en el precio) — así también queda claro que se
-      // puede volver a tocar para cambiar de modelo.
-      const botonSelector = `<button type="button" class="btn-elegir-modelo" onclick="abrirSelectorModelo(${p.id})">🔽 Elegí el modelo</button>`;
-      const paneles = p.variantes.map((v,idx)=>{
-        const claveV = claveCarritoVariante(p.id, idx);
-        return `<div class="modelo-panel${idxModeloAbierto===idx?' open':''}" id="panel-modelo-${p.id}-${idx}">
-          <div class="nombre-modelo">${v.modelo}</div>
-          ${v.codigo ? `<div class="codigo-modelo">Cod: ${v.codigo}</div>` : ''}
-          <div class="precio-modelo">${money(precioVariante(v))} c/u</div>
-          <div class="qty-row">
-            <button onclick="cambiarQty('modelo-${p.id}-${idx}',-1)">-</button>
-            <input type="number" id="qty-modelo-${p.id}-${idx}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
-            <button onclick="cambiarQty('modelo-${p.id}-${idx}',1)">+</button>
-          </div>
-          <button class="add-btn${cart[claveV]?' en-carrito':''}" onclick="agregarAlCarritoVariante(${p.id},${idx})">${cart[claveV]?'✓ En presupuesto':'Agregar'}</button>
-        </div>`;
-      }).join("");
-      bloqueSeleccion = `${botonSelector}${paneles}`;
+      // Antes acá se mostraban TODOS los modelos en chips, uno al lado del otro
+      // (hacía la imagen muy larga), y después de elegir uno se repetía el nombre
+      // en varios lados. Ahora todo pasa adentro de la ventana "Elegí el modelo":
+      // ahí se ve el precio de cada modelo, se elige la cantidad y se agrega,
+      // sin salir de la ventana (así se pueden cargar varios modelos seguidos).
+      // Esto no afecta a los productos con colores, que siguen igual.
+      precioMostrado = `<div class="precio" style="color:var(--gris);font-size:0.85rem;">Varios modelos disponibles</div>`;
+      bloqueSeleccion = `<button type="button" class="btn-elegir-modelo" onclick="abrirSelectorModelo(${p.id})">🔽 Elegí el modelo</button>`;
     } else if(tieneColores){
       const idxAbierto = chipAbierto[p.id];
       const chips = p.colores.map((c,idx)=>{
@@ -1139,18 +1124,42 @@ function abrirSelectorModelo(id){
   cont.innerHTML = p.variantes.map((v,idx)=>{
     const claveV = claveCarritoVariante(id, idx);
     const enCarrito = !!cart[claveV];
-    return `<button type="button" class="item-selector-modelo${enCarrito?' en-carrito':''}"
-      onclick="elegirModeloDesdeSelector(${id},${idx})">${v.modelo}${enCarrito?' ✓ (en presupuesto)':''}</button>`;
+    return `<div class="fila-selector-modelo">
+      <div class="nombre-modelo">${v.modelo}</div>
+      ${v.codigo ? `<div class="codigo-modelo">Cod: ${v.codigo}</div>` : ''}
+      <div class="precio-modelo">${money(precioVariante(v))} c/u</div>
+      <div class="qty-row">
+        <button type="button" onclick="cambiarQty('selmodelo-${id}-${idx}',-1)">-</button>
+        <input type="number" id="qty-selmodelo-${id}-${idx}" value="1" min="1" inputmode="numeric" pattern="[0-9]*">
+        <button type="button" onclick="cambiarQty('selmodelo-${id}-${idx}',1)">+</button>
+      </div>
+      <button type="button" class="add-btn${enCarrito?' en-carrito':''}" id="btn-add-selmodelo-${id}-${idx}"
+        onclick="agregarModeloDesdeSelector(${id},${idx})">${enCarrito?'✓ En presupuesto':'Agregar'}</button>
+    </div>`;
   }).join("");
   document.getElementById("selector-modelo-panel").classList.add("open");
 }
 function cerrarSelectorModelo(){
   document.getElementById("selector-modelo-panel").classList.remove("open");
 }
-function elegirModeloDesdeSelector(id, idx){
-  modeloAbierto[id] = idx;
-  cerrarSelectorModelo();
-  renderGrid();
+
+// Agrega el modelo elegido directo al presupuesto compartido (mismo camino que
+// siempre: guardarCarrito() sincroniza con la web al toque). La ventana se deja
+// abierta para poder seguir eligiendo y agregando otros modelos del mismo
+// producto sin tener que volver a tocar la foto cada vez.
+function agregarModeloDesdeSelector(id, idx){
+  const p = productos.find(x=>x.id===id);
+  const variante = p.variantes[idx];
+  const input = document.getElementById(`qty-selmodelo-${id}-${idx}`);
+  const qty = parseInt(input.value || "1");
+  const clave = claveCarritoVariante(id, idx);
+  if(!cart[clave]) cart[clave] = 0;
+  cart[clave] += qty;
+  guardarCarrito();
+  showToast(`${p.nombre} (${variante.modelo}) agregado`);
+  const btn = document.getElementById(`btn-add-selmodelo-${id}-${idx}`);
+  if(btn){ btn.textContent = "✓ En presupuesto"; btn.classList.add("en-carrito"); }
+  input.value = 1;
 }
 
 function agregarAlCarritoColor(id, idx){
