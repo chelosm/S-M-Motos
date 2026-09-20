@@ -621,6 +621,13 @@ async function cargarProductos(){
   renderTabs();
   renderGrid();
   if(esAdmin) renderAdminLista();
+  // Cada vez que la tienda carga (incluida la actualización automática cada
+  // 30s), volvemos a escribir sus propios ítems en el presupuesto
+  // compartido. Esto es "autocurativo": si la web llegó a pisar el
+  // presupuesto compartido con una copia vieja (ya arreglamos ese bug, pero
+  // por las dudas), acá se reponen solos sin que el usuario tenga que hacer
+  // nada ni volver a cargar productos a mano.
+  sincronizarPresupuestoCompartido();
 }
 
 // Unifica los precios: para cada producto de la tienda que tenga el mismo código

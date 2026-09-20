@@ -1481,6 +1481,13 @@
   let PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
   let contadorManual = 0;
 
+  // Todos los ids de ítems que esta pestaña llegó a "ver" alguna vez (ya sea
+  // porque los leyó del storage o porque los agregó ella misma). Sirve para
+  // que, al guardar, sepamos distinguir un ítem que la tienda agregó mientras
+  // esta pestaña ya estaba abierta (nuevo, hay que sumarlo) de uno que
+  // borramos nosotros a propósito (ya lo conocíamos, no hay que resucitarlo).
+  let idsVistosPresupuesto = new Set(PRESUPUESTO.map(it => it.id));
+
   // La tienda (distribuidora-tienda.html) agrega y modifica ítems escribiendo
   // directo en este mismo localStorage compartido. Como esta página guarda
   // el presupuesto en la variable PRESUPUESTO al abrir, si se agregaron cosas
@@ -1490,6 +1497,7 @@
   function sincronizarPresupuestoDesdeStorage() {
     try {
       PRESUPUESTO = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
+      PRESUPUESTO.forEach(it => idsVistosPresupuesto.add(it.id));
     } catch (e) { /* si falla, seguimos con lo que ya había en memoria */ }
   }
   let modoPresupuesto = localStorage.getItem("modoPresupuestoSMMotos") || "minorista";
@@ -1521,6 +1529,22 @@
   }
 
   function guardarPresupuesto() {
+    // OJO: acá estaba el bug de "se pierden los artículos de la tienda". Esta
+    // pestaña guardaba SIEMPRE pisando todo el presupuesto compartido con lo
+    // que tenía en memoria. Si la tienda había agregado cosas mientras tanto,
+    // esta pestaña no las conocía y las borraba sin querer al guardar.
+    // Ahora, antes de guardar, revisamos si en el storage hay ítems que esta
+    // pestaña todavía no vio (o sea, los agregó la tienda recién) y los
+    // sumamos en vez de perderlos. Si un ítem ya lo conocíamos y lo borramos
+    // a propósito, no se vuelve a agregar.
+    try {
+      const actual = JSON.parse(localStorage.getItem("presupuestoSMMotos") || "[]");
+      const nuevosDesconocidos = actual.filter(it => !idsVistosPresupuesto.has(it.id));
+      nuevosDesconocidos.forEach(it => idsVistosPresupuesto.add(it.id));
+      if (nuevosDesconocidos.length > 0) {
+        PRESUPUESTO = [...PRESUPUESTO, ...nuevosDesconocidos];
+      }
+    } catch (e) { /* si falla la lectura, guardamos igual con lo que tenemos */ }
     localStorage.setItem("presupuestoSMMotos", JSON.stringify(PRESUPUESTO));
     actualizarContadorPresupuesto();
   }
