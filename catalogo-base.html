@@ -1554,7 +1554,17 @@
     actualizarContadorPresupuesto();
   }
 
+  // Mismo problema que con el ítem manual: en algunas tablets un solo toque
+  // dispara el evento de click dos veces, y como acá se espera una respuesta
+  // (pedirNumero) antes de guardar, ese doble toque alcanzaba a abrir dos
+  // veces el flujo y terminaba agregando el producto dos veces en vez de una.
+  // Este freno bloquea el segundo toque si llega a menos de un segundo del primero.
+  let bloqueadoAgregarPresupuesto = false;
   async function agregarAPresupuesto(id) {
+    if (bloqueadoAgregarPresupuesto) return;
+    bloqueadoAgregarPresupuesto = true;
+    setTimeout(() => { bloqueadoAgregarPresupuesto = false; }, 1000);
+
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
 
@@ -1579,6 +1589,7 @@
       });
     }
     guardarPresupuesto();
+    renderPresupuesto();
     mostrarDebug("Agregado al presupuesto (" + modoPresupuesto + "): " + producto.codigo);
   }
 
