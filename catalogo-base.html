@@ -2114,7 +2114,11 @@
     input.value = valorInicial !== undefined ? valorInicial : "";
     document.getElementById("fondo-prompt-numerico").style.display = "block";
     document.getElementById("modal-prompt-numerico").style.display = "block";
-    setTimeout(() => input.focus(), 50);
+    // Antes el cursor quedaba al final del "1" que aparece por defecto, así
+    // que si escribías una cantidad se pegaba al 1 (por ej. querías poner 5
+    // y quedaba 15). Con .select() el "1" queda resaltado/seleccionado, así
+    // que en cuanto empezás a escribir se reemplaza solo, sin que se sume.
+    setTimeout(() => { input.focus(); input.select(); }, 50);
     return new Promise(resolve => { _resolverPromptNumericoPendiente = resolve; });
   }
   function resolverPromptNumerico(confirmar) {
