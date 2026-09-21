@@ -1550,6 +1550,16 @@
         PRESUPUESTO = [...PRESUPUESTO, ...nuevosDesconocidos];
       }
     } catch (e) { /* si falla la lectura, guardamos igual con lo que tenemos */ }
+
+    // Acá estaba el bug de la duplicación: cuando agregábamos un ítem nuevo
+    // (por código o manual) lo metíamos en PRESUPUESTO pero nunca lo
+    // marcábamos como "visto". Entonces, en el SIGUIENTE guardado (agregar
+    // otro ítem, editar una cantidad, etc.) este mismo ítem aparecía en el
+    // storage y el sistema lo confundía con algo nuevo agregado desde la
+    // tienda, volviendo a copiarlo. Esta línea marca como "visto" todo lo
+    // que ya tenemos en memoria antes de guardar, así no se vuelve a copiar.
+    PRESUPUESTO.forEach(it => idsVistosPresupuesto.add(it.id));
+
     localStorage.setItem("presupuestoSMMotos", JSON.stringify(PRESUPUESTO));
     actualizarContadorPresupuesto();
   }
