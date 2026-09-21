@@ -1582,7 +1582,16 @@
     mostrarDebug("Agregado al presupuesto (" + modoPresupuesto + "): " + producto.codigo);
   }
 
+  // En algunas tablets un solo toque en el botón puede disparar el evento de
+  // click dos veces (bug conocido del navegador), y eso hacía que el ítem
+  // manual se cargara duplicado aunque solo se tocara una vez. Este freno
+  // bloquea el segundo toque si llega a menos de un segundo del primero.
+  let bloqueadoAgregarManual = false;
   function agregarItemManual() {
+    if (bloqueadoAgregarManual) return;
+    bloqueadoAgregarManual = true;
+    setTimeout(() => { bloqueadoAgregarManual = false; }, 1000);
+
     const desc = document.getElementById("manual-descripcion").value.trim();
     const cant = Math.max(1, parseInt(document.getElementById("manual-cantidad").value) || 1);
     const precio = parseFloat(document.getElementById("manual-precio").value);
@@ -1596,15 +1605,28 @@
       return;
     }
 
-    contadorManual++;
-    PRESUPUESTO.push({
-      id: "manual-" + Date.now() + "-" + contadorManual,
-      codigo: "—",
-      descripcion: desc,
-      cantidad: cant,
-      precioUnitario: precio,
-      manual: true
-    });
+    // Si ya hay un ítem manual cargado con el mismo nombre y el mismo precio,
+    // sumamos la cantidad ahí en vez de crear una línea nueva duplicada (antes
+    // pasaba esto: cargabas "410*18" dos veces y quedaban dos líneas separadas
+    // en vez de una sola con cantidad 2).
+    const existente = PRESUPUESTO.find(item =>
+      item.manual &&
+      item.descripcion.trim().toLowerCase() === desc.toLowerCase() &&
+      item.precioUnitario === precio
+    );
+    if (existente) {
+      existente.cantidad += cant;
+    } else {
+      contadorManual++;
+      PRESUPUESTO.push({
+        id: "manual-" + Date.now() + "-" + contadorManual,
+        codigo: "—",
+        descripcion: desc,
+        cantidad: cant,
+        precioUnitario: precio,
+        manual: true
+      });
+    }
 
     document.getElementById("manual-descripcion").value = "";
     document.getElementById("manual-cantidad").value = "1";
@@ -1642,6 +1664,22 @@
       return;
     }
     item.precioUnitario = nuevoPrecio;
+    // Si el ítem es un manual que se cargó desde la tienda, la tienda se
+    // "repone" sola cada 30 segundos usando SU propio precio guardado — así
+    // que si no lo actualizamos también ahí, el precio que edites acá se
+    // pisaría solo la próxima vez que la tienda se actualice. Por eso, para
+    // estos ítems, guardamos el precio nuevo también en el lugar donde la
+    // tienda lo guarda.
+    if (id.startsWith("tienda-custom|")) {
+      const customId = id.slice("tienda-custom|".length);
+      try {
+        const customsTienda = JSON.parse(localStorage.getItem("dt_custom") || "{}");
+        if (customsTienda[customId]) {
+          customsTienda[customId].precio = nuevoPrecio;
+          localStorage.setItem("dt_custom", JSON.stringify(customsTienda));
+        }
+      } catch (e) { /* si esto falla, al menos ya quedó guardado en el presupuesto */ }
+    }
     guardarPresupuesto();
     renderPresupuesto();
   }
@@ -1657,6 +1695,19 @@
       return;
     }
     item.cantidad = nuevaCantidad;
+    // Mismo caso que con el precio: si es un manual cargado desde la tienda,
+    // actualizamos también la cantidad ahí para que no se pise sola en el
+    // próximo repaso automático de la tienda.
+    if (id.startsWith("tienda-custom|")) {
+      try {
+        const clave = id.slice("tienda-".length);
+        const cartTienda = JSON.parse(localStorage.getItem("dt_cart") || "{}");
+        if (clave in cartTienda) {
+          cartTienda[clave] = nuevaCantidad;
+          localStorage.setItem("dt_cart", JSON.stringify(cartTienda));
+        }
+      } catch (e) { /* si esto falla, al menos ya quedó guardado en el presupuesto */ }
+    }
     guardarPresupuesto();
     renderPresupuesto();
   }
