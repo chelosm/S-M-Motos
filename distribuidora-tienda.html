@@ -64,6 +64,13 @@
     text-stroke:1.5px #000;
     text-shadow:-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
   }
+  .aviso-costos{
+    text-align:center;
+    padding:2px 16px 0;
+    font-size:1rem;
+    font-weight:800;
+    color:#39FF14;
+  }
   #buscador-wrap{
     padding:14px 16px 0;
     max-width:1000px;
@@ -72,7 +79,7 @@
   #buscador{
     width:100%;
     padding:12px 14px;
-    border:1px solid var(--borde);
+    border:2px solid var(--amarillo);
     border-radius:10px;
     font-size:0.95rem;
   }
@@ -395,6 +402,7 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h13l3 3v17H4z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
 </a>
 <div class="subtitulo"><strong>¡Elegí la categoría y armá tu pedido!</strong></div>
+<div class="aviso-costos">"Estos precios son costos!"</div>
 
 <div id="buscador-wrap">
   <input type="text" id="buscador" placeholder="Buscar por nombre o código" oninput="onBuscadorInput()">
