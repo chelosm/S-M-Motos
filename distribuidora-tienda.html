@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>S-M Motos | Distribuidora Tienda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -53,8 +56,13 @@
   .subtitulo{
     text-align:center;
     padding:10px 16px 0;
-    font-size:0.95rem;
-    color:var(--negro);
+    font-size:1.5rem;
+    font-weight:800;
+    font-family:'Baloo 2',cursive;
+    color:#ff1493;
+    -webkit-text-stroke:1.5px #000;
+    text-stroke:1.5px #000;
+    text-shadow:-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
   }
   #buscador-wrap{
     padding:14px 16px 0;
@@ -386,7 +394,7 @@
 <a id="btn-catalogo" href="https://chelosm.github.io/S-M-Motos/catalogo-base.html" target="catalogo-smmotos" rel="noopener" title="Ir a Catálogo / Facturación">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h13l3 3v17H4z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
 </a>
-<div class="subtitulo"><strong>Armá tu pedido</strong></div>
+<div class="subtitulo"><strong>¡Elegí la categoría y armá tu pedido!</strong></div>
 
 <div id="buscador-wrap">
   <input type="text" id="buscador" placeholder="Buscar por nombre o código" oninput="onBuscadorInput()">
@@ -1057,7 +1065,16 @@ function guardarCustomItems(){
   localStorage.setItem("dt_custom", JSON.stringify(customItems));
 }
 
+// En algunas tablets un solo toque en el botón puede disparar el evento de
+// click dos veces (bug conocido del navegador), y eso hacía que el ítem
+// manual se cargara duplicado aunque solo se tocara una vez. Este freno
+// bloquea el segundo toque si llega a menos de un segundo del primero.
+let bloqueadoAgregarManualTienda = false;
 function agregarItemManual(){
+  if(bloqueadoAgregarManualTienda) return;
+  bloqueadoAgregarManualTienda = true;
+  setTimeout(() => { bloqueadoAgregarManualTienda = false; }, 1000);
+
   const nombre = document.getElementById("manual-nombre").value.trim();
   const precio = parseFloat(document.getElementById("manual-precio").value);
   const cantidad = parseInt(document.getElementById("manual-cantidad").value || "1");
@@ -1065,11 +1082,19 @@ function agregarItemManual(){
     showToast("Completá nombre y precio del ítem");
     return;
   }
-  const id = Date.now().toString(36);
-  customItems[id] = { nombre, precio };
-  guardarCustomItems();
+  // Si ya hay un ítem manual cargado con el mismo nombre y el mismo precio,
+  // sumamos la cantidad ahí en vez de crear una línea nueva duplicada.
+  const idExistente = Object.keys(customItems).find(k =>
+    customItems[k].nombre.trim().toLowerCase() === nombre.toLowerCase() &&
+    customItems[k].precio === precio
+  );
+  const id = idExistente || Date.now().toString(36);
+  if(!idExistente){
+    customItems[id] = { nombre, precio };
+    guardarCustomItems();
+  }
   const clave = claveCarritoCustom(id);
-  cart[clave] = cantidad;
+  cart[clave] = (cart[clave] || 0) + cantidad;
   guardarCarrito();
   document.getElementById("manual-nombre").value = "";
   document.getElementById("manual-precio").value = "";
