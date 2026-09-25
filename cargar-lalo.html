@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carga masiva - Proveedor Lalo</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body{font-family:'Segoe UI',Roboto,Arial,sans-serif;background:#111;color:#eee;padding:16px;max-width:700px;margin:0 auto;}
+  h1{font-size:1.2rem;}
+  p{font-size:0.9rem;color:#bbb;}
+  input{width:100%;padding:10px;margin-bottom:8px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;box-sizing:border-box;}
+  button{width:100%;padding:12px;margin-top:8px;border:none;border-radius:8px;background:#FFD500;color:#111;font-weight:800;font-size:1rem;}
+  button:disabled{opacity:0.5;}
+  #estado{margin-top:14px;font-size:0.9rem;white-space:pre-wrap;}
+  #resumen{margin-top:14px;font-size:0.85rem;color:#9f9;}
+  .fila{font-size:0.8rem;color:#999;border-bottom:1px solid #333;padding:4px 0;}
+  #login-box, #accion-box{background:#1a1a1a;padding:14px;border-radius:10px;margin-bottom:14px;}
+</style>
+</head>
+<body>
+
+<h1>Carga masiva — Proveedor "Lalo"</h1>
+<p>Esta página carga de una sola vez los 132 productos de la lista de precios que me pasaste, calculando el costo en dólares necesario para que el precio minorista te quede exactamente como el precio final que ya tenías (dólar $1560, IVA 21%, margen 50%). Es de un solo uso: una vez que termine la carga, no hace falta volver a abrir esta página.</p>
+
+<div id="login-box">
+  <p>Entrá con el mismo usuario y contraseña que usás para el panel de administrador en la web.</p>
+  <input type="password" id="password" placeholder="Contraseña de administrador">
+  <button onclick="login()">Iniciar sesión</button>
+  <div id="estado-login"></div>
+</div>
+
+<div id="accion-box" style="display:none;">
+  <p><strong id="cantidad-txt"></strong></p>
+  <button id="btn-importar" onclick="importarTodo()">Cargar los 132 productos de Lalo</button>
+  <div id="estado"></div>
+  <div id="resumen"></div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://lzozlxxcnkqznnuueuxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_pX8-nV0ceP1Q5CWPl2baiA_S9BSCDq6";
+  const ADMIN_EMAIL = "admin@smmotos.com";
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const PROVEEDOR = "Lalo";
+
+  const ITEMS = [
+  {codigo:'3532',descripcion:'AGARRADERAS TRASERA GILERA SMASH JGO',precio_usd:3.0197,objetivo:8550},
+  {codigo:'3724',descripcion:'AMORTIGUADORES HONDA TITAN 150 FAR',precio_usd:29.8842,objetivo:84614},
+  {codigo:'2340',descripcion:'BALANCINES GILERA SMASH (JGO)',precio_usd:3.0423,objetivo:8614},
+  {codigo:'3851',descripcion:'BALANCINES HONDA NEW WAVE S (JGO)',precio_usd:9.0846,objetivo:25722},
+  {codigo:'3500',descripcion:'BALANCINES ZANELLA RX150 INFERIOR COMPETICION (JGO)',precio_usd:12.2017,objetivo:34548},
+  {codigo:'3980',descripcion:'BARRALES GILERA SMASH SET',precio_usd:18.4411,objetivo:52214},
+  {codigo:'3959',descripcion:'BARRALES MOTOMEL SKUA 150 SET',precio_usd:30.0233,objetivo:85008},
+  {codigo:'2342',descripcion:'BENDIX DE ARRANQUE GILERA SMASH',precio_usd:5.0159,objetivo:14202},
+  {codigo:'4547',descripcion:'BENDIX DE ARRANQUE HONDA TITAN 150',precio_usd:14.2304,objetivo:40292},
+  {codigo:'4030',descripcion:'BENDIX DE ARRANQUE HONDA TWISTER/TORNADO',precio_usd:13.0656,objetivo:36994},
+  {codigo:'3281',descripcion:'BENDIX DE ARRANQUE MOTOMEL DAKAR 200',precio_usd:11.6536,objetivo:32996},
+  {codigo:'3700',descripcion:'BOBINA DE IGNICION CON CAPUCHON',precio_usd:3.541,objetivo:10026},
+  {codigo:'4284',descripcion:'BULBO DE FRENO DELANTERO GILERA SMASH A DISCO',precio_usd:0.5926,objetivo:1678},
+  {codigo:'4240',descripcion:'BULBO DE FRENO TRASERO HONDA TITAN 2000',precio_usd:1.2135,objetivo:3436},
+  {codigo:'181',descripcion:'CABLE DE ACELERADOR UNIVERSAL C/U',precio_usd:0.308,objetivo:872},
+  {codigo:'182',descripcion:'CABLE DE EMBRAGUE UNIVERSAL C/U',precio_usd:0.3595,objetivo:1018},
+  {codigo:'207',descripcion:'CABLE DE EMBRAGUE YAMAHA YBR 125 MOD.2000',precio_usd:1.6642,objetivo:4712},
+  {codigo:'3354',descripcion:'CADENA 420 X 112L',precio_usd:4.0793,objetivo:11550},
+  {codigo:'3429',descripcion:'CADENA 428 H X 136L DORADA',precio_usd:6.6003,objetivo:18688},
+  {codigo:'3668',descripcion:'CADENA DE DISTRIBUCION 25H X 84L DID',precio_usd:2.0534,objetivo:5814},
+  {codigo:'3881',descripcion:'CAJA DE CAMBIO GILERA SMASH CORTA',precio_usd:16.9308,objetivo:47938},
+  {codigo:'3883',descripcion:'CAJA DE CAMBIO ZANELLA RX 150/SKUA150',precio_usd:18.8331,objetivo:53324},
+  {codigo:'3430',descripcion:'CAMARA 400 X 17',precio_usd:3.4817,objetivo:9858},
+  {codigo:'4337',descripcion:'CAÑO POSAPIE GILERA SMASH',precio_usd:8.766,objetivo:24820},
+  {codigo:'288',descripcion:'CARBURADOR GILERA SMASH',precio_usd:12.4786,objetivo:35332},
+  {codigo:'3963',descripcion:'CARBURADOR HONDA NEW WAVE S',precio_usd:17.9077,objetivo:50704},
+  {codigo:'3472',descripcion:'CARBURADOR HONDA TITAN 150',precio_usd:18.2546,objetivo:51686},
+  {codigo:'510',descripcion:'CERRADURA DE ASIENTO GILERA SMASH',precio_usd:3.0423,objetivo:8614},
+  {codigo:'709',descripcion:'CHANCHITO DE ARRANQUE CON FUSIBLE',precio_usd:4.1238,objetivo:11676},
+  {codigo:'2930',descripcion:'CHANCHITO DE ARRANQUE HONDA NEW TITAN 150',precio_usd:5.6015,objetivo:15860},
+  {codigo:'57',descripcion:'CHANCHITO DE ARRANQUE SIN FUSIBLE',precio_usd:2.5351,objetivo:7178},
+  {codigo:'3611',descripcion:'CILINDRO GILERA SMASH 52,4',precio_usd:17.3102,objetivo:49012},
+  {codigo:'701',descripcion:'CORONA DE DISTRIBUCION 28 D 3 AGUJEROS',precio_usd:0.7332,objetivo:2076},
+  {codigo:'4243',descripcion:'CORONA DE DISTRIBUCION ROUSER NS 135',precio_usd:3.4499,objetivo:9768},
+  {codigo:'715',descripcion:'CUBETA DE DIRECCION HONDA CG 150',precio_usd:3.8603,objetivo:10930},
+  {codigo:'3543',descripcion:'CUBETA DE DIRECCION HONDA TORNADO 250',precio_usd:5.2419,objetivo:14842},
+  {codigo:'3344',descripcion:'CUBETA DE DIRECCION HONDA TWISTER',precio_usd:4.8118,objetivo:13624},
+  {codigo:'3343',descripcion:'CUBETA DE DIRECCION MOTOMEL SKUA 150',precio_usd:4.0552,objetivo:11482},
+  {codigo:'4279',descripcion:'CUBETA DE DIRECCION ROUSER NS 135',precio_usd:4.0531,objetivo:11476},
+  {codigo:'2933',descripcion:'CUBETA DE DIRECCION ZANELLA RX150/STORM CKM',precio_usd:2.8678,objetivo:8120},
+  {codigo:'3723',descripcion:'DESTELLADOR CUADRADO SIN SONIDO',precio_usd:1.4629,objetivo:4142},
+  {codigo:'3697',descripcion:'EJE DELANTERO GILERA SMASH A DISCO',precio_usd:1.8881,objetivo:5346},
+  {codigo:'340',descripcion:'EJE DELANTERO GILERA SMASH A TAMBOR',precio_usd:1.9326,objetivo:5472},
+  {codigo:'351',descripcion:'EJE TRASERO GILERA SMASH',precio_usd:1.4954,objetivo:4234},
+  {codigo:'3400',descripcion:'EJE TRASERO YAMAHA YBR 125',precio_usd:1.8231,objetivo:5162},
+  {codigo:'3397',descripcion:'EJE TRASERO ZANELLA RX150/STORM',precio_usd:2.7718,objetivo:7848},
+  {codigo:'2755',descripcion:'ESTATOR GILERA SMASH 8 CAMPOS',precio_usd:9.7973,objetivo:27740},
+  {codigo:'364',descripcion:'ESTIRA CADENA GILERA SMASH (JUEGO)',precio_usd:0.7085,objetivo:2006},
+  {codigo:'4595',descripcion:'ESTIRA CADENA HONDA NEW WAVE S SET',precio_usd:0.8053,objetivo:2280},
+  {codigo:'2710',descripcion:'EVITA SOLDADURA EMBRAGUE C/U',precio_usd:0.2225,objetivo:630},
+  {codigo:'4114',descripcion:'FAROL DELANTERO GILERA SMASH AMBAR',precio_usd:12.1318,objetivo:34350},
+  {codigo:'385',descripcion:'FAROL DELANTERO GILERA SMASH CRISTAL',precio_usd:12.1311,objetivo:34348},
+  {codigo:'386',descripcion:'FAROL DELANTERO HONDA TITAN 150',precio_usd:9.6758,objetivo:27396},
+  {codigo:'3702',descripcion:'FAROL TRASERO GILERA CRISTAL',precio_usd:8.4573,objetivo:23946},
+  {codigo:'390',descripcion:'FAROL TRASERO GILERA SMASH AMBAR',precio_usd:8.4573,objetivo:23946},
+  {codigo:'3129',descripcion:'FILTRO DE ACEITE ROUSER NS 200/220',precio_usd:0.6703,objetivo:1898},
+  {codigo:'406',descripcion:'FILTRO DE ACEITE TWISTER/XR250 TORNADO',precio_usd:0.6703,objetivo:1898},
+  {codigo:'408',descripcion:'FILTRO DE ACEITE YAMAHA FZ16',precio_usd:0.6703,objetivo:1898},
+  {codigo:'2934',descripcion:'FILTRO DE ACEITE YAMAHA YBR125/CRYPTON',precio_usd:0.8307,objetivo:2352},
+  {codigo:'393',descripcion:'FILTRO DE AIRE GILERA SMASH (ESPONJA)',precio_usd:0.3179,objetivo:900},
+  {codigo:'942',descripcion:'FILTRO DE AIRE HONDA BROSS/SKUA150',precio_usd:3.0225,objetivo:8558},
+  {codigo:'4394',descripcion:'FILTRO DE AIRE HONDA GLH 150 GAUCHA',precio_usd:2.5387,objetivo:7188},
+  {codigo:'2931',descripcion:'FILTRO DE AIRE HONDA NEW TITAN 150',precio_usd:3.185,objetivo:9018},
+  {codigo:'4488',descripcion:'FILTRO DE AIRE HONDA NEW WAVE S',precio_usd:3.3623,objetivo:9520},
+  {codigo:'3264',descripcion:'FORMADOR DE JUNTA ALTA TEMPERATURA GRIS 40GR',precio_usd:2.3741,objetivo:6722},
+  {codigo:'3336',descripcion:'FUSIBLE FICHA PLANA 15 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'415',descripcion:'FUSIBLE FICHA PLANA 20 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'411',descripcion:'FUSIBLE FICHA PLANA 25 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'738',descripcion:'FUSIBLE FICHA PLANA 30 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'3918',descripcion:'FUSIBLE MINI FICHA PLANA 10 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'4303',descripcion:'FUSIBLE MINI FICHA PLANA 15 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'4304',descripcion:'FUSIBLE MINI FICHA PLANA 20 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'413',descripcion:'FUSIBLE VIDRIO 20 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'412',descripcion:'FUSIBLE VIDRIO 30 AMP C/U',precio_usd:0.0622,objetivo:176},
+  {codigo:'670',descripcion:'GOMA PATADA DE ARRANQUE VARIAS',precio_usd:0.2974,objetivo:842},
+  {codigo:'4301',descripcion:'GUIA DE CADENA DISTRIBUCION ROUSER NS 135',precio_usd:4.5815,objetivo:12972},
+  {codigo:'3185',descripcion:'JUNTA DE BASE CILINDRO HONDA TITAN 150 C/U',precio_usd:0.2056,objetivo:582},
+  {codigo:'2786',descripcion:'JUNTA DE MOTOR HONDA NEW WAVE S',precio_usd:1.8132,objetivo:5134},
+  {codigo:'3861',descripcion:'KIT DISTRIBUCION PASO 84L BUHO',precio_usd:3.0939,objetivo:8760},
+  {codigo:'4591',descripcion:'KIT DISTRIBUCION PASO 84L VINI',precio_usd:11.1252,objetivo:31500},
+  {codigo:'4022',descripcion:'LAMPARA LED POSICION SILICONADA AMBAR',precio_usd:0.2388,objetivo:676},
+  {codigo:'2394',descripcion:'LLAVE DE CONTACTO HONDA DAX70',precio_usd:4.2043,objetivo:11904},
+  {codigo:'505',descripcion:'LLAVE DE CONTACTO MOTOMEL SKUA 150',precio_usd:4.7588,objetivo:13474},
+  {codigo:'3921',descripcion:'LLAVE DE CONTACTO ROUSER NS 200',precio_usd:5.2285,objetivo:14804},
+  {codigo:'4587',descripcion:'LLAVE DE CONTACTO YAMAHA FZ 16 PAG',precio_usd:8.3535,objetivo:23652},
+  {codigo:'2843',descripcion:'LLAVE DE CONTACTO YAMAHA YBR 125 4 CABLES',precio_usd:6.1051,objetivo:17286},
+  {codigo:'4142',descripcion:'LLAVE DE CONTACTO ZANELLA RX 150 CORTA',precio_usd:4.9283,objetivo:13954},
+  {codigo:'2750',descripcion:'MANCHON MOTOMEL SKUA 150',precio_usd:0.8159,objetivo:2310},
+  {codigo:'1282',descripcion:'MAZA TRASERA GILERA SMASH COMPLETA',precio_usd:24.6408,objetivo:69768},
+  {codigo:'467',descripcion:'MEDIO JUEGO DE JUNTA GILERA SMASH',precio_usd:0.5609,objetivo:1588},
+  {codigo:'469',descripcion:'MEDIO JUEGO DE JUNTA HONDA TITAN 150 CG',precio_usd:0.7007,objetivo:1984},
+  {codigo:'3513',descripcion:'MULETA MOTOMEL SKUA/BROSS',precio_usd:2.8029,objetivo:7936},
+  {codigo:'4076',descripcion:'ORING DE ENCENDIDO GILERA SMASH',precio_usd:0.4238,objetivo:1200},
+  {codigo:'3924',descripcion:'ORING TAPA DE VALVULA ROUSER NS 135',precio_usd:1.5674,objetivo:4438},
+  {codigo:'542',descripcion:'PALANCA DE CAMBIO GILERA SMASH LARGA',precio_usd:2.4793,objetivo:7020},
+  {codigo:'568',descripcion:'PASTILLA DE FRENO HONDA WAVE 2014/NEW TITAN DEL',precio_usd:1.7624,objetivo:4990},
+  {codigo:'551',descripcion:'PATADA DE ARRANQUE GILERA SMASH/C90',precio_usd:2.8926,objetivo:8190},
+  {codigo:'553',descripcion:'PEDAL DE FRENO GILERA SMASH',precio_usd:3.909,objetivo:11068},
+  {codigo:'2771',descripcion:'PLAQUETA PORTACARBON HONDA TITAN 150',precio_usd:1.2319,objetivo:3488},
+  {codigo:'272',descripcion:'PORTACORONA GILERA SMASH COMPLETO',precio_usd:5.5202,objetivo:15630},
+  {codigo:'4419',descripcion:'PORTAFUSIBLE DE VIDRIO',precio_usd:0.5065,objetivo:1434},
+  {codigo:'574',descripcion:'PORTALAMPARA SMASH COMPLETO (GOMA)',precio_usd:0.9755,objetivo:2762},
+  {codigo:'4522',descripcion:'REGULADOR DE VOLTAJE GILERA SMASH MONOFASICO 4 CABLES',precio_usd:6.0373,objetivo:17094},
+  {codigo:'3190',descripcion:'REGULADOR DE VOLTAJE GILERA SMASH MONOFASICO 4 PIN',precio_usd:3.4788,objetivo:9850},
+  {codigo:'3450',descripcion:'REGULADOR DE VOLTAJE GILERA SMASH TRIF 5 CABLES',precio_usd:7.6633,objetivo:21698},
+  {codigo:'3130',descripcion:'REGULADOR DE VOLTAJE GILERA SMASH TRIF LUZ ENC. 6 CABLES',precio_usd:6.7762,objetivo:19186},
+  {codigo:'3947',descripcion:'REGULADOR DE VOLTAJE HONDA NEW TITAN 150',precio_usd:10.4351,objetivo:29546},
+  {codigo:'4253',descripcion:'REGULADOR DE VOLTAJE HONDA NEW WAVE S',precio_usd:2.8332,objetivo:8022},
+  {codigo:'4231',descripcion:'REGULADOR DE VOLTAJE ROUSER NS 135 CKM',precio_usd:13.3439,objetivo:37782},
+  {codigo:'4232',descripcion:'REGULADOR DE VOLTAJE ROUSER NS 200 CKM',precio_usd:14.2339,objetivo:40302},
+  {codigo:'3191',descripcion:'REGULADOR DE VOLTAJE ZANELLA ZB110',precio_usd:5.9292,objetivo:16788},
+  {codigo:'3979',descripcion:'REPARACION BENDIX HONDA TITAN 150',precio_usd:2.8876,objetivo:8176},
+  {codigo:'3655',descripcion:'REPARACION BENDIX MOTOMEL DAKAR 200/CUATRI CKM',precio_usd:5.9292,objetivo:16788},
+  {codigo:'4433',descripcion:'REPARACION BENDIX ROUSER NS 200',precio_usd:3.8914,objetivo:11018},
+  {codigo:'3389',descripcion:'REPARACION BENDIX ZANELLA RX150',precio_usd:0.9882,objetivo:2798},
+  {codigo:'81',descripcion:'REPARACION CARBURADOR GILERA SMASH',precio_usd:1.8867,objetivo:5342},
+  {codigo:'83',descripcion:'REPARACION CARBURADOR HONDA TITAN 150',precio_usd:2.3564,objetivo:6672},
+  {codigo:'84',descripcion:'REPARACION CARBURADOR MOTOMEL DAKAR 200',precio_usd:2.0442,objetivo:5788},
+  {codigo:'4171',descripcion:'RESORTE DE PEDAL FRENO YAMAHA YBR 125',precio_usd:0.5086,objetivo:1440},
+  {codigo:'4565',descripcion:'RESORTE DE SUSPENSION GILERA SMASH A DISCO SET',precio_usd:4.9792,objetivo:14098},
+  {codigo:'4121',descripcion:'RESORTE DE SUSPENSION GILERA SMASH A ZAPATA SET',precio_usd:4.9792,objetivo:14098},
+  {codigo:'4568',descripcion:'RESORTE DE SUSPENSION HONDA TITAN 150 SET',precio_usd:7.8032,objetivo:22094},
+  {codigo:'4567',descripcion:'RESORTE DE SUSPENSION ZANELLA RX 150 SET',precio_usd:9.0351,objetivo:25582},
+  {codigo:'3826',descripcion:'RETEN DE GUARDAPOLVO GILERA SMASH',precio_usd:0.3313,objetivo:938},
+  {codigo:'3542',descripcion:'RUEDITAS DE DISTRIBUCION CON DIENTES CON EJE PASO 84',precio_usd:0.9995,objetivo:2830},
+  {codigo:'3323',descripcion:'RULEMAN 6003 2RS ALTA VELOCIDAD',precio_usd:0.5135,objetivo:1454},
+  {codigo:'585',descripcion:'RULEMAN 6203 2RS ALTA VELOCIDAD',precio_usd:0.5898,objetivo:1670},
+  {codigo:'1946',descripcion:'SEGURO DE PIÑON CG125/RX150/YBR125',precio_usd:0.4104,objetivo:1162},
+  {codigo:'4015',descripcion:'TENSOR DE CADENA ROUSER NS 135',precio_usd:4.0284,objetivo:11406},
+  {codigo:'4533',descripcion:'TORRINGTONE ZANELLA RX 150',precio_usd:1.951,objetivo:5524},
+  {codigo:'4563',descripcion:'VARILLA DE VALVULA MOTOMEL DAKAR 200 SET',precio_usd:1.7136,objetivo:4852},
+  {codigo:'3471',descripcion:'VARILLAS DE VALVULAS ZANELLA RX150/SKUA150 JGO',precio_usd:1.8584,objetivo:5262}
+];
+
+  async function login() {
+    const password = document.getElementById("password").value;
+    const estado = document.getElementById("estado-login");
+    estado.textContent = "Ingresando...";
+    const { error } = await db.auth.signInWithPassword({ email: ADMIN_EMAIL, password });
+    if (error) {
+      estado.textContent = "Contraseña incorrecta o error: " + error.message;
+      return;
+    }
+    estado.textContent = "Sesión iniciada.";
+    document.getElementById("login-box").style.display = "none";
+    document.getElementById("accion-box").style.display = "block";
+    document.getElementById("cantidad-txt").textContent = "Productos listos para cargar: " + ITEMS.length;
+  }
+
+  async function importarTodo() {
+    const btn = document.getElementById("btn-importar");
+    const estado = document.getElementById("estado");
+    const resumen = document.getElementById("resumen");
+    btn.disabled = true;
+
+    let creados = 0, saltados = 0, errores = 0;
+    const detalle = [];
+
+    for (let i = 0; i < ITEMS.length; i++) {
+      const it = ITEMS[i];
+      estado.textContent = `Procesando ${i + 1} de ${ITEMS.length}: ${it.codigo} - ${it.descripcion}`;
+
+      try {
+        // Si ya existe un producto con este código y este proveedor, no lo
+        // volvemos a crear (así se puede ejecutar esta página más de una vez
+        // sin duplicar nada si algo se corta a mitad de camino).
+        const { data: existentes, error: errBusqueda } = await db
+          .from("Producto")
+          .select("id")
+          .eq("codigo", it.codigo)
+          .eq("proveedor", PROVEEDOR)
+          .limit(1);
+
+        if (errBusqueda) throw errBusqueda;
+
+        if (existentes && existentes.length > 0) {
+          saltados++;
+          detalle.push(`⏭️ ${it.codigo} ya estaba cargado, se saltea.`);
+          continue;
+        }
+
+        const nuevoId = "LALO-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+        const { error: errInsert } = await db.from("Producto").insert({
+          id: nuevoId,
+          codigo: it.codigo,
+          proveedor: PROVEEDOR,
+          descripcion: it.descripcion,
+          categoria: "",
+          precio_usd: it.precio_usd,
+          margen_pct: 50
+        });
+        if (errInsert) throw errInsert;
+
+        creados++;
+        detalle.push(`✅ ${it.codigo} - ${it.descripcion} (objetivo $${it.objetivo.toLocaleString('es-AR')})`);
+      } catch (err) {
+        errores++;
+        detalle.push(`❌ ${it.codigo}: ${err.message || err}`);
+      }
+    }
+
+    estado.textContent = "Listo.";
+    resumen.innerHTML =
+      `Creados: ${creados}<br>Ya existían (salteados): ${saltados}<br>Errores: ${errores}<br><br>` +
+      detalle.map(d => `<div class="fila">${d}</div>`).join("");
+    btn.disabled = false;
+    btn.textContent = "Volver a ejecutar (no duplica lo ya cargado)";
+  }
+</script>
+</body>
+</html>
