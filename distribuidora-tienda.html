@@ -648,8 +648,25 @@ function precioDe(p){
   return p.precio;
 }
 
+// Si el "ojo" está cerrado en la web (catalogo-base.html), acá se ocultan los
+// precios a los clientes. El admin logueado en esta misma tienda (esAdmin)
+// sigue viendo los precios reales igual, para poder trabajar.
+let preciosVisibles = true;
+async function cargarConfigPrecios(){
+  try {
+    const { data } = await sb.from("ConfigTienda").select("precios_visibles").eq("id", 1).single();
+    if (data && typeof data.precios_visibles === "boolean") {
+      preciosVisibles = data.precios_visibles;
+    }
+  } catch (e) { /* si falla o la tabla no existe todavía, seguimos mostrando precios */ }
+}
+function textoPrecio(monto){
+  return (preciosVisibles || esAdmin) ? money(monto) : "Consultar precio";
+}
+
 async function cargarProductos(){
   await obtenerDolarBlue();
+  await cargarConfigPrecios();
   const grid = document.getElementById("grid");
   const { data, error } = await sb.from("DistribuidoraTienda").select("*").order("created_at",{ascending:true});
   if(error){
@@ -783,13 +800,13 @@ function renderGrid(){
   visibles.forEach(p=>{
     const div = document.createElement("div");
     div.className = "card" + (p.oferta ? " oferta" : "");
-    const packTxt = p.pack_size > 1 ? `<div class="pack-info">Pack de ${p.pack_size} unidades &middot; Total: ${money(precioDe(p)*p.pack_size)}</div>` : "";
+    const packTxt = p.pack_size > 1 ? `<div class="pack-info">Pack de ${p.pack_size} unidades${(preciosVisibles || esAdmin) ? ' &middot; Total: '+money(precioDe(p)*p.pack_size) : ''}</div>` : "";
     const tieneColores = Array.isArray(p.colores) && p.colores.length > 0;
     const tieneVariantes = Array.isArray(p.variantes) && p.variantes.length > 0;
 
     let bloqueSeleccion;
     let fotoMostrada = p.foto_url || "";
-    let precioMostrado = `<div class="precio">${money(precioDe(p))} c/u</div>${packTxt}`;
+    let precioMostrado = `<div class="precio">${textoPrecio(precioDe(p))} c/u</div>${packTxt}`;
 
     if(tieneVariantes){
       // Antes acá se mostraban TODOS los modelos en chips, uno al lado del otro
@@ -870,7 +887,7 @@ function renderGrid(){
       div.innerHTML = `
         <div class="compacta-info">
           <h3>${item.d} <small style="color:var(--gris);font-weight:400;">(${item.codigo})</small></h3>
-          <div class="precio">${money(precioFinal)} c/u${(!item.esFinal && margenSugerido) ? ` <small style="color:var(--gris);font-weight:400;">(costo ${money(item.p)} +${margenSugerido}%)</small>` : ''}</div>
+          <div class="precio">${textoPrecio(precioFinal)}${(preciosVisibles || esAdmin) ? ' c/u' : ''}${(!item.esFinal && margenSugerido && (preciosVisibles || esAdmin)) ? ` <small style="color:var(--gris);font-weight:400;">(costo ${money(item.p)} +${margenSugerido}%)</small>` : ''}</div>
         </div>
         <div class="compacta-controles">
           <div class="qty-row">
@@ -1163,7 +1180,7 @@ function abrirSelectorModelo(id){
     return `<div class="fila-selector-modelo">
       <div class="nombre-modelo">${v.modelo}</div>
       ${v.codigo ? `<div class="codigo-modelo">Cod: ${v.codigo}</div>` : ''}
-      <div class="precio-modelo">${money(precioVariante(v))} c/u${p.pack_size>1 ? ' &middot; '+money(precioVariante(v)*p.pack_size)+' el pack' : ''}</div>
+      <div class="precio-modelo">${textoPrecio(precioVariante(v))}${(preciosVisibles || esAdmin) ? ' c/u'+(p.pack_size>1 ? ' &middot; '+money(precioVariante(v)*p.pack_size)+' el pack' : '') : ''}</div>
       ${packTxt}
       <div class="qty-row">
         <button type="button" onclick="cambiarQty('selmodelo-${id}-${idx}',-1)">-</button>

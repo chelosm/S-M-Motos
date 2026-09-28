@@ -869,13 +869,31 @@
   function margenDe(producto) {
     return (producto.margen_pct != null && producto.margen_pct !== "") ? producto.margen_pct : margenPct;
   }
-  let mostrarCostos = true; // el "ojo": true = se ven costo y margen
+  let mostrarCostos = true; // el "ojo": true = se ven costo y margen (y también controla si la tienda muestra precios a los clientes)
 
-  function toggleMostrarCostos() {
+  // El ojo ahora no es solo una vista tuya: también le avisa a la tienda
+  // (distribuidora-tienda.html) si tiene que mostrar u ocultar los precios
+  // a los clientes. Por eso este valor se guarda en la base de datos
+  // (tabla ConfigTienda), no solo en esta pestaña.
+  async function cargarConfigTienda() {
+    try {
+      const { data } = await db.from("ConfigTienda").select("precios_visibles").eq("id", 1).single();
+      if (data && typeof data.precios_visibles === "boolean") {
+        mostrarCostos = data.precios_visibles;
+      }
+    } catch (e) { /* si la tabla todavía no existe o falla, seguimos con el valor por defecto */ }
+    document.getElementById("btn-ojo").textContent = mostrarCostos ? "👁️" : "🙈";
+    document.getElementById("caja-margen").style.display = mostrarCostos ? "inline-block" : "none";
+  }
+
+  async function toggleMostrarCostos() {
     mostrarCostos = !mostrarCostos;
     document.getElementById("btn-ojo").textContent = mostrarCostos ? "👁️" : "🙈";
     document.getElementById("caja-margen").style.display = mostrarCostos ? "inline-block" : "none";
     renderTabla();
+    try {
+      await db.from("ConfigTienda").upsert({ id: 1, precios_visibles: mostrarCostos });
+    } catch (e) { /* si falla el guardado, el cambio igual queda aplicado en esta pantalla */ }
   }
 
   /* ============================================
@@ -1441,6 +1459,7 @@
   }
 
   revisarSesionExistente();
+  cargarConfigTienda();
 
   // ===== ACTUALIZACIÓN AUTOMÁTICA =====
   // Cada 30 segundos volvemos a traer los productos desde Supabase y
