@@ -892,7 +892,7 @@
     document.getElementById("caja-margen").style.display = mostrarCostos ? "inline-block" : "none";
     renderTabla();
     try {
-      await db.from("ConfigTienda").upsert({ id: 1, precios_visibles: mostrarCostos });
+      await db.from("ConfigTienda").update({ precios_visibles: mostrarCostos }).eq("id", 1);
     } catch (e) { /* si falla el guardado, el cambio igual queda aplicado en esta pantalla */ }
   }
 
