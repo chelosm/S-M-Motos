@@ -648,17 +648,21 @@ function precioDe(p){
   return p.precio;
 }
 
-// Si el "ojo" está cerrado en la web (catalogo-base.html), acá se ocultan los
-// precios a los clientes. El admin logueado en esta misma tienda (esAdmin)
-// sigue viendo los precios reales igual, para poder trabajar.
-let preciosVisibles = true;
+// Los precios en la tienda solo se muestran si, en ESE MISMO aparato/navegador,
+// hay una sesión de administrador iniciada en la web (catalogo-base.html) sin
+// cerrar. Como la web y la tienda comparten el mismo proyecto de Supabase, la
+// sesión iniciada en la web queda guardada en el navegador y esta página la
+// puede leer. Si nadie inició sesión ahí (por ejemplo, el celular de un
+// cliente cualquiera), no se ven los precios. El admin logueado directamente
+// en esta tienda (esAdmin, con la contraseña propia de acá) también los ve.
+let preciosVisibles = false;
 async function cargarConfigPrecios(){
   try {
-    const { data } = await sb.from("ConfigTienda").select("precios_visibles").eq("id", 1).single();
-    if (data && typeof data.precios_visibles === "boolean") {
-      preciosVisibles = data.precios_visibles;
-    }
-  } catch (e) { /* si falla o la tabla no existe todavía, seguimos mostrando precios */ }
+    const { data } = await sb.auth.getSession();
+    preciosVisibles = !!(data && data.session);
+  } catch (e) {
+    preciosVisibles = false; // si falla la verificación, por las dudas no mostramos precios
+  }
 }
 function textoPrecio(monto){
   return (preciosVisibles || esAdmin) ? money(monto) : "Consultar precio";
