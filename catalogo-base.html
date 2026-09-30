@@ -1150,7 +1150,16 @@
       // Partimos la búsqueda en palabras sueltas: "estator rx" busca
       // que el texto tenga "estator" Y "rx", sin importar el orden.
       const palabras = busqueda.split(/\s+/).filter(Boolean);
+      // Además, para que el código encuentre el producto tenga o no espacios
+      // (ya sea en lo que escribiste o en cómo está cargado el código), comparamos
+      // también las dos versiones sin ningún espacio: "cb 1427" encuentra "CB1427"
+      // y "cb1427" encuentra "CB 1427", da igual cómo esté escrito cualquiera de los dos.
+      const busquedaSinEspacios = busqueda.replace(/\s+/g, "");
       lista = lista.filter(p => {
+        const codigoSinEspacios = (p.codigo || "").toLowerCase().replace(/\s+/g, "");
+        if (busquedaSinEspacios && codigoSinEspacios.includes(busquedaSinEspacios)) {
+          return true;
+        }
         const texto = (p.codigo + " " + (p.descripcion || "")).toLowerCase();
         return palabras.every(palabra => texto.includes(palabra));
       });
