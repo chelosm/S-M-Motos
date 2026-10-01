@@ -612,6 +612,11 @@
     </thead>
     <tbody id="tabla-productos"></tbody>
   </table>
+  <div id="paginacion-productos" style="display:none; justify-content:space-between; align-items:center; gap:10px; margin-top:10px;">
+    <button id="btn-pagina-anterior" onclick="cambiarPaginaProductos(-1)" style="flex:1; background:var(--metal-claro); color:var(--texto); border:1px solid var(--borde); font-weight:700; padding:10px; border-radius:8px; cursor:pointer;">⬅ Anteriores 300</button>
+    <span id="texto-pagina-productos" style="white-space:nowrap; font-size:0.85rem; color:var(--texto);"></span>
+    <button id="btn-pagina-siguiente" onclick="cambiarPaginaProductos(1)" style="flex:1; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:800; padding:10px; border-radius:8px; cursor:pointer;">Siguientes 300 ➡</button>
+  </div>
 </main>
 
 <footer>
@@ -1132,6 +1137,17 @@
      TABLA: filtra por texto y categoría, y calcula
      costo / costo+IVA / precio de venta sugerido
      ============================================ */
+  // Cuando una búsqueda o un proveedor trae muchos resultados, en vez de
+  // mostrar solo los primeros 300 y cortar ahí, se puede pasar de a 300 en
+  // 300 con los botones de abajo de la tabla.
+  let paginaProductos = 0;
+  let ultimaClaveFiltroTabla = "";
+  function cambiarPaginaProductos(delta) {
+    paginaProductos += delta;
+    renderTabla();
+    document.querySelector("table").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function renderTabla() {
     const tbody = document.getElementById("tabla-productos");
     const contador = document.getElementById("contador");
@@ -1170,13 +1186,40 @@
       : "Escribí algo en el buscador o elegí un proveedor/categoría para ver productos";
 
     tbody.innerHTML = "";
+    const paginacion = document.getElementById("paginacion-productos");
 
     if (!busqueda && !catElegida && !provElegido) {
+      paginacion.style.display = "none";
       return; // no mostramos nada hasta que busquen o filtren
     }
 
+    // Si cambió la búsqueda o el filtro desde la última vez, volvemos a la
+    // primera página (300 productos). Si solo se recalculó el precio (dólar,
+    // margen, etc.) con la misma búsqueda, se queda en la página donde estaba.
+    const claveFiltro = busqueda + "|" + catElegida + "|" + provElegido;
+    if (claveFiltro !== ultimaClaveFiltroTabla) {
+      paginaProductos = 0;
+      ultimaClaveFiltroTabla = claveFiltro;
+    }
+
     const LIMITE = 300;
-    const paraMostrar = lista.slice(0, LIMITE);
+    const totalPaginas = Math.max(1, Math.ceil(lista.length / LIMITE));
+    if (paginaProductos >= totalPaginas) paginaProductos = totalPaginas - 1;
+    if (paginaProductos < 0) paginaProductos = 0;
+    const desde = paginaProductos * LIMITE;
+    const paraMostrar = lista.slice(desde, desde + LIMITE);
+
+    if (lista.length > LIMITE) {
+      paginacion.style.display = "flex";
+      document.getElementById("texto-pagina-productos").textContent =
+        "Página " + (paginaProductos + 1) + " de " + totalPaginas;
+      document.getElementById("btn-pagina-anterior").disabled = (paginaProductos === 0);
+      document.getElementById("btn-pagina-anterior").style.opacity = (paginaProductos === 0) ? "0.5" : "1";
+      document.getElementById("btn-pagina-siguiente").disabled = (paginaProductos >= totalPaginas - 1);
+      document.getElementById("btn-pagina-siguiente").style.opacity = (paginaProductos >= totalPaginas - 1) ? "0.5" : "1";
+    } else {
+      paginacion.style.display = "none";
+    }
 
     paraMostrar.forEach(p => {
       const tr = document.createElement("tr");
