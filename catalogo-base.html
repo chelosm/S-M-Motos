@@ -2037,15 +2037,26 @@
     };
     mostrarEstado("Generando " + paginas.length + " imagen(es)...");
 
+    // Con muchas páginas, el celular puede tildarse si generamos todo de
+    // una sola vez sin respirar. Esperamos un toque entre cada imagen para
+    // darle tiempo al navegador a terminar y liberar memoria, y si son
+    // muchas páginas bajamos un poco la nitidez para que pese menos.
+    const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    const escalaImagen = paginas.length > 3 ? 1.5 : 2;
+
     try {
       const archivos = [];
       for (let p = 0; p < paginas.length; p++) {
         mostrarEstado("⏳ Generando imagen " + (p + 1) + " de " + paginas.length + "...");
+        // Deja que el navegador termine de pintar/liberar memoria antes de
+        // la próxima captura, en vez de encadenar todo sin pausa.
+        await esperar(150);
         const plantilla = armarPaginaPresupuestoImg(
           paginas[p], p + 1, paginas.length, cliente, fecha, subtotalGeneral, descuentoPct, totalGeneral
         );
-        const canvas = await html2canvas(plantilla, { backgroundColor: "#ffffff", scale: 2 });
+        let canvas = await html2canvas(plantilla, { backgroundColor: "#ffffff", scale: escalaImagen });
         const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+        canvas = null;
         const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
         const sufijoPagina = paginas.length > 1 ? "_pag" + (p + 1) + "de" + paginas.length : "";
         const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + sufijoPagina + "_" + sello + ".png";
@@ -2067,15 +2078,18 @@
         }
       }
 
-      // Si no se puede compartir directo, se descargan una por una
-      archivos.forEach(archivo => {
+      // Si no se puede compartir directo, se descargan una por una, con una
+      // pequeña pausa entre cada descarga: disparar varias descargas
+      // pesadas al mismo tiempo es lo que suele tildar el navegador.
+      for (const archivo of archivos) {
         const url = URL.createObjectURL(archivo);
         const a = document.createElement("a");
         a.href = url;
         a.download = archivo.name;
         a.click();
+        await esperar(400);
         URL.revokeObjectURL(url);
-      });
+      }
       if (estadoPanel) estadoPanel.textContent = "";
     } catch (e) {
       mostrarEstado("❌ No se pudo generar la imagen: " + e.message);
