@@ -1924,49 +1924,100 @@
     }
   }
 
-  // Lista de precios para clientes: un Excel con una pestaña por categoría.
+  // Lista de precios para clientes: un Excel con pestañas por rubro.
   // Muestra el precio mayorista (costo + IVA, SIN margen) en dólares y también
   // en pesos al dólar del día. Cada cliente le suma su propio margen.
+  //
+  // Las categorías cargadas en el catálogo son muchísimas (cientos, varias con
+  // 1 o 2 productos), así que: se unen singular/plural (TORNILLO + TORNILLOS),
+  // las categorías grandes tienen pestaña propia y todo lo chico va junto en
+  // una pestaña "OTROS" (con una columna que dice a qué categoría pertenece).
   function descargarListaClientesExcel() {
     if (!logueado) {
       alert("Iniciá sesión de mayorista para descargar la lista.");
       return;
     }
-    const productos = PRODUCTOS.filter(p => p.precio_usd != null && p.precio_usd !== "" && !isNaN(parseFloat(p.precio_usd)));
+    const MIN_ITEMS_PESTANIA = 30; // categorías con menos productos que esto van a "OTROS"
+
+    // Solo productos con un precio válido (mayor a cero)
+    const productos = PRODUCTOS.filter(p => parseFloat(p.precio_usd) > 0);
     if (productos.length === 0) {
       alert("Todavía no hay productos cargados. Refrescá la página e intentá de nuevo.");
       return;
     }
 
     const fecha = new Date().toLocaleDateString('es-AR');
-    const porCategoria = {};
-    productos.forEach(p => {
-      const cat = (p.categoria || "").toString().trim() || "Sin categoría";
-      (porCategoria[cat] = porCategoria[cat] || []).push(p);
+    const catDe = p => ((p.categoria || "").toString().trim().toUpperCase()) || "SIN CATEGORÍA";
+
+    // 1) Contamos productos por categoría
+    const conteo = {};
+    productos.forEach(p => { const c = catDe(p); conteo[c] = (conteo[c] || 0) + 1; });
+
+    // 2) Unimos plural con singular cuando las dos existen (TAPONES -> TAPON, AROS -> ARO)
+    const nombreUnido = {};
+    Object.keys(conteo).forEach(c => {
+      let destino = c;
+      if (c.endsWith("ES") && conteo[c.slice(0, -2)]) destino = c.slice(0, -2);
+      else if (c.endsWith("S") && conteo[c.slice(0, -1)]) destino = c.slice(0, -1);
+      nombreUnido[c] = destino;
     });
+    const grupos = {};
+    productos.forEach(p => {
+      const g = nombreUnido[catDe(p)];
+      (grupos[g] = grupos[g] || []).push(p);
+    });
+
+    // 3) Las categorías grandes tienen pestaña; las chicas (y "sin categoría") van a OTROS
+    const pestanias = [];
+    const otros = [];
+    Object.keys(grupos).forEach(g => {
+      if (grupos[g].length >= MIN_ITEMS_PESTANIA && g !== "SIN CATEGORÍA") {
+        pestanias.push({ nombre: g, items: grupos[g], conCategoria: false });
+      } else {
+        grupos[g].forEach(p => otros.push({ p, cat: g }));
+      }
+    });
+    pestanias.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    if (otros.length > 0) {
+      otros.sort((a, b) => a.cat.localeCompare(b.cat, 'es') || (a.p.descripcion || "").localeCompare(b.p.descripcion || "", 'es'));
+      pestanias.push({ nombre: "OTROS", items: otros.map(o => o.p), cats: otros.map(o => o.cat), conCategoria: true });
+    }
 
     const libro = XLSX.utils.book_new();
     const nombresUsados = new Set();
-    Object.keys(porCategoria).sort((a, b) => a.localeCompare(b, 'es')).forEach(cat => {
-      const lista = porCategoria[cat].slice().sort((a, b) =>
-        (a.descripcion || "").localeCompare(b.descripcion || "", 'es'));
+    const dolarTxt = valorDolar.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    pestanias.forEach(pest => {
+      // Dentro de cada pestaña normal: orden alfabético por descripción
+      let lista = pest.items;
+      let cats = pest.cats;
+      if (!pest.conCategoria) {
+        lista = pest.items.slice().sort((a, b) =>
+          (a.descripcion || "").localeCompare(b.descripcion || "", 'es'));
+      }
 
       const filas = [];
-      filas.push(["S-M MOTOS — LISTA DE PRECIOS — " + cat.toUpperCase()]);
-      filas.push(["Fecha: " + fecha + "  ·  Dólar del día: $" + valorDolar.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + "  ·  Precios mayoristas, IVA incluido"]);
+      filas.push(["S-M MOTOS — LISTA DE PRECIOS — " + pest.nombre]);
+      filas.push(["Fecha: " + fecha + "  ·  Dólar del día: $" + dolarTxt + "  ·  Precios mayoristas, IVA incluido"]);
       filas.push([]);
-      filas.push(["CODIGO", "DESCRIPCION", "PRECIO USD (IVA incl.)", "PRECIO ARS (IVA incl.)"]);
-      lista.forEach(p => {
+      const encabezado = ["CODIGO", "DESCRIPCION", "PRECIO USD (IVA incl.)", "PRECIO ARS (IVA incl.)"];
+      if (pest.conCategoria) encabezado.push("CATEGORIA");
+      filas.push(encabezado);
+      lista.forEach((p, i) => {
         // Precio mayorista = costo + IVA, igual que el "Costo (Neto + IVA)" de la web.
         // Sin margen: cada cliente le pone el suyo.
         const costoConIva = parseFloat(p.precio_usd) * (1 + IVA);
         const arsConIva = Math.round(costoConIva * valorDolar * 100) / 100;
-        filas.push([p.codigo || "", p.descripcion || "", Math.round(costoConIva * 100) / 100, arsConIva]);
+        const fila = [p.codigo || "", p.descripcion || "", Math.round(costoConIva * 100) / 100, arsConIva];
+        if (pest.conCategoria) fila.push(cats[i]);
+        filas.push(fila);
       });
 
       const hoja = XLSX.utils.aoa_to_sheet(filas);
-      hoja["!cols"] = [{wch:16},{wch:55},{wch:18},{wch:18}];
-      hoja["!autofilter"] = { ref: `A4:D${4 + lista.length}` };
+      hoja["!cols"] = pest.conCategoria
+        ? [{wch:16},{wch:55},{wch:18},{wch:18},{wch:16}]
+        : [{wch:16},{wch:55},{wch:18},{wch:18}];
+      hoja["!autofilter"] = { ref: `A4:${pest.conCategoria ? "E" : "D"}${4 + lista.length}` };
       // Formato de moneda en las dos columnas de precio
       for (let r = 5; r <= 4 + lista.length; r++) {
         const u = hoja["C" + r]; if (u) u.z = '"US$" #,##0.00';
@@ -1974,7 +2025,7 @@
       }
 
       // Nombre de pestaña válido en Excel: máx. 31 caracteres, sin \ / ? * [ ] :
-      let nombre = cat.replace(/[\\\/\?\*\[\]:]/g, "-").slice(0, 31).trim() || "Hoja";
+      let nombre = pest.nombre.replace(/[\\\/\?\*\[\]:]/g, "-").slice(0, 31).trim() || "Hoja";
       let n = 2, base = nombre;
       while (nombresUsados.has(nombre.toLowerCase())) {
         nombre = base.slice(0, 28) + " " + n++;
