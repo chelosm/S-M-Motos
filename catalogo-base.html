@@ -572,6 +572,8 @@
     </div>
     <!-- Ojo para tapar costo/margen frente a un cliente -->
     <button id="btn-ojo" class="abrir" onclick="toggleMostrarCostos()" style="font-size:1.1rem;" title="Mostrar/ocultar costo y margen">👁️</button>
+    <!-- Descargar la lista de precios para clientes, en Excel -->
+    <button id="btn-lista-excel" class="abrir" onclick="descargarListaClientesExcel()" style="font-size:1.1rem;" title="Descargar lista de precios en Excel">📥</button>
   </div>
   <div id="debug-box" style="width:100%; font-size:0.78rem; color:var(--amarillo); margin-top:4px;"></div>
 </header>
@@ -715,6 +717,7 @@
       Minorista = precio con tu margen de ganancia. Mayorista = solo costo + IVA, sin margen.
     </div>
 
+    <input type="text" id="buscador-presupuesto" placeholder="🔍 Buscar en el presupuesto (código o nombre)..." oninput="renderPresupuesto()" style="width:100%; background:var(--asfalto); border:2px solid var(--amarillo); color:var(--texto); padding:10px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
     <div id="lista-presupuesto"></div>
     <button onclick="recalcularPreciosPresupuesto()" style="width:100%; background:var(--amarillo-chillon); color:#1a1a1a; border:1px dashed #1a1a1a; font-size:0.8rem; padding:8px; border-radius:6px; cursor:pointer; margin:8px 0;">🔄 Recalcular precios con el dólar/modo actual</button>
 
@@ -1846,6 +1849,8 @@
 
   function abrirPresupuesto() {
     sincronizarPresupuestoDesdeStorage();
+    const inputBuscador = document.getElementById("buscador-presupuesto");
+    if (inputBuscador) inputBuscador.value = "";
     renderPresupuesto();
     actualizarBotonesModo();
     document.getElementById("overlay-presupuesto").classList.add("abierto");
@@ -1866,23 +1871,42 @@
       return;
     }
 
+    // El total siempre se calcula sobre TODO el presupuesto, aunque el
+    // buscador de abajo esté filtrando lo que se ve en la lista — así nunca
+    // da un total "recortado" por error.
     let subtotal = 0;
-    lista.innerHTML = PRESUPUESTO.map(item => {
-      const sub = item.precioUnitario * item.cantidad;
-      subtotal += sub;
-      return `
-        <div class="item-carrito">
-          <div class="info">
-            <div class="cod">${item.codigo} × ${item.cantidad} ${item.manual ? "(manual)" : ""}</div>
-            <div class="desc">${item.descripcion}</div>
+    PRESUPUESTO.forEach(item => { subtotal += item.precioUnitario * item.cantidad; });
+
+    const inputBuscador = document.getElementById("buscador-presupuesto");
+    const busquedaPresupuesto = inputBuscador ? inputBuscador.value.trim().toLowerCase() : "";
+    const busquedaSinEspacios = busquedaPresupuesto.replace(/\s+/g, "");
+    const itemsAMostrar = busquedaPresupuesto
+      ? PRESUPUESTO.filter(item => {
+          const codigoSinEspacios = (item.codigo || "").toLowerCase().replace(/\s+/g, "");
+          const texto = ((item.codigo || "") + " " + (item.descripcion || "")).toLowerCase();
+          return (busquedaSinEspacios && codigoSinEspacios.includes(busquedaSinEspacios)) || texto.includes(busquedaPresupuesto);
+        })
+      : PRESUPUESTO;
+
+    if (itemsAMostrar.length === 0) {
+      lista.innerHTML = `<div id="carrito-vacio">No se encontró ningún artículo del presupuesto con "${inputBuscador.value}".</div>`;
+    } else {
+      lista.innerHTML = itemsAMostrar.map(item => {
+        const sub = item.precioUnitario * item.cantidad;
+        return `
+          <div class="item-carrito">
+            <div class="info">
+              <div class="cod">${item.codigo} × ${item.cantidad} ${item.manual ? "(manual)" : ""}</div>
+              <div class="desc">${item.descripcion}</div>
+            </div>
+            <div class="subtotal">$${fmt(sub)}</div>
+            <button class="btn-quitar" style="color:var(--verde-stock);" onclick="editarCantidadPresupuesto('${item.id.replace(/'/g,"\\'")}')">🔢</button>
+            <button class="btn-quitar" style="color:var(--amarillo);" onclick="editarPrecioPresupuesto('${item.id.replace(/'/g,"\\'")}')">✏️</button>
+            <button class="btn-quitar" onclick="quitarDePresupuesto('${item.id.replace(/'/g,"\\'")}')">✕</button>
           </div>
-          <div class="subtotal">$${fmt(sub)}</div>
-          <button class="btn-quitar" style="color:var(--verde-stock);" onclick="editarCantidadPresupuesto('${item.id.replace(/'/g,"\\'")}')">🔢</button>
-          <button class="btn-quitar" style="color:var(--amarillo);" onclick="editarPrecioPresupuesto('${item.id.replace(/'/g,"\\'")}')">✏️</button>
-          <button class="btn-quitar" onclick="quitarDePresupuesto('${item.id.replace(/'/g,"\\'")}')">✕</button>
-        </div>
-      `;
-    }).join("");
+        `;
+      }).join("");
+    }
 
     const inputDescuento = document.getElementById("input-descuento-presupuesto");
     const descuentoPct = inputDescuento ? (parseFloat(inputDescuento.value) || 0) : 0;
@@ -1898,6 +1922,69 @@
     } else {
       totalDiv.textContent = "Total: $" + fmt(subtotal);
     }
+  }
+
+  // Lista de precios para clientes: un Excel con una pestaña por categoría.
+  // Muestra el precio mayorista (costo + IVA, SIN margen) en dólares y también
+  // en pesos al dólar del día. Cada cliente le suma su propio margen.
+  function descargarListaClientesExcel() {
+    if (!logueado) {
+      alert("Iniciá sesión de mayorista para descargar la lista.");
+      return;
+    }
+    const productos = PRODUCTOS.filter(p => p.precio_usd != null && p.precio_usd !== "" && !isNaN(parseFloat(p.precio_usd)));
+    if (productos.length === 0) {
+      alert("Todavía no hay productos cargados. Refrescá la página e intentá de nuevo.");
+      return;
+    }
+
+    const fecha = new Date().toLocaleDateString('es-AR');
+    const porCategoria = {};
+    productos.forEach(p => {
+      const cat = (p.categoria || "").toString().trim() || "Sin categoría";
+      (porCategoria[cat] = porCategoria[cat] || []).push(p);
+    });
+
+    const libro = XLSX.utils.book_new();
+    const nombresUsados = new Set();
+    Object.keys(porCategoria).sort((a, b) => a.localeCompare(b, 'es')).forEach(cat => {
+      const lista = porCategoria[cat].slice().sort((a, b) =>
+        (a.descripcion || "").localeCompare(b.descripcion || "", 'es'));
+
+      const filas = [];
+      filas.push(["S-M MOTOS — LISTA DE PRECIOS — " + cat.toUpperCase()]);
+      filas.push(["Fecha: " + fecha + "  ·  Dólar del día: $" + valorDolar.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + "  ·  Precios mayoristas, IVA incluido"]);
+      filas.push([]);
+      filas.push(["CODIGO", "DESCRIPCION", "PRECIO USD (IVA incl.)", "PRECIO ARS (IVA incl.)"]);
+      lista.forEach(p => {
+        // Precio mayorista = costo + IVA, igual que el "Costo (Neto + IVA)" de la web.
+        // Sin margen: cada cliente le pone el suyo.
+        const costoConIva = parseFloat(p.precio_usd) * (1 + IVA);
+        const arsConIva = Math.round(costoConIva * valorDolar * 100) / 100;
+        filas.push([p.codigo || "", p.descripcion || "", Math.round(costoConIva * 100) / 100, arsConIva]);
+      });
+
+      const hoja = XLSX.utils.aoa_to_sheet(filas);
+      hoja["!cols"] = [{wch:16},{wch:55},{wch:18},{wch:18}];
+      hoja["!autofilter"] = { ref: `A4:D${4 + lista.length}` };
+      // Formato de moneda en las dos columnas de precio
+      for (let r = 5; r <= 4 + lista.length; r++) {
+        const u = hoja["C" + r]; if (u) u.z = '"US$" #,##0.00';
+        const a = hoja["D" + r]; if (a) a.z = '"$" #,##0.00';
+      }
+
+      // Nombre de pestaña válido en Excel: máx. 31 caracteres, sin \ / ? * [ ] :
+      let nombre = cat.replace(/[\\\/\?\*\[\]:]/g, "-").slice(0, 31).trim() || "Hoja";
+      let n = 2, base = nombre;
+      while (nombresUsados.has(nombre.toLowerCase())) {
+        nombre = base.slice(0, 28) + " " + n++;
+      }
+      nombresUsados.add(nombre.toLowerCase());
+      XLSX.utils.book_append_sheet(libro, hoja, nombre);
+    });
+
+    const sello = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(libro, "Lista_Precios_SM_Motos_" + sello + ".xlsx", { bookType: "xlsx" });
   }
 
   function exportarPresupuestoExcel() {
