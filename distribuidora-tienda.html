@@ -664,7 +664,9 @@ function textoPrecio(monto){
   return (preciosVisibles || esAdmin) ? money(monto) : "Consultar precio";
 }
 
+let ultimaCargaTienda = Date.now();
 async function cargarProductos(){
+  ultimaCargaTienda = Date.now();
   await obtenerDolarBlue();
   await cargarConfigPrecios();
   const grid = document.getElementById("grid");
@@ -2025,14 +2027,22 @@ async function abrirAumentoMasivo(){
 }
 
 // ===== ACTUALIZACIÓN AUTOMÁTICA =====
-// Cada 30 segundos volvemos a traer los productos y el dólar desde
-// Supabase/la web, así la tienda se mantiene al día sola, sin que
-// haga falta refrescar la página a mano. No tocamos lo que el
-// usuario esté escribiendo (buscador) ni cerramos paneles abiertos.
-setInterval(() => {
+// Cada carga baja los productos de la tienda y todo el catálogo mayorista
+// (miles de filas), lo que gastaba mucho del cupo de datos gratis de
+// Supabase cuando se hacía cada 30 segundos con la pestaña abierta. Ahora
+// solo se actualiza cada 10 minutos, y únicamente si la pestaña se está
+// viendo (y al volver a ella si pasaron más de 10 minutos).
+// No tocamos lo que el usuario esté escribiendo (buscador) ni cerramos
+// paneles abiertos.
+const INTERVALO_ACTUALIZACION_MS = 10 * 60 * 1000;
+function actualizarTiendaSiHaceFalta(){
+  if(document.hidden) return;
+  if(Date.now() - ultimaCargaTienda < INTERVALO_ACTUALIZACION_MS) return;
   dolarBlueCache = null; // fuerza a releer el dólar guardado en localStorage
   cargarProductos();
-}, 30000);
+}
+setInterval(actualizarTiendaSiHaceFalta, 60000);
+document.addEventListener("visibilitychange", actualizarTiendaSiHaceFalta);
 
 // Si el usuario cambia el dólar en la web (catalogo-base.html) en OTRA
 // pestaña del mismo navegador, este evento avisa al instante (sin

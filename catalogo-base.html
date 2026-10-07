@@ -907,7 +907,9 @@
   /* ============================================
      PRODUCTOS desde Supabase (de a tandas de 1000)
      ============================================ */
+  let ultimaCargaCatalogo = Date.now();
   async function cargarProductos(esReintento) {
+    ultimaCargaCatalogo = Date.now();
     mostrarDebug(esReintento ? "Reintentando cargar catálogo..." : "Cargando catálogo...");
     let todos = [];
     let desde = 0;
@@ -954,6 +956,11 @@
 
   function poblarFiltroCategorias() {
     const selectCat = document.getElementById("filtro-categoria");
+    // Cada actualización automática vuelve a llamar a esta función: dejamos
+    // solo la primera opción ("Todas...") y recordamos lo elegido, para que la
+    // lista no se llene de opciones repetidas.
+    const catElegidaAntes = selectCat.value;
+    selectCat.length = 1;
     const categorias = [...new Set(PRODUCTOS.map(p => p.categoria).filter(Boolean))].sort();
     categorias.forEach(cat => {
       const opt = document.createElement("option");
@@ -962,7 +969,11 @@
       selectCat.appendChild(opt);
     });
 
+    selectCat.value = catElegidaAntes;
+
     const selectProv = document.getElementById("filtro-proveedor");
+    const provElegidoAntes = selectProv.value;
+    selectProv.length = 1;
     const proveedores = [...new Set(PRODUCTOS.map(p => p.proveedor).filter(Boolean))].sort();
     proveedores.forEach(prov => {
       const opt = document.createElement("option");
@@ -970,6 +981,7 @@
       opt.textContent = prov;
       selectProv.appendChild(opt);
     });
+    selectProv.value = provElegidoAntes;
   }
 
   /* ============================================
@@ -1517,16 +1529,23 @@
   cargarConfigTienda();
 
   // ===== ACTUALIZACIÓN AUTOMÁTICA =====
-  // Cada 30 segundos volvemos a traer los productos desde Supabase y
-  // releemos el dólar/margen guardados, así la web se mantiene al día
-  // sola, sin que haga falta refrescar la página a mano. Si el admin
-  // tiene abierto el panel de "Agregar / Modificar producto" en ese
-  // momento, nos salteamos esa vuelta para no interrumpirlo.
-  setInterval(() => {
+  // Bajar los ~9.300 productos pesa varios MB. Antes se hacía cada 30
+  // segundos con la pestaña abierta (aunque nadie la mirara) y eso gastaba
+  // el cupo de datos gratis de Supabase. Ahora: solo cada 10 minutos, solo
+  // si la pestaña se está viendo, y al volver a la pestaña si pasaron más de
+  // 10 minutos. Para ver un cambio ya mismo está el botón 🔄 de la página.
+  // Si el admin tiene abierto el panel de "Agregar / Modificar producto",
+  // nos salteamos esa vuelta para no interrumpirlo.
+  const INTERVALO_ACTUALIZACION_MS = 10 * 60 * 1000;
+  function actualizarCatalogoSiHaceFalta() {
+    if (document.hidden) return;
     if (document.getElementById("panel-editor").classList.contains("abierto")) return;
+    if (Date.now() - ultimaCargaCatalogo < INTERVALO_ACTUALIZACION_MS) return;
     cargarConfigGuardada();
     cargarProductos();
-  }, 30000);
+  }
+  setInterval(actualizarCatalogoSiHaceFalta, 60000);
+  document.addEventListener("visibilitychange", actualizarCatalogoSiHaceFalta);
 
   // Si el dólar, el margen o el presupuesto se cambian en OTRA pestaña del
   // mismo navegador (por ejemplo la tienda), esto avisa al instante.
