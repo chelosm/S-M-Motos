@@ -536,6 +536,7 @@
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
@@ -575,6 +576,7 @@
     <!-- Descargar la lista de precios para clientes, en Excel -->
     <button id="btn-lista-excel" class="abrir" onclick="descargarListaClientesExcel()" style="font-size:1.1rem;" title="Descargar lista de precios en Excel">📥</button>
     <button id="btn-respaldo" class="abrir" onclick="descargarRespaldo()" style="font-size:1.1rem; display:none;" title="Descargar copia de seguridad de todos los datos">💾</button>
+    <button id="btn-respaldo-fotos" class="abrir" onclick="descargarRespaldoFotos()" style="font-size:1.1rem; display:none;" title="Descargar copia de seguridad de las fotos de la tienda">🖼️</button>
   </div>
   <div id="debug-box" style="width:100%; font-size:0.78rem; color:var(--amarillo); margin-top:4px;"></div>
 </header>
@@ -1125,6 +1127,7 @@
     const btnAdmin = document.getElementById("btn-admin-producto");
     // El botón de copia de seguridad es solo para el administrador
     document.getElementById("btn-respaldo").style.display = (logueado && esAdmin) ? "" : "none";
+    document.getElementById("btn-respaldo-fotos").style.display = (logueado && esAdmin) ? "" : "none";
     if (logueado) {
       estado.textContent = esAdmin ? "Sesión de administrador activa" : "Sesión activa";
       estado.classList.add("activo");
@@ -1943,6 +1946,91 @@
       `;
     } else {
       totalDiv.textContent = "Total: $" + fmt(subtotal);
+    }
+  }
+
+  // ===== COPIA DE SEGURIDAD DE LAS FOTOS =====
+  // Baja todas las fotos de la tienda (DistribuidoraTienda) y las guarda en
+  // archivos .zip de a 40 fotos, para que el celular no se quede sin memoria.
+  async function descargarRespaldoFotos() {
+    if (!logueado || !esAdmin) {
+      alert("Iniciá sesión de administrador para descargar las fotos.");
+      return;
+    }
+    if (typeof JSZip === "undefined") {
+      alert("No se cargó el compresor de archivos. Recargá la página e intentá de nuevo.");
+      return;
+    }
+    const boton = document.getElementById("btn-respaldo-fotos");
+    const original = boton ? boton.textContent : "🖼️";
+    const estadoBoton = (t) => { if (boton) boton.textContent = t; };
+    if (boton) boton.disabled = true;
+    try {
+      // 1) Lista de fotos
+      let filas = [];
+      let desde = 0;
+      const TANDA = 1000;
+      while (true) {
+        const { data, error } = await db
+          .from("DistribuidoraTienda")
+          .select("id, codigo, nombre, foto_url")
+          .order("id", { ascending: true })
+          .range(desde, desde + TANDA - 1);
+        if (error) throw new Error(error.message);
+        filas = filas.concat(data);
+        if (data.length < TANDA) break;
+        desde += TANDA;
+      }
+      const fotos = filas.filter(f => f.foto_url && /^https?:/.test(f.foto_url));
+      if (!fotos.length) { alert("No hay fotos para respaldar."); return; }
+
+      const hoy = new Date();
+      const pad = n => String(n).padStart(2, "0");
+      const fecha = hoy.getFullYear() + "-" + pad(hoy.getMonth() + 1) + "-" + pad(hoy.getDate());
+      const POR_ZIP = 40;
+      const totalPartes = Math.ceil(fotos.length / POR_ZIP);
+      const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+      const fallidas = [];
+      let hechas = 0;
+
+      for (let parte = 0; parte < totalPartes; parte++) {
+        const zip = new JSZip();
+        const lote = fotos.slice(parte * POR_ZIP, (parte + 1) * POR_ZIP);
+        for (const f of lote) {
+          estadoBoton("⏳ " + (hechas + 1) + "/" + fotos.length);
+          try {
+            const resp = await fetch(f.foto_url);
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            const blob = await resp.blob();
+            const archivoOriginal = decodeURIComponent(f.foto_url.split("/").pop().split("?")[0]);
+            const limpio = String((f.codigo || "") + "_" + (f.nombre || "")).replace(/[^\w\-]+/g, "_").slice(0, 60);
+            const ext = (archivoOriginal.match(/\.[A-Za-z0-9]+$/) || [".jpg"])[0];
+            zip.file(f.id + "_" + limpio + ext, blob);
+          } catch (e) {
+            fallidas.push((f.codigo || f.nombre || f.id) + " (" + e.message + ")");
+          }
+          hechas++;
+        }
+        const contenido = await zip.generateAsync({ type: "blob", compression: "STORE" });
+        const nombre = "Fotos_Tienda_SM_Motos_" + fecha + "_parte" + (parte + 1) + "de" + totalPartes + ".zip";
+        const url = URL.createObjectURL(contenido);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = nombre;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        await esperar(1500);
+        URL.revokeObjectURL(url);
+      }
+      let msg = "Listo: " + (fotos.length - fallidas.length) + " fotos guardadas en " + totalPartes + " archivo(s) .zip.";
+      if (fallidas.length) msg += "\n\nNo se pudieron bajar " + fallidas.length + ":\n" + fallidas.slice(0, 10).join("\n");
+      msg += "\n\nGuardá los .zip en Google Drive.";
+      alert(msg);
+    } catch (e) {
+      alert("No se pudo hacer el respaldo de fotos: " + e.message);
+    } finally {
+      if (boton) { boton.disabled = false; boton.textContent = original; }
     }
   }
 
