@@ -1872,6 +1872,14 @@
 
   function vaciarPresupuesto() {
     PRESUPUESTO = [];
+    // Los ítems que se agregaron desde la tienda (tocando las fotos) viven también
+    // en el carrito de la tienda. Si no se vacía ese carrito, la tienda los vuelve
+    // a poner sola en el presupuesto. Por eso vaciamos todo.
+    try {
+      localStorage.setItem("dt_cart", "{}");
+      localStorage.setItem("dt_custom", "{}");
+      localStorage.setItem("dt_cambios_manuales", "{}");
+    } catch (e) { /* si falla, igual queda vacío el presupuesto de esta página */ }
     guardarPresupuesto();
     renderPresupuesto();
     const inputDescuento = document.getElementById("input-descuento-presupuesto");

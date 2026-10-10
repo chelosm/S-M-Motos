@@ -1349,6 +1349,10 @@ function guardarPresupuestoCompartido(arr){
 // Actualiza, dentro del presupuesto compartido, solo la parte que agregamos desde
 // esta página (la tienda). Lo que se agregó desde catalogo-base.html se deja intacto.
 function sincronizarPresupuestoCompartido(){
+  // Releemos el carrito guardado: si desde la web se vació el presupuesto, esta
+  // pestaña (aunque estuviera abierta) no tiene que volver a agregar lo viejo.
+  try { cart = JSON.parse(localStorage.getItem("dt_cart") || "{}"); } catch(e) { /* seguimos con el que hay */ }
+  try { customItems = JSON.parse(localStorage.getItem("dt_custom") || "{}"); } catch(e) { /* idem */ }
   limpiarCambiosManuales();
   const compartido = leerPresupuestoCompartido();
   const delCatalogo = compartido.filter(it => it.origen !== "tienda");
