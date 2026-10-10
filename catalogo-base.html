@@ -1778,6 +1778,23 @@
     renderPresupuesto();
   }
 
+  // Guarda en el lugar compartido con la tienda un cambio manual hecho acá sobre
+  // un ítem que vino de la tienda, para que la tienda NO lo pise cuando se
+  // actualiza. (La tienda lo lee de la clave "dt_cambios_manuales".)
+  function guardarCambioManualTienda(id, campos) {
+    if (!id.startsWith("tienda-") || id.startsWith("tienda-custom|")) return;
+    const clave = id.slice("tienda-".length);
+    try {
+      const cm = JSON.parse(localStorage.getItem("dt_cambios_manuales") || "{}");
+      const cartTienda = JSON.parse(localStorage.getItem("dt_cart") || "{}");
+      const nuevo = Object.assign({}, cm[clave]);
+      if (campos.precio !== undefined) nuevo.precio = campos.precio;
+      if (campos.unidades !== undefined) { nuevo.unidades = campos.unidades; nuevo.packs = cartTienda[clave]; }
+      cm[clave] = nuevo;
+      localStorage.setItem("dt_cambios_manuales", JSON.stringify(cm));
+    } catch (e) { /* si esto falla, al menos ya quedó guardado en el presupuesto */ }
+  }
+
   async function editarPrecioPresupuesto(id) {
     const item = PRESUPUESTO.find(i => i.id === id);
     if (!item) return;
@@ -1789,6 +1806,7 @@
       return;
     }
     item.precioUnitario = nuevoPrecio;
+    guardarCambioManualTienda(id, { precio: nuevoPrecio });
     // Si el ítem es un manual que se cargó desde la tienda, la tienda se
     // "repone" sola cada 30 segundos usando SU propio precio guardado — así
     // que si no lo actualizamos también ahí, el precio que edites acá se
@@ -1820,6 +1838,7 @@
       return;
     }
     item.cantidad = nuevaCantidad;
+    guardarCambioManualTienda(id, { unidades: nuevaCantidad });
     // Mismo caso que con el precio: si es un manual cargado desde la tienda,
     // actualizamos también la cantidad ahí para que no se pise sola en el
     // próximo repaso automático de la tienda.

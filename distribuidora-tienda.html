@@ -568,6 +568,40 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let productos = [];
 let cart = JSON.parse(localStorage.getItem("dt_cart") || "{}");
+
+// ===== CAMBIOS MANUALES (cantidad en unidades y precio) =====
+// Cuando se cambia a mano la cantidad o el precio de un ítem de la tienda, el
+// cambio se guarda acá y NO se pisa solo cada vez que la tienda se actualiza.
+// Formato: { clave: { unidades: N, packs: P, precio: X } }
+//  - "unidades" vale mientras la cantidad de packs siga siendo P (si se cambian
+//    los packs a propósito, se vuelve a calcular packs x unidades por pack).
+//  - "precio" vale hasta que se saque el ítem del presupuesto.
+// El catálogo (catalogo-base.html) escribe en la misma clave del localStorage.
+function leerCambiosManuales(){
+  try { return JSON.parse(localStorage.getItem("dt_cambios_manuales") || "{}"); }
+  catch(e){ return {}; }
+}
+function guardarCambiosManuales(obj){
+  localStorage.setItem("dt_cambios_manuales", JSON.stringify(obj));
+}
+function limpiarCambiosManuales(){
+  const cm = leerCambiosManuales();
+  let tocado = false;
+  Object.keys(cm).forEach(clave=>{
+    if(!(clave in cart)){ delete cm[clave]; tocado = true; return; }
+    const o = cm[clave];
+    if(typeof o.unidades === "number" && o.packs !== cart[clave]){ delete o.unidades; delete o.packs; tocado = true; }
+    if(o.unidades === undefined && o.precio === undefined){ delete cm[clave]; tocado = true; }
+  });
+  if(tocado) guardarCambiosManuales(cm);
+}
+// Unidades que corresponden a un ítem del carrito (respeta el cambio manual si lo hay)
+function unidadesCarrito(clave, it){
+  const base = cart[clave] * ((it.p && it.p.pack_size) || 1);
+  const o = leerCambiosManuales()[clave];
+  if(o && typeof o.unidades === "number" && o.packs === cart[clave]) return o.unidades;
+  return base;
+}
 let esAdmin = false;
 let margenSugerido = parseFloat(localStorage.getItem("dt_margen_sugerido") || "0");
 function guardarMargenSugerido(){
@@ -1071,6 +1105,13 @@ function obtenerItemProveedor(codigo){
 }
 
 function itemCarrito(clave){
+  const it = itemCarritoBase(clave);
+  if(!it) return it;
+  const o = leerCambiosManuales()[clave];
+  if(o && typeof o.precio === "number") return Object.assign({}, it, { precio: o.precio, precioEditado: true });
+  return it;
+}
+function itemCarritoBase(clave){
   const info = parseClaveCarrito(clave);
   if(info.tipo === "proveedor"){
     const item = obtenerItemProveedor(info.codigo);
@@ -1146,7 +1187,25 @@ function editarPrecioCarrito(clave, valor){
       customItems[info.customId].precio = nuevo;
       guardarCustomItems();
     }
+  } else {
+    // Precio cambiado a mano: queda guardado y no se pisa en las actualizaciones.
+    const cm = leerCambiosManuales();
+    cm[clave] = Object.assign({}, cm[clave], { precio: nuevo });
+    guardarCambiosManuales(cm);
+    sincronizarPresupuestoCompartido();
   }
+  renderCarrito();
+  actualizarBarra();
+}
+
+// Cantidad en UNIDADES cambiada a mano (por si el pack no era de esa cantidad).
+function editarUnidadesCarrito(clave, valor){
+  let nuevas = parseInt(valor || "1");
+  if(isNaN(nuevas) || nuevas < 1) nuevas = 1;
+  const cm = leerCambiosManuales();
+  cm[clave] = Object.assign({}, cm[clave], { unidades: nuevas, packs: cart[clave] });
+  guardarCambiosManuales(cm);
+  sincronizarPresupuestoCompartido();
   renderCarrito();
   actualizarBarra();
 }
@@ -1267,6 +1326,7 @@ function agregarAlCarrito(id){
 
 function guardarCarrito(){
   localStorage.setItem("dt_cart", JSON.stringify(cart));
+  limpiarCambiosManuales();
   sincronizarPresupuestoCompartido();
   actualizarBarra();
   actualizarBotonesCarrito();
@@ -1289,6 +1349,7 @@ function guardarPresupuestoCompartido(arr){
 // Actualiza, dentro del presupuesto compartido, solo la parte que agregamos desde
 // esta página (la tienda). Lo que se agregó desde catalogo-base.html se deja intacto.
 function sincronizarPresupuestoCompartido(){
+  limpiarCambiosManuales();
   const compartido = leerPresupuestoCompartido();
   const delCatalogo = compartido.filter(it => it.origen !== "tienda");
   const deLaTienda = Object.keys(cart).map(clave=>{
@@ -1298,7 +1359,7 @@ function sincronizarPresupuestoCompartido(){
       id: "tienda-" + clave,
       codigo: (it.p && it.p.codigo) || "",
       descripcion: it.nombre,
-      cantidad: cart[clave] * (it.p.pack_size || 1),
+      cantidad: unidadesCarrito(clave, it),
       precioUnitario: it.precio,
       manual: !!it.esCustom,
       origen: "tienda"
@@ -1462,7 +1523,7 @@ function renderCarrito(){
     if(!it) return;
     const { p, precio, nombre } = it;
     const cantidad = cart[clave];
-    const unidades = cantidad * p.pack_size;
+    const unidades = unidadesCarrito(clave, it);
     const subtotal = unidades * precio;
     total += subtotal;
     const claveJs = clave.replace(/'/g,"\\'");
@@ -1470,7 +1531,9 @@ function renderCarrito(){
     div.className = "cart-item";
     div.innerHTML = `
       <div class="info"><b>${nombre}</b> ${p.codigo?'<span style="color:#999;">['+p.codigo+']</span>':''}<br>
-      ${p.pack_size>1 ? unidades+' unid. ('+cantidad+' pack(s))' : cantidad+' unid.'} &middot;
+      ${p.pack_size>1
+        ? '<input type="number" class="precio-editable" style="max-width:70px;" value="'+unidades+'" min="1" inputmode="numeric" onchange="editarUnidadesCarrito(\''+claveJs+'\', this.value)"> unid. ('+cantidad+' pack(s) de '+p.pack_size+')'
+        : cantidad+' unid.'} &middot;
       <input type="number" class="precio-editable" value="${precio}" min="0"
         onchange="editarPrecioCarrito('${claveJs}', this.value)"> c/u &middot; <b>Total: ${money(subtotal)}</b>
       <div class="qty-edit">
@@ -1535,6 +1598,7 @@ function quitarDelCarrito(clave){
 function vaciarCarrito(){
   if(!confirm("¿Vaciar todo el presupuesto? Se van a borrar todos los productos cargados, tanto de la tienda como del catálogo.")) return;
   cart = {};
+  guardarCambiosManuales({});
   guardarCarrito();
   guardarPresupuestoCompartido([]);
   renderCarrito();
@@ -1557,7 +1621,7 @@ function exportarExcel(){
   claves.forEach(clave=>{
     const it = itemCarrito(clave);
     if(!it) return;
-    const unidades = cart[clave] * it.p.pack_size;
+    const unidades = unidadesCarrito(clave, it);
     const subtotal = unidades * it.precio;
     total += subtotal;
     filas.push([unidades, it.p.codigo || "", it.nombre, money(it.precio), money(subtotal)]);
@@ -1589,7 +1653,7 @@ function exportarImagen(){
   }
   const itemsPropios = claves.map(clave=>{
     const it = itemCarrito(clave);
-    return it ? {p: it.p, codigo: (it.p && it.p.codigo) || "", nombre: it.nombre, precio: it.precio, cantidad: cart[clave]} : null;
+    return it ? {p: { pack_size: 1 }, codigo: (it.p && it.p.codigo) || "", nombre: it.nombre, precio: it.precio, cantidad: unidadesCarrito(clave, it)} : null;
   }).filter(Boolean);
   const itemsCompartidos = compartidos.map(it=> ({
     p: { pack_size: 1 }, codigo: it.codigo || "", nombre: it.descripcion, precio: it.precioUnitario, cantidad: it.cantidad
