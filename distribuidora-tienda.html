@@ -428,6 +428,8 @@
   <div class="sheet">
     <button class="cerrar-x" onclick="cerrarModales()">✕</button>
     <h2>Tu presupuesto</h2>
+    <input type="text" id="buscador-presupuesto" placeholder="🔍 Buscar en el presupuesto (código o nombre)..." oninput="renderCarrito()" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:10px;border:2px solid var(--naranja);border-radius:8px;font-size:0.9rem;margin-bottom:10px;">
     <div id="cart-items"></div>
     <div class="manual-add-box">
       <div class="fila">
@@ -634,9 +636,12 @@ function coincideBusqueda(p, busqueda){
   }
   // Coincidencia de código ignorando espacios y mayúsculas (ej: "cb738" encuentra "CB 738")
   if(normalizarCodigo(texto).includes(normalizarCodigo(busqueda))) return true;
+  // Igual pero también sin guiones/puntos (ej: "gm0072" encuentra "GM-0072")
+  const compactoBusqueda = compactarCodigo(busqueda);
+  if(compactoBusqueda.length >= 2 && compactarCodigo(texto).includes(compactoBusqueda)) return true;
 
-  texto = texto.toLowerCase();
-  const partes = busqueda.toLowerCase().trim().split(/\s+/);
+  texto = sinTildes(texto);
+  const partes = sinTildes(busqueda).trim().split(/\s+/);
   return partes.every(parte => texto.includes(parte));
 }
 
@@ -949,6 +954,14 @@ function renderGrid(){
 function normalizarCodigo(s){
   return String(s).toUpperCase().replace(/\s+/g, "");
 }
+// Para BUSCAR: ignora espacios, guiones, puntos y barras ("cb1427" = "CB 1427" = "CB-1427").
+function compactarCodigo(s){
+  return String(s).toUpperCase().replace(/[\s\-_.\/]+/g, "");
+}
+// Minúsculas y sin tildes ("Pastilla" = "pastilla", "cadena" = "CADENA", "embrague" = "émbrague")
+function sinTildes(s){
+  return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
 let _indiceProveedorCache = null;
 // Índice código-normalizado -> código real, para búsquedas exactas sin importar espacios.
@@ -965,7 +978,7 @@ function indiceNormalizadoProveedor(){
 // Busca en la lista de precios del proveedor códigos que coincidan con lo escrito,
 // y que todavía no estén cargados como producto (ni como código de una variante).
 function buscarEnListaProveedor(busqueda){
-  const term = normalizarCodigo(busqueda);
+  const term = compactarCodigo(busqueda);
   if(!term) return [];
   const codigosCargados = new Set();
   productos.forEach(p=>{
@@ -975,7 +988,7 @@ function buscarEnListaProveedor(busqueda){
   const resultados = [];
   for(const codigo in LISTA_PRECIOS_PROVEEDOR){
     if(codigosCargados.has(normalizarCodigo(codigo))) continue;
-    if(normalizarCodigo(codigo).includes(term)){
+    if(compactarCodigo(codigo).includes(term)){
       resultados.push({ codigo, ...LISTA_PRECIOS_PROVEEDOR[codigo] });
       if(resultados.length >= 8) break;
     }
@@ -1016,14 +1029,17 @@ async function buscarCatalogoVivo(busqueda){
   // "cb 1427" encuentre "CB1427" y viceversa), y por descripción con el texto tal cual.
   // Primero un match EXACTO de código, para que no se pierda entre otros resultados
   // que solo lo contienen como parte de una descripción más larga.
+  // También probamos un patrón que tolera espacios o guiones entre letras y números:
+  // "cb1427" => "cb%1427", que encuentra "CB1427", "CB 1427" y "CB-1427".
+  const patronCodigo = termSinEspacios.replace(/([A-Za-z])(\d)/g, "$1%$2").replace(/(\d)([A-Za-z])/g, "$1%$2");
   const { data: exactos } = await sb.from("Producto")
     .select("codigo, descripcion, precio_usd")
-    .or(`codigo.ilike.${term},codigo.ilike.${termSinEspacios}`)
+    .or(`codigo.ilike.${term},codigo.ilike.${termSinEspacios},codigo.ilike.${patronCodigo}`)
     .limit(5);
 
   const { data: parciales, error } = await sb.from("Producto")
     .select("codigo, descripcion, precio_usd")
-    .or(`codigo.ilike.%${term}%,codigo.ilike.%${termSinEspacios}%,descripcion.ilike.%${term}%`)
+    .or(`codigo.ilike.%${term}%,codigo.ilike.%${termSinEspacios}%,codigo.ilike.%${patronCodigo}%,descripcion.ilike.%${term}%`)
     .limit(8);
   if(error) return;
 
@@ -1423,6 +1439,8 @@ function actualizarBarra(){
 }
 
 function abrirCarrito(){
+  const buscador = document.getElementById("buscador-presupuesto");
+  if(buscador) buscador.value = "";
   renderCarrito();
   document.getElementById("cart-panel").classList.add("open");
 }
@@ -1513,10 +1531,30 @@ function toggleVerCamion(){
   renderGrid();
 }
 
+// Normaliza texto para buscar: sin mayúsculas, sin tildes
+function normalizarBusqueda(t){
+  return String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+// ¿El ítem coincide con lo escrito en el buscador del presupuesto?
+// Busca por nombre/descripción y por código (el código también sin importar espacios o guiones).
+function coincideBusquedaPresupuesto(texto, nombre, codigo){
+  if(!texto) return true;
+  const t = normalizarBusqueda(texto).trim();
+  if(!t) return true;
+  const nom = normalizarBusqueda(nombre);
+  const cod = normalizarBusqueda(codigo);
+  const compacto = s => s.replace(/[\s\-_.]/g, "");
+  return nom.includes(t) || cod.includes(t) || compacto(cod).includes(compacto(t)) ||
+    t.split(/\s+/).every(palabra => nom.includes(palabra) || cod.includes(palabra));
+}
+
 function renderCarrito(){
   const cont = document.getElementById("cart-items");
   cont.innerHTML = "";
   let total = 0;
+  let mostrados = 0;
+  const bBuscador = document.getElementById("buscador-presupuesto");
+  const textoBusqueda = bBuscador ? bBuscador.value : "";
   const claves = Object.keys(cart);
   const compartidos = itemsDelCatalogoCompartidos();
   if(claves.length === 0 && compartidos.length === 0){
@@ -1530,6 +1568,8 @@ function renderCarrito(){
     const unidades = unidadesCarrito(clave, it);
     const subtotal = unidades * precio;
     total += subtotal;
+    if(!coincideBusquedaPresupuesto(textoBusqueda, nombre, p.codigo)) return;
+    mostrados++;
     const claveJs = clave.replace(/'/g,"\\'");
     const div = document.createElement("div");
     div.className = "cart-item";
@@ -1552,6 +1592,8 @@ function renderCarrito(){
   compartidos.forEach(it=>{
     const subtotal = it.cantidad * it.precioUnitario;
     total += subtotal;
+    if(!coincideBusquedaPresupuesto(textoBusqueda, it.descripcion, it.codigo)) return;
+    mostrados++;
     const idJs = it.id.replace(/'/g,"\\'");
     const div = document.createElement("div");
     div.className = "cart-item";
@@ -1569,6 +1611,9 @@ function renderCarrito(){
       <button class="del" onclick="quitarDeCompartido('${idJs}')">✕</button>`;
     cont.appendChild(div);
   });
+  if(textoBusqueda.trim() && mostrados === 0){
+    cont.innerHTML = "<p style='color:#888;'>No hay productos en el presupuesto que coincidan con la búsqueda.</p>";
+  }
   document.getElementById("cart-total-2").textContent = money(total);
 }
 
