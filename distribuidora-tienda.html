@@ -15,6 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root{
     --amarillo:#FFD500;
@@ -545,7 +546,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<div id="plantilla-presupuesto-img" style="position:fixed;left:-9999px;top:0;width:600px;background:#ffffff;color:#161616;font-family:Arial,sans-serif;padding:24px;"></div>
+<div id="plantilla-presupuesto-img" style="position:fixed;left:-9999px;top:0;width:794px;min-height:1123px;box-sizing:border-box;background:#ffffff;color:#161616;font-family:Arial,sans-serif;padding:40px;"></div>
 
 <footer>
   <a href="https://wa.me/5492235923638" target="_blank" style="color:#25D366;font-weight:700;text-decoration:none;">💬 223 592-3638</a>
@@ -1690,8 +1691,82 @@ function exportarExcel(){
   XLSX.utils.book_append_sheet(libro, hoja, "Presupuesto");
 
   const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
-  XLSX.writeFile(libro, "Presupuesto_" + sello + ".xlsx", { bookType: "xlsx" });
+  // Excel listo para imprimir en A4 (fila 3 = encabezado de la tabla)
+  guardarExcelA4(libro, "Presupuesto_" + sello + ".xlsx", 3);
 }
+
+// Guarda el presupuesto en Excel ya configurado para imprimir en hoja A4
+// vertical: ajustado al ancho de la hoja, márgenes chicos, encabezado de
+// la tabla repetido en cada hoja y numeración de páginas al pie.
+// Si algo falla, baja el Excel común para no perder el presupuesto.
+async function guardarExcelA4(libro, nombreArchivo, filaEncabezado) {
+  try {
+    if (typeof JSZip === "undefined") throw new Error("JSZip no disponible");
+    const datos = XLSX.write(libro, { bookType: "xlsx", type: "array" });
+    const zip = await JSZip.loadAsync(datos);
+
+    const archivoHoja = zip.file(/^xl\/worksheets\/sheet1\.xml$/)[0];
+    const archivoLibro = zip.file("xl/workbook.xml");
+    if (!archivoHoja || !archivoLibro) throw new Error("estructura inesperada");
+
+    // --- Hoja: A4 vertical, ajustar al ancho, márgenes y pie de página ---
+    let hoja = await archivoHoja.async("string");
+    hoja = hoja
+      .replace(/<printOptions[^>]*\/>/g, "")
+      .replace(/<pageMargins[^>]*\/>/g, "")
+      .replace(/<pageSetup[^>]*\/>/g, "")
+      .replace(/<headerFooter[\s\S]*?<\/headerFooter>/g, "");
+
+    if (/<sheetPr[^>]*\/>/.test(hoja)) {
+      hoja = hoja.replace(/<sheetPr([^>]*)\/>/, '<sheetPr$1><pageSetUpPr fitToPage="1"/></sheetPr>');
+    } else if (/<sheetPr[^>]*>/.test(hoja)) {
+      hoja = hoja.replace(/<\/sheetPr>/, '<pageSetUpPr fitToPage="1"/></sheetPr>');
+    } else {
+      hoja = hoja.replace(/(<worksheet[^>]*>)/, '$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+    }
+
+    const bloqueImpresion =
+      '<printOptions horizontalCentered="1"/>' +
+      '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/>' +
+      '<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' +
+      '<headerFooter><oddFooter>&amp;CPágina &amp;P de &amp;N</oddFooter></headerFooter>';
+    if (hoja.indexOf("<ignoredErrors") !== -1) {
+      hoja = hoja.replace("<ignoredErrors", bloqueImpresion + "<ignoredErrors");
+    } else {
+      hoja = hoja.replace("</worksheet>", bloqueImpresion + "</worksheet>");
+    }
+    zip.file(archivoHoja.name, hoja);
+
+    // --- Libro: repetir la fila de encabezado en cada hoja impresa ---
+    let libroXml = await archivoLibro.async("string");
+    const nombreTitulos =
+      '<definedName name="_xlnm.Print_Titles" localSheetId="0">Presupuesto!$' + filaEncabezado + ":$" + filaEncabezado + "</definedName>";
+    if (libroXml.indexOf("<definedNames>") !== -1) {
+      libroXml = libroXml.replace("<definedNames>", "<definedNames>" + nombreTitulos);
+    } else {
+      libroXml = libroXml.replace("</sheets>", "</sheets><definedNames>" + nombreTitulos + "</definedNames>");
+    }
+    zip.file("xl/workbook.xml", libroXml);
+
+    const blob = await zip.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (e) {
+    console.warn("Excel A4 no disponible, se baja el común:", e);
+    XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
+  }
+}
+
 
 function exportarImagen(){
   const claves = Object.keys(cart);
@@ -1709,7 +1784,7 @@ function exportarImagen(){
   }));
   const items = [...itemsPropios, ...itemsCompartidos];
 
-  const POR_PAGINA = 20;
+  const POR_PAGINA = 18; // por hoja A4
   const paginas = [];
   for(let i=0; i<items.length; i+=POR_PAGINA){
     paginas.push(items.slice(i, i+POR_PAGINA));
@@ -1736,7 +1811,7 @@ async function generarPaginasPresupuesto(paginas, index, archivos){
     const subtotal = unidades * it.precio;
     filas += `<tr style="background:${i%2===0?'#ffffff':'#f5f5f5'};">
       <td style="padding:9px 6px;text-align:center;border-bottom:1px solid #eee;">${unidades}</td>
-      <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.codigo || ""}</td>
+      <td style="padding:9px 6px;border-bottom:1px solid #eee;white-space:nowrap;">${it.codigo || ""}</td>
       <td style="padding:9px 6px;border-bottom:1px solid #eee;">${it.nombre}</td>
       <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;">${money(it.precio)}</td>
       <td style="padding:9px 6px;text-align:right;border-bottom:1px solid #eee;white-space:nowrap;font-weight:700;">${money(subtotal)}</td>
@@ -1751,7 +1826,7 @@ async function generarPaginasPresupuesto(paginas, index, archivos){
     <div style="text-align:center;font-size:11px;color:#888;letter-spacing:1px;margin-bottom:20px;">DISTRIBUIDORA TIENDA &middot; VENTA DE REPUESTOS Y ACCESORIOS</div>
     <div style="font-weight:800;font-size:15px;margin-bottom:2px;">PRESUPUESTO${paginas.length>1 ? ' — Página '+(index+1)+' de '+paginas.length : ''}</div>
     <div style="font-size:12px;color:#666;margin-bottom:14px;">Fecha: ${fecha}</div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <table style="width:100%;border-collapse:collapse;font-size:14px;">
       <thead>
         <tr style="background:#161616;color:#fff;">
           <th style="padding:9px 6px;text-align:center;">CANT.</th>
@@ -1767,7 +1842,7 @@ async function generarPaginasPresupuesto(paginas, index, archivos){
       <span>${esUltima ? 'TOTAL' : 'Subtotal página'}</span><span>${money(esUltima ? totalGeneral : totalPagina)}</span>
     </div>`;
 
-  const canvas = await html2canvas(tpl, {backgroundColor:"#ffffff"});
+  const canvas = await html2canvas(tpl, {backgroundColor:"#ffffff", scale:2});
   canvas.toBlob(blob=>{
     const file = new File([blob], `presupuesto-sm-motos-${index+1}.png`, {type:"image/png"});
     archivos.push(file);

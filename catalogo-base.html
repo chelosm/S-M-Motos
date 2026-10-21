@@ -752,7 +752,7 @@
 </div>
 
 <!-- Plantilla oculta para generar la imagen del presupuesto -->
-<div id="plantilla-presupuesto-img" style="position:fixed; left:-9999px; top:0; width:600px; background:#ffffff; color:#111; font-family:Arial, sans-serif; padding:24px;"></div>
+<div id="plantilla-presupuesto-img" style="position:fixed; left:-9999px; top:0; width:794px; min-height:1123px; box-sizing:border-box; background:#ffffff; color:#111; font-family:Arial, sans-serif; padding:40px;"></div>
 
 <!-- Mini modal para elegir la forma de pago de una venta (permite combinar métodos) -->
 <div id="fondo-forma-pago" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60;" onclick="if(event.target===this) resolverFormaPago(null)"></div>
@@ -2277,10 +2277,84 @@
 
     const sello = new Date().toISOString().slice(0,16).replace("T","_").replace(":","");
     const nombreArchivo = "Presupuesto" + (cliente ? "_" + cliente.replace(/\s+/g,"_") : "") + "_" + sello + ".xlsx";
-    XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
+    // Excel listo para imprimir en A4 (fila 3 = encabezado de la tabla)
+    guardarExcelA4(libro, nombreArchivo, 3);
   }
 
-  const ITEMS_POR_IMAGEN = 20;
+  // Guarda el presupuesto en Excel ya configurado para imprimir en hoja A4
+  // vertical: ajustado al ancho de la hoja, márgenes chicos, encabezado de
+  // la tabla repetido en cada hoja y numeración de páginas al pie.
+  // Si algo falla, baja el Excel común para no perder el presupuesto.
+  async function guardarExcelA4(libro, nombreArchivo, filaEncabezado) {
+    try {
+      if (typeof JSZip === "undefined") throw new Error("JSZip no disponible");
+      const datos = XLSX.write(libro, { bookType: "xlsx", type: "array" });
+      const zip = await JSZip.loadAsync(datos);
+
+      const archivoHoja = zip.file(/^xl\/worksheets\/sheet1\.xml$/)[0];
+      const archivoLibro = zip.file("xl/workbook.xml");
+      if (!archivoHoja || !archivoLibro) throw new Error("estructura inesperada");
+
+      // --- Hoja: A4 vertical, ajustar al ancho, márgenes y pie de página ---
+      let hoja = await archivoHoja.async("string");
+      hoja = hoja
+        .replace(/<printOptions[^>]*\/>/g, "")
+        .replace(/<pageMargins[^>]*\/>/g, "")
+        .replace(/<pageSetup[^>]*\/>/g, "")
+        .replace(/<headerFooter[\s\S]*?<\/headerFooter>/g, "");
+
+      if (/<sheetPr[^>]*\/>/.test(hoja)) {
+        hoja = hoja.replace(/<sheetPr([^>]*)\/>/, '<sheetPr$1><pageSetUpPr fitToPage="1"/></sheetPr>');
+      } else if (/<sheetPr[^>]*>/.test(hoja)) {
+        hoja = hoja.replace(/<\/sheetPr>/, '<pageSetUpPr fitToPage="1"/></sheetPr>');
+      } else {
+        hoja = hoja.replace(/(<worksheet[^>]*>)/, '$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+      }
+
+      const bloqueImpresion =
+        '<printOptions horizontalCentered="1"/>' +
+        '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/>' +
+        '<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' +
+        '<headerFooter><oddFooter>&amp;CPágina &amp;P de &amp;N</oddFooter></headerFooter>';
+      if (hoja.indexOf("<ignoredErrors") !== -1) {
+        hoja = hoja.replace("<ignoredErrors", bloqueImpresion + "<ignoredErrors");
+      } else {
+        hoja = hoja.replace("</worksheet>", bloqueImpresion + "</worksheet>");
+      }
+      zip.file(archivoHoja.name, hoja);
+
+      // --- Libro: repetir la fila de encabezado en cada hoja impresa ---
+      let libroXml = await archivoLibro.async("string");
+      const nombreTitulos =
+        '<definedName name="_xlnm.Print_Titles" localSheetId="0">Presupuesto!$' + filaEncabezado + ":$" + filaEncabezado + "</definedName>";
+      if (libroXml.indexOf("<definedNames>") !== -1) {
+        libroXml = libroXml.replace("<definedNames>", "<definedNames>" + nombreTitulos);
+      } else {
+        libroXml = libroXml.replace("</sheets>", "</sheets><definedNames>" + nombreTitulos + "</definedNames>");
+      }
+      zip.file("xl/workbook.xml", libroXml);
+
+      const blob = await zip.generateAsync({
+        type: "blob",
+        compression: "DEFLATE",
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nombreArchivo;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      console.warn("Excel A4 no disponible, se baja el común:", e);
+      XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
+    }
+  }
+
+
+  const ITEMS_POR_IMAGEN = 18; // por hoja A4
 
   // Arma el HTML de una "página" del presupuesto (un pedazo de hasta
   // 20 productos) y lo mete en la plantilla oculta, lista para capturar.
@@ -2293,7 +2367,7 @@
       return `
         <tr style="background:${fondoFila};">
           <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.cantidad}</td>
-          <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.codigo || ""}</td>
+          <td style="padding:8px; white-space:nowrap; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.codigo || ""}</td>
           <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111;">${item.descripcion}</td>
           <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111; text-align:right;">$${fmt(item.precioUnitario)}</td>
           <td style="padding:8px; border-bottom:1px solid #ddd; background:${fondoFila}; color:#111; text-align:right;">$${fmt(sub)}</td>
@@ -2326,7 +2400,7 @@
           ${cliente ? "Cliente: " + cliente + "<br>" : ""}
           Fecha: ${fecha}
         </div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.85rem; background:#ffffff;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.9rem; background:#ffffff;">
           <thead>
             <tr style="background:#111111;">
               <th style="padding:8px; text-align:left; background:#111111; color:#ffffff;">Cant.</th>
