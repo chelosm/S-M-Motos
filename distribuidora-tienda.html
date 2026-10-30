@@ -540,6 +540,9 @@
       </div>
 
       <h3>Productos cargados</h3>
+      <input type="text" id="buscador-admin" placeholder="🔍 Buscar un producto cargado (nombre, código, rubro)..." oninput="renderAdminLista()" autocomplete="off"
+        style="width:100%;padding:10px;border:1px solid var(--borde);border-radius:8px;margin:4px 0 6px;font-size:0.95rem;">
+      <div id="admin-contador" style="font-size:0.8rem;color:var(--gris);margin-bottom:6px;"></div>
       <div id="admin-lista"></div>
     </div>
   </div>
@@ -2162,7 +2165,14 @@ function cancelarEdicion(){
 function renderAdminLista(){
   const cont = document.getElementById("admin-lista");
   cont.innerHTML = "";
+  // Buscador del panel: ignora espacios, guiones, mayúsculas y tildes, y
+  // también busca por rubro.
+  const buscadorAdmin = document.getElementById("buscador-admin");
+  const qAdmin = buscadorAdmin ? buscadorAdmin.value : "";
+  let mostrados = 0;
   productos.forEach(p=>{
+    if(qAdmin.trim() && !coincideBusqueda({...p, nombre: (p.nombre||"") + " " + (p.rubro||"")}, qAdmin)) return;
+    mostrados++;
     const row = document.createElement("div");
     row.className = "prod-row";
     const tieneVariantes = Array.isArray(p.variantes) && p.variantes.length > 0;
@@ -2178,6 +2188,12 @@ function renderAdminLista(){
       <button style="background:#eee;" onclick="borrarProducto(${p.id})">Borrar</button>`;
     cont.appendChild(row);
   });
+  const contador = document.getElementById("admin-contador");
+  if(contador){
+    contador.textContent = qAdmin.trim()
+      ? (mostrados === 0 ? "No se encontró ningún producto con esa búsqueda" : mostrados + " de " + productos.length + " productos")
+      : productos.length + " productos cargados";
+  }
 }
 
 async function toggleCampo(id, campo, valor){
