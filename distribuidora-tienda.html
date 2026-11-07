@@ -131,6 +131,9 @@
     position:relative;
   }
   .card.oferta{border:2px solid var(--oferta);}
+  .barra-orden{display:flex;gap:6px;justify-content:center;padding:5px;background:#111;width:100%;box-sizing:border-box;}
+  .card.compacta .barra-orden{flex:1 1 100%;}
+  .barra-orden button{flex:1;background:#F5B700;color:#000;border:none;border-radius:6px;padding:6px 0;font-size:1rem;font-weight:700;cursor:pointer;}
   .card.compacta{
     grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center;
     padding:10px 12px;gap:8px 14px;
@@ -712,6 +715,52 @@ function textoPrecio(monto){
   return (preciosVisibles || esAdmin) ? money(monto) : "Consultar precio";
 }
 
+// ===== ORDEN ELEGIDO A MANO (solo el administrador lo cambia) =====
+let idsGridActual = [];
+function ordenEfectivo(p){
+  return (typeof p.orden === "number") ? p.orden : 1000000 + (p._i || 0);
+}
+function controlesOrden(p){
+  if(!esAdmin || verSoloCamion || document.getElementById("buscador").value.trim()) return "";
+  return `<div class="barra-orden">
+    <button type="button" title="Poner primero" onclick="moverProducto(${p.id},'primero')">⏮</button>
+    <button type="button" title="Subir un lugar" onclick="moverProducto(${p.id},'antes')">◀</button>
+    <button type="button" title="Bajar un lugar" onclick="moverProducto(${p.id},'despues')">▶</button>
+    <button type="button" title="Poner último" onclick="moverProducto(${p.id},'ultimo')">⏭</button>
+  </div>`;
+}
+async function moverProducto(id, accion){
+  const p = productos.find(x=>x.id === id);
+  if(!p) return;
+  // Se mueve dentro de su grupo visible: destacados con destacados, el resto con el resto.
+  const grupo = idsGridActual.map(i=>productos.find(x=>x.id === i)).filter(x=>x && !!x.oferta === !!p.oferta);
+  const pos = grupo.findIndex(x=>x.id === id);
+  if(pos < 0) return;
+  let cambios = [];
+  if(accion === "primero"){
+    if(pos === 0) return;
+    cambios = [[p, ordenEfectivo(grupo[0]) - 10]];
+  } else if(accion === "ultimo"){
+    if(pos === grupo.length - 1) return;
+    cambios = [[p, ordenEfectivo(grupo[grupo.length - 1]) + 10]];
+  } else {
+    const vecino = grupo[pos + (accion === "antes" ? -1 : 1)];
+    if(!vecino) return;
+    cambios = [[p, ordenEfectivo(vecino)], [vecino, ordenEfectivo(p)]];
+  }
+  const respuestas = await Promise.all(cambios.map(([x, v]) =>
+    sb.from("DistribuidoraTienda").update({orden: v}).eq("id", x.id)));
+  const fallo = respuestas.find(r => r.error);
+  if(fallo){
+    alert("No se pudo guardar el orden. Si dice que falta la columna 'orden', hay que correr el SQL de orden en Supabase.\n\n" + fallo.error.message);
+    return;
+  }
+  cambios.forEach(([x, v]) => { x.orden = v; });
+  productos.sort((a,b)=>ordenEfectivo(a)-ordenEfectivo(b));
+  renderGrid();
+  if(esAdmin) renderAdminLista();
+}
+
 let ultimaCargaTienda = Date.now();
 async function cargarProductos(){
   ultimaCargaTienda = Date.now();
@@ -725,6 +774,10 @@ async function cargarProductos(){
     return;
   }
   productos = data || [];
+  // Orden elegido a mano (columna "orden"); los productos sin orden quedan al final,
+  // en el orden en que se cargaron.
+  productos.forEach((p,i)=>{ p._i = i; });
+  productos.sort((a,b)=>ordenEfectivo(a)-ordenEfectivo(b));
   await vincularCostosDelCatalogo();
   renderTabs();
   renderGrid();
@@ -820,6 +873,7 @@ function renderGrid(){
   visibles = visibles.filter(p => coincideBusqueda(p, busqueda));
   // Los productos en oferta suben arriba de todo; el resto mantiene su orden habitual.
   visibles.sort((a, b) => (b.oferta ? 1 : 0) - (a.oferta ? 1 : 0));
+  idsGridActual = visibles.map(p => p.id);
 
   // Las sugerencias de precio del proveedor son información interna (a veces precio de costo):
   // solo se muestran si entraste al panel admin, nunca al público que arma su presupuesto.
@@ -908,7 +962,8 @@ function renderGrid(){
           <h3>${p.nombre}${p.codigo ? ' <small style="color:var(--gris);font-weight:400;">('+p.codigo+')</small>' : ''}</h3>
           ${precioMostrado}
           ${bloqueSeleccion}
-        </div>`;
+        </div>
+        ${controlesOrden(p)}`;
     } else {
       div.className += " compacta";
       div.innerHTML = `
@@ -917,7 +972,8 @@ function renderGrid(){
           <h3>${p.nombre}${p.codigo ? ' <small style="color:var(--gris);font-weight:400;">('+p.codigo+')</small>' : ''}</h3>
           ${precioMostrado}
         </div>
-        <div class="compacta-controles">${bloqueSeleccion}</div>`;
+        <div class="compacta-controles">${bloqueSeleccion}</div>
+        ${controlesOrden(p)}`;
     }
     grid.appendChild(div);
   });
