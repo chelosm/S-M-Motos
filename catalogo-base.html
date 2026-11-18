@@ -1338,7 +1338,11 @@
     }
 
 
-    const filaStock = (esAdmin && HAY_STOCK) ? `
+    const filaStock = (esAdmin && !HAY_STOCK) ? `
+      <div style="margin-top:14px; padding:10px; border:1px dashed var(--rojo-sinstock); border-radius:8px; font-size:0.82rem; color:var(--rojo-sinstock);">
+        📦 Stock: todavía falta crear la columna en Supabase. Corré el SQL <b>alter table "Producto" add column if not exists stock integer;</b> y refrescá la página.
+      </div>
+    ` : (esAdmin && HAY_STOCK) ? `
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--metal-claro);">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
           <span style="color:var(--texto-tenue);">📦 Stock</span>
