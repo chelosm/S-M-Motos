@@ -2269,7 +2269,7 @@
     }
 
     const hoja = XLSX.utils.aoa_to_sheet(filas);
-    hoja["!cols"] = [{wch:8},{wch:14},{wch:45},{wch:12},{wch:14}];
+    hoja["!cols"] = [{wch:6},{wch:13},{wch:56},{wch:14},{wch:15}];
     hoja["!autofilter"] = { ref: `A3:E${3 + PRESUPUESTO.length}` };
 
     const libro = XLSX.utils.book_new();
@@ -2320,6 +2320,19 @@
         hoja = hoja.replace("<ignoredErrors", bloqueImpresion + "<ignoredErrors");
       } else {
         hoja = hoja.replace("</worksheet>", bloqueImpresion + "</worksheet>");
+      }
+      // --- Descripción: ajustar el texto en varias líneas (sin cortar) ---
+      const archivoEstilos = zip.file("xl/styles.xml");
+      if (archivoEstilos) {
+        let est = await archivoEstilos.async("string");
+        const m = est.match(/<cellXfs count="(\d+)">/);
+        if (m) {
+          const idx = parseInt(m[1], 10);
+          est = est.replace(m[0], '<cellXfs count="' + (idx + 1) + '">')
+                   .replace("</cellXfs>", '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs>');
+          zip.file("xl/styles.xml", est);
+          hoja = hoja.replace(/<c r="C(\d+)"/g, (t, n) => parseInt(n, 10) >= filaEncabezado ? '<c r="C' + n + '" s="' + idx + '"' : t);
+        }
       }
       zip.file(archivoHoja.name, hoja);
 
