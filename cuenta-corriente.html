@@ -145,6 +145,17 @@
   .msg.ok{color:var(--verde);}
   .msg.err{color:var(--rojo);}
   small.hint{display:block;color:#888;font-size:.75rem;margin-top:-2px;margin-bottom:6px;}
+
+  .estGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+  .estBox{background:var(--gris-claro);border-radius:8px;padding:10px;}
+  .estBox small{display:block;color:#666;font-size:.75rem;}
+  .estBox b{font-size:1.05rem;}
+  .estRow{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gris-borde);font-size:.92rem;}
+  .estBar{display:flex;align-items:flex-end;gap:6px;height:130px;margin:10px 0 4px;}
+  .estBar div.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;font-size:.65rem;}
+  .estBar .b{width:100%;display:flex;gap:2px;align-items:flex-end;flex:1;}
+  .estBar .b span{flex:1;border-radius:3px 3px 0 0;min-height:2px;}
+  .estLeg{font-size:.75rem;color:#555;display:flex;gap:12px;justify-content:center;}
 </style>
 </head>
 <body>
@@ -167,6 +178,7 @@
     <div class="tabs">
       <div class="tab active" id="modoClientesBtn" onclick="cambiarModo('clientes')">👥 Clientes</div>
       <div class="tab" id="modoProveedoresBtn" onclick="cambiarModo('proveedores')">🏭 Proveedores</div>
+      <div class="tab" id="modoEstadisticasBtn" onclick="cambiarModo('estadisticas')">📊 Estadísticas</div>
     </div>
 
     <div id="seccionClientes">
@@ -352,6 +364,19 @@
       </div>
     </div>
     <!-- FIN seccionProveedores -->
+
+    <div id="seccionEstadisticas" class="hidden">
+      <div class="card">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn" onclick="cambiarMesEst(-1)">◀</button>
+          <input type="month" id="estMes" onchange="renderEstadisticas()" style="flex:1;padding:10px;font-size:1rem;border:1px solid var(--gris-borde);border-radius:6px;text-align:center;">
+          <button class="btn" onclick="cambiarMesEst(1)">▶</button>
+        </div>
+      </div>
+      <div id="estContenido"><div class="card">Cargando...</div></div>
+      <button class="btn" style="width:100%;" onclick="exportarExcelEstadisticas()">📥 Exportar estadísticas a Excel</button>
+    </div>
+
   </main>
 </div>
 
@@ -464,7 +489,141 @@ function cambiarModo(modo){
   document.getElementById('seccionProveedores').classList.toggle('hidden', modo !== 'proveedores');
   document.getElementById('modoClientesBtn').classList.toggle('active', modo === 'clientes');
   document.getElementById('modoProveedoresBtn').classList.toggle('active', modo === 'proveedores');
+  document.getElementById('seccionEstadisticas').classList.toggle('hidden', modo !== 'estadisticas');
+  document.getElementById('modoEstadisticasBtn').classList.toggle('active', modo === 'estadisticas');
   if(modo === 'proveedores') cargarProveedores();
+  if(modo === 'estadisticas') abrirEstadisticas();
+}
+
+
+/* ---------- ESTADÍSTICAS MENSUALES ---------- */
+let estClientes = [], estProveedores = [];
+
+async function traerTodo(tabla, columnas){
+  let todo = [], desde = 0;
+  while(true){
+    const {data, error} = await sb.from(tabla).select(columnas).range(desde, desde+999);
+    if(error) throw error;
+    todo = todo.concat(data);
+    if(data.length < 1000) break;
+    desde += 1000;
+  }
+  return todo;
+}
+
+async function abrirEstadisticas(){
+  const inp = document.getElementById('estMes');
+  if(!inp.value){ const h=new Date(); inp.value = h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0'); }
+  document.getElementById('estContenido').innerHTML = '<div class="card">Cargando...</div>';
+  try{
+    estClientes = await traerTodo('movimientos','fecha,venta,deposito,cheque,echeq,pago,observaciones');
+    estProveedores = await traerTodo('movimientos_proveedores','fecha_factura,compra,deposito,cheque,echeq,pago,observaciones,moneda,dolar');
+    renderEstadisticas();
+  }catch(e){
+    document.getElementById('estContenido').innerHTML = '<div class="card" style="color:var(--rojo)">No se pudieron cargar los datos: '+(e.message||e)+'</div>';
+  }
+}
+
+function cambiarMesEst(d){
+  const [a,m] = document.getElementById('estMes').value.split('-').map(Number);
+  const f = new Date(a, m-1+d, 1);
+  document.getElementById('estMes').value = f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0');
+  renderEstadisticas();
+}
+
+function esEspecial(o){ o=(o||'').toLowerCase(); return o.includes('saldo inicial') || o.includes('ajuste'); }
+
+// Devuelve totales de un mes 'YYYY-MM'
+function totalesMes(mes){
+  const t = {ventas:0, dep:0, chq:0, ech:0, efe:0, cobrado:0, movs:0,
+             compraArs:0, compraUsd:0, pagoProv:0, pagoProvUsdEq:0, ajustes:0};
+  estClientes.forEach(m=>{
+    if(!m.fecha || m.fecha.slice(0,7)!==mes) return;
+    if(esEspecial(m.observaciones)){ t.ajustes += (Number(m.venta)||0) - (Number(m.deposito)||0)-(Number(m.cheque)||0)-(Number(m.echeq)||0)-(Number(m.pago)||0); return; }
+    t.ventas += Number(m.venta)||0;
+    t.dep += Number(m.deposito)||0; t.chq += Number(m.cheque)||0;
+    t.ech += Number(m.echeq)||0;  t.efe += Number(m.pago)||0;
+    t.movs++;
+  });
+  t.cobrado = t.dep+t.chq+t.ech+t.efe;
+  estProveedores.forEach(m=>{
+    if(!m.fecha_factura || m.fecha_factura.slice(0,7)!==mes) return;
+    if(esEspecial(m.observaciones)) return;
+    if(m.moneda==='USD') t.compraUsd += Number(m.compra)||0; else t.compraArs += Number(m.compra)||0;
+    t.pagoProv += (Number(m.deposito)||0)+(Number(m.cheque)||0)+(Number(m.echeq)||0)+(Number(m.pago)||0);
+  });
+  return t;
+}
+
+function mesesUltimos(mesFin, n){
+  const [a,m] = mesFin.split('-').map(Number), r=[];
+  for(let i=n-1;i>=0;i--){ const f=new Date(a,m-1-i,1); r.push(f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')); }
+  return r;
+}
+const NOMBRES_MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function nombreMes(k){ const [a,m]=k.split('-'); return NOMBRES_MES[m-1]+' '+a.slice(2); }
+
+function renderEstadisticas(){
+  const mes = document.getElementById('estMes').value;
+  if(!mes) return;
+  const t = totalesMes(mes);
+  const pct = t.ventas>0 ? Math.round(t.cobrado/t.ventas*100) : 0;
+  const hist = mesesUltimos(mes,6).map(k=>({k, ...totalesMes(k)}));
+  const max = Math.max(1, ...hist.map(h=>Math.max(h.ventas,h.cobrado)));
+
+  let barras = hist.map(h=>`
+    <div class="col"><div class="b">
+      <span style="background:var(--negro);height:${h.ventas/max*100}%" title="Ventas ${formatoMoneda(h.ventas)}"></span>
+      <span style="background:var(--amarillo);height:${h.cobrado/max*100}%" title="Cobrado ${formatoMoneda(h.cobrado)}"></span>
+    </div>${nombreMes(h.k)}</div>`).join('');
+
+  let filas = hist.slice().reverse().map(h=>`
+    <div class="estRow"><span>${nombreMes(h.k)}</span><span>Vendido ${formatoMoneda(h.ventas)} · Cobrado ${formatoMoneda(h.cobrado)}</span></div>`).join('');
+
+  document.getElementById('estContenido').innerHTML = `
+    <div class="card">
+      <h3 style="margin-bottom:10px;">Clientes — ${nombreMes(mes)}</h3>
+      <div class="estGrid">
+        <div class="estBox"><small>Ventas</small><b>${formatoMoneda(t.ventas)}</b></div>
+        <div class="estBox"><small>Cobrado total</small><b>${formatoMoneda(t.cobrado)}</b></div>
+        <div class="estBox"><small>Diferencia (cuenta corriente)</small><b>${formatoMoneda(t.ventas-t.cobrado)}</b></div>
+        <div class="estBox"><small>Cobrado sobre vendido</small><b>${pct}%</b></div>
+      </div>
+      <div class="estRow"><span>🏦 Depósitos</span><b>${formatoMoneda(t.dep)}</b></div>
+      <div class="estRow"><span>📄 Cheques</span><b>${formatoMoneda(t.chq)}</b></div>
+      <div class="estRow"><span>💻 Echeq</span><b>${formatoMoneda(t.ech)}</b></div>
+      <div class="estRow"><span>💵 Efectivo</span><b>${formatoMoneda(t.efe)}</b></div>
+      <div class="estRow"><span>Movimientos cargados</span><b>${t.movs}</b></div>
+      ${t.ajustes? `<div class="estRow"><span>Ajustes de saldo / saldos iniciales (no cuentan)</span><b>${formatoMoneda(t.ajustes)}</b></div>`:''}
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:10px;">Proveedores — ${nombreMes(mes)}</h3>
+      <div class="estGrid">
+        <div class="estBox"><small>Compras en pesos</small><b>${formatoMoneda(t.compraArs)}</b></div>
+        <div class="estBox"><small>Compras en USD</small><b>${formatoDolar(t.compraUsd)}</b></div>
+        <div class="estBox" style="grid-column:span 2"><small>Pagado a proveedores (en pesos)</small><b>${formatoMoneda(t.pagoProv)}</b></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Últimos 6 meses</h3>
+      <div class="estBar">${barras}</div>
+      <div class="estLeg"><span>■ Ventas</span><span style="color:#b8920a">■ Cobrado</span></div>
+      <div style="margin-top:10px;">${filas}</div>
+    </div>`;
+}
+
+function exportarExcelEstadisticas(){
+  if(typeof XLSX==='undefined'){ alert('No cargó la librería de Excel. Revisá internet.'); return; }
+  const mes = document.getElementById('estMes').value;
+  const meses = mesesUltimos(mes,12);
+  const filas = [['Mes','Ventas','Depósitos','Cheques','Echeq','Efectivo','Total cobrado','Diferencia','Compras ARS','Compras USD','Pagado a proveedores (ARS)']];
+  meses.forEach(k=>{ const t=totalesMes(k);
+    filas.push([nombreMes(k),t.ventas,t.dep,t.chq,t.ech,t.efe,t.cobrado,t.ventas-t.cobrado,t.compraArs,t.compraUsd,t.pagoProv]); });
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols'] = filas[0].map(()=>({wch:16}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Estadisticas');
+  XLSX.writeFile(wb, 'Estadisticas_SM_Motos_'+mes+'.xlsx');
 }
 
 /* ---------- LOGIN ---------- */
