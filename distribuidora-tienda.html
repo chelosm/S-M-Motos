@@ -1546,14 +1546,16 @@ function limpiarStockConfirmado(){
 }
 // cli = cliente de Supabase; items = ítems del presupuesto compartido.
 // Devuelve { idProducto: stockNuevo } con lo que se descontó, o null si no se hizo nada.
-async function confirmarVentaStock(cli, items){
+async function confirmarVentaStock(cli, items, silencioso){
+  // silencioso = true: se usa al exportar el presupuesto; no pregunta ni interrumpe (salvo que falte stock o falle algo).
   const { data: ses } = await cli.auth.getSession();
   if(!(ses && ses.session)){
+    if(silencioso) return null;
     alert("Solo el administrador puede descontar stock. Iniciá sesión de administrador en la web principal.");
     return null;
   }
   items = (items || []).filter(it => it && !it.manual && Number(it.cantidad) > 0);
-  if(!items.length){ alert("No hay productos del catálogo para descontar."); return null; }
+  if(!items.length){ if(!silencioso) alert("No hay productos del catálogo para descontar."); return null; }
 
   const cols = "id, codigo, descripcion, stock";
   const ids = [...new Set(items.filter(i => i.origen !== "tienda" && i.id).map(i => String(i.id)))];
@@ -1563,6 +1565,7 @@ async function confirmarVentaStock(cli, items){
   if(ids.length){
     const r = await cli.from("Producto").select(cols).in("id", ids);
     if(r.error){
+      if(silencioso) return null;
       alert(falloColumna(r.error) ? "Todavía no está creada la columna de stock en Supabase. Corré primero el SQL que te pasé." : "No se pudo leer el stock: " + r.error.message);
       return null;
     }
@@ -1571,6 +1574,7 @@ async function confirmarVentaStock(cli, items){
   if(codigos.length){
     const r = await cli.from("Producto").select(cols).in("codigo", codigos);
     if(r.error){
+      if(silencioso) return null;
       alert(falloColumna(r.error) ? "Todavía no está creada la columna de stock en Supabase. Corré primero el SQL que te pasé." : "No se pudo leer el stock: " + r.error.message);
       return null;
     }
@@ -1603,6 +1607,7 @@ async function confirmarVentaStock(cli, items){
   if(!aplicar.length){
     // Nada con stock cargado para descontar: la venta igual se da por confirmada, sin avisos de más.
     localStorage.setItem(CLAVE_STOCK_CONFIRMADO, JSON.stringify(confirmados));
+    if(silencioso) return null;
     alert(yaDescontados.length && !sinControl.length && !sinVincular.length ? "Esta venta ya estaba confirmada." : "✅ Venta confirmada.");
     return null;
   }
@@ -1612,7 +1617,7 @@ async function confirmarVentaStock(cli, items){
   ).join("\n");
   if(aplicar.length > 14) texto += "\n… y " + (aplicar.length - 14) + " más";
   texto += "\n\n¿Confirmar la venta?";
-  if(!confirm(texto)) return null;
+  if(!silencioso && !confirm(texto)) return null;
 
   const resultado = {};
   const fallaron = [];
@@ -1625,10 +1630,22 @@ async function confirmarVentaStock(cli, items){
   localStorage.setItem(CLAVE_STOCK_CONFIRMADO, JSON.stringify(confirmados));
   if(fallaron.length){
     alert("No se pudo descontar (el stock cambió o hubo un error): " + fallaron.join(", ") + ".\nVolvé a tocar Confirmar venta para reintentar solo esos.");
+  } else if(silencioso){
+    const faltantes = aplicar.filter(a => a.falta && resultado[a.p.id] !== undefined).map(a => a.p.codigo);
+    if(faltantes.length) alert("⚠️ Se descontó el stock, pero había menos de lo vendido en: " + faltantes.slice(0, 8).join(", ") + (faltantes.length > 8 ? "…" : "") + ". Quedaron en 0.");
   } else {
     alert("✅ Venta confirmada. Stock descontado de " + Object.keys(resultado).length + " producto(s).");
   }
   return resultado;
+}
+
+// Al exportar (Excel o imagen) el stock se descuenta solo, sin preguntar.
+// No se descuenta dos veces: solo lo que todavía no se había descontado.
+async function descontarStockAlExportar(){
+  try{
+    const resultado = await confirmarVentaStock(sb, leerPresupuestoCompartido(), true);
+    if(resultado) showToast("✅ Stock descontado de " + Object.keys(resultado).length + " producto(s)");
+  }catch(e){ /* el descuento nunca debe impedir que se baje el presupuesto */ }
 }
 
 async function confirmarVentaTienda(){
@@ -1866,6 +1883,7 @@ function exportarExcel(){
     showToast("No hay productos en el presupuesto");
     return;
   }
+  descontarStockAlExportar();
   const filas = [];
   const fecha = new Date().toLocaleString('es-AR');
   filas.push(["", "", "", fecha, ""]);
@@ -1993,6 +2011,7 @@ function exportarImagen(){
     showToast("No hay productos en el presupuesto");
     return;
   }
+  descontarStockAlExportar();
   const itemsPropios = claves.map(clave=>{
     const it = itemCarrito(clave);
     return it ? {p: { pack_size: 1 }, codigo: (it.p && it.p.codigo) || "", nombre: it.nombre, precio: it.precio, cantidad: unidadesCarrito(clave, it)} : null;

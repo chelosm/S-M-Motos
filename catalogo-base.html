@@ -748,6 +748,7 @@
     <button onclick="exportarPresupuestoExcel()" style="width:100%; background:var(--amarillo-chillon); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">📊 Exportar a Excel</button>
     <button onclick="generarImagenPresupuesto()" style="width:100%; background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:12px; border-radius:8px; font-size:0.95rem; cursor:pointer; margin-bottom:10px;">🖼️ Generar imagen / Compartir</button>
     <div id="estado-generacion-img" style="text-align:center; font-size:0.85rem; color:var(--amarillo); margin-bottom:10px;"></div>
+    <div id="estado-stock-presupuesto" style="text-align:center; font-size:0.85rem; color:var(--verde-stock); margin-bottom:10px;"></div>
     <button onclick="confirmarVaciarPresupuesto()" style="width:100%; background:none; color:var(--rojo-sinstock); border:1px solid var(--rojo-sinstock); font-weight:700; padding:10px; border-radius:8px; font-size:0.9rem; cursor:pointer;">🗑️ Vaciar presupuesto</button>
   </div>
 </div>
@@ -1399,6 +1400,19 @@
     estado.textContent = valor === null ? "✔ Sin control de stock" : (valor <= 0 ? "✔ Guardado: sin stock" : "✔ Guardado: hay " + valor + " unidades");
   }
 
+  // Al exportar (Excel o imagen) el stock se descuenta solo, sin preguntar.
+  // No se descuenta dos veces: solo lo que todavía no se había descontado.
+  async function descontarStockAlExportar() {
+    try {
+      const resultado = await confirmarVentaStock(db, PRESUPUESTO, true);
+      if (resultado) {
+        PRODUCTOS.forEach(p => { if (resultado[p.id] !== undefined) p.stock = resultado[p.id]; });
+        const el = document.getElementById("estado-stock-presupuesto");
+        if (el) el.textContent = "✅ Stock descontado de " + Object.keys(resultado).length + " producto(s).";
+      }
+    } catch (e) { /* el descuento nunca debe impedir que se baje el presupuesto */ }
+  }
+
   async function confirmarVentaPresupuesto() {
     const resultado = await confirmarVentaStock(db, PRESUPUESTO);
     if (resultado) PRODUCTOS.forEach(p => { if (resultado[p.id] !== undefined) p.stock = resultado[p.id]; });
@@ -1707,14 +1721,16 @@
   }
   // cli = cliente de Supabase; items = ítems del presupuesto compartido.
   // Devuelve { idProducto: stockNuevo } con lo que se descontó, o null si no se hizo nada.
-  async function confirmarVentaStock(cli, items){
+  async function confirmarVentaStock(cli, items, silencioso){
+    // silencioso = true: se usa al exportar el presupuesto; no pregunta ni interrumpe (salvo que falte stock o falle algo).
     const { data: ses } = await cli.auth.getSession();
     if(!(ses && ses.session)){
+      if(silencioso) return null;
       alert("Solo el administrador puede descontar stock. Iniciá sesión de administrador en la web principal.");
       return null;
     }
     items = (items || []).filter(it => it && !it.manual && Number(it.cantidad) > 0);
-    if(!items.length){ alert("No hay productos del catálogo para descontar."); return null; }
+    if(!items.length){ if(!silencioso) alert("No hay productos del catálogo para descontar."); return null; }
   
     const cols = "id, codigo, descripcion, stock";
     const ids = [...new Set(items.filter(i => i.origen !== "tienda" && i.id).map(i => String(i.id)))];
@@ -1724,6 +1740,7 @@
     if(ids.length){
       const r = await cli.from("Producto").select(cols).in("id", ids);
       if(r.error){
+        if(silencioso) return null;
         alert(falloColumna(r.error) ? "Todavía no está creada la columna de stock en Supabase. Corré primero el SQL que te pasé." : "No se pudo leer el stock: " + r.error.message);
         return null;
       }
@@ -1732,6 +1749,7 @@
     if(codigos.length){
       const r = await cli.from("Producto").select(cols).in("codigo", codigos);
       if(r.error){
+        if(silencioso) return null;
         alert(falloColumna(r.error) ? "Todavía no está creada la columna de stock en Supabase. Corré primero el SQL que te pasé." : "No se pudo leer el stock: " + r.error.message);
         return null;
       }
@@ -1764,6 +1782,7 @@
     if(!aplicar.length){
     // Nada con stock cargado para descontar: la venta igual se da por confirmada, sin avisos de más.
     localStorage.setItem(CLAVE_STOCK_CONFIRMADO, JSON.stringify(confirmados));
+    if(silencioso) return null;
     alert(yaDescontados.length && !sinControl.length && !sinVincular.length ? "Esta venta ya estaba confirmada." : "✅ Venta confirmada.");
     return null;
   }
@@ -1773,7 +1792,7 @@
     ).join("\n");
     if(aplicar.length > 14) texto += "\n… y " + (aplicar.length - 14) + " más";
         texto += "\n\n¿Confirmar la venta?";
-    if(!confirm(texto)) return null;
+    if(!silencioso && !confirm(texto)) return null;
   
     const resultado = {};
     const fallaron = [];
@@ -1786,6 +1805,9 @@
     localStorage.setItem(CLAVE_STOCK_CONFIRMADO, JSON.stringify(confirmados));
     if(fallaron.length){
       alert("No se pudo descontar (el stock cambió o hubo un error): " + fallaron.join(", ") + ".\nVolvé a tocar Confirmar venta para reintentar solo esos.");
+    } else if(silencioso){
+      const faltantes = aplicar.filter(a => a.falta && resultado[a.p.id] !== undefined).map(a => a.p.codigo);
+      if(faltantes.length) alert("⚠️ Se descontó el stock, pero había menos de lo vendido en: " + faltantes.slice(0, 8).join(", ") + (faltantes.length > 8 ? "…" : "") + ". Quedaron en 0.");
     } else {
       alert("✅ Venta confirmada. Stock descontado de " + Object.keys(resultado).length + " producto(s).");
     }
@@ -2067,6 +2089,8 @@
     renderPresupuesto();
     actualizarBotonesModo();
     actualizarBotonConfirmarVenta();
+    const estadoStock = document.getElementById("estado-stock-presupuesto");
+    if (estadoStock) estadoStock.textContent = "";
     document.getElementById("overlay-presupuesto").classList.add("abierto");
   }
 
@@ -2399,6 +2423,7 @@
       alert("Todavía no agregaste nada al presupuesto.");
       return;
     }
+    descontarStockAlExportar();
     const cliente = document.getElementById("input-cliente-presupuesto").value.trim() || "";
     const fecha = new Date().toLocaleString('es-AR');
     const descuentoPct = parseFloat(document.getElementById("input-descuento-presupuesto").value) || 0;
@@ -2596,6 +2621,7 @@
       alert("Todavía no agregaste nada al presupuesto.");
       return;
     }
+    descontarStockAlExportar();
     const cliente = document.getElementById("input-cliente-presupuesto").value.trim();
     const fecha = new Date().toLocaleDateString('es-AR');
     const descuentoPct = parseFloat(document.getElementById("input-descuento-presupuesto").value) || 0;
