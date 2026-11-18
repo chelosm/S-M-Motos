@@ -464,6 +464,7 @@
       <button type="button" onclick="agregarItemManual()">+ Agregar ítem que no está en el catálogo</button>
     </div>
     <div class="total-row"><span>Total</span><span id="cart-total-2">$0</span></div>
+    <button id="btn-confirmar-venta" class="btn-primario" style="display:none;width:100%;margin-bottom:10px;" onclick="confirmarVentaTienda()">✅ Confirmar venta (descontar stock)</button>
     <div class="sheet-actions">
       <button class="btn-secundario" onclick="vaciarCarrito()">Vaciar</button>
       <button class="btn-secundario" onclick="exportarExcel()">📊 Excel</button>
@@ -1471,7 +1472,7 @@ function sincronizarPresupuestoCompartido(){
     if(!it) return null;
     return {
       id: "tienda-" + clave,
-      codigo: (it.p && it.p.codigo) || "",
+      codigo: (it.p && it.p.codigo) || (String(clave).startsWith("prov|") ? String(clave).slice(5) : ""),
       descripcion: it.nombre,
       cantidad: unidadesCarrito(clave, it),
       precioUnitario: it.precio,
@@ -1532,10 +1533,120 @@ function actualizarBarra(){
   // el detalle correcto siempre.
 }
 
+// ===== STOCK: descontar lo vendido (solo administrador) =====
+// Guarda, por producto, cuántas unidades de este presupuesto ya se descontaron,
+// así apretar "Confirmar venta" dos veces no descuenta dos veces.
+const CLAVE_STOCK_CONFIRMADO = "presupuestoStockConfirmado";
+function leerStockConfirmado(){
+  try { return JSON.parse(localStorage.getItem(CLAVE_STOCK_CONFIRMADO) || "{}"); }
+  catch(e){ return {}; }
+}
+function limpiarStockConfirmado(){
+  try { localStorage.setItem(CLAVE_STOCK_CONFIRMADO, "{}"); } catch(e){}
+}
+// cli = cliente de Supabase; items = ítems del presupuesto compartido.
+// Devuelve { idProducto: stockNuevo } con lo que se descontó, o null si no se hizo nada.
+async function confirmarVentaStock(cli, items){
+  const { data: ses } = await cli.auth.getSession();
+  if(!(ses && ses.session)){
+    alert("Solo el administrador puede descontar stock. Iniciá sesión de administrador en la web principal.");
+    return null;
+  }
+  items = (items || []).filter(it => it && !it.manual && Number(it.cantidad) > 0);
+  if(!items.length){ alert("No hay productos del catálogo para descontar."); return null; }
+
+  const cols = "id, codigo, descripcion, stock";
+  const ids = [...new Set(items.filter(i => i.origen !== "tienda" && i.id).map(i => String(i.id)))];
+  const codigos = [...new Set(items.filter(i => i.codigo && i.codigo !== "—").map(i => String(i.codigo)))];
+  const porId = {}, porCodigo = {};
+  const falloColumna = e => /stock/i.test((e && e.message) || "");
+  if(ids.length){
+    const r = await cli.from("Producto").select(cols).in("id", ids);
+    if(r.error){
+      alert(falloColumna(r.error) ? "Todavía no está creada la columna de stock en Supabase. Corré primero el SQL que te pasé." : "No se pudo leer el stock: " + r.error.message);
+      return null;
+    }
+    (r.data || []).forEach(p => { porId[p.id] = p; });
+  }
+  if(codigos.length){
+    const r = await cli.from("Producto").select(cols).in("codigo", codigos);
+    if(r.error){
+      alert(falloColumna(r.error) ? "Todavía no está creada la columna de stock en Supabase. Corré primero el SQL que te pasé." : "No se pudo leer el stock: " + r.error.message);
+      return null;
+    }
+    (r.data || []).forEach(p => { (porCodigo[p.codigo] = porCodigo[p.codigo] || []).push(p); });
+  }
+
+  const necesita = {};     // idProducto -> unidades en el presupuesto
+  const productos = {};    // idProducto -> fila
+  const sinVincular = [];
+  items.forEach(it => {
+    let p = (it.origen !== "tienda" && it.id) ? porId[String(it.id)] : null;
+    if(!p && it.codigo && porCodigo[it.codigo] && porCodigo[it.codigo].length === 1) p = porCodigo[it.codigo][0];
+    if(!p){ sinVincular.push(it.codigo || it.descripcion || "?"); return; }
+    productos[p.id] = p;
+    necesita[p.id] = (necesita[p.id] || 0) + Number(it.cantidad);
+  });
+
+  const confirmados = leerStockConfirmado();
+  const aplicar = [];       // { p, delta, nuevo }
+  const sinControl = [];
+  const yaDescontados = [];
+  Object.keys(necesita).forEach(id => {
+    const p = productos[id];
+    const delta = necesita[id] - (Number(confirmados[id]) || 0);
+    if(delta <= 0){ yaDescontados.push(p.codigo); return; }
+    if(p.stock === null || p.stock === undefined){ sinControl.push(p.codigo); confirmados[id] = necesita[id]; return; }
+    aplicar.push({ p, delta, nuevo: Math.max(0, p.stock - delta), falta: p.stock - delta < 0 });
+  });
+
+  if(!aplicar.length){
+    // Nada con stock cargado para descontar: la venta igual se da por confirmada, sin avisos de más.
+    localStorage.setItem(CLAVE_STOCK_CONFIRMADO, JSON.stringify(confirmados));
+    alert(yaDescontados.length && !sinControl.length && !sinVincular.length ? "Esta venta ya estaba confirmada." : "✅ Venta confirmada.");
+    return null;
+  }
+
+  let texto = "Se va a descontar del stock:\n\n" + aplicar.slice(0, 14).map(a =>
+    (a.falta ? "⚠️ " : "• ") + a.p.codigo + ": " + a.p.stock + " → " + a.nuevo + (a.falta ? " (había menos de lo vendido)" : "")
+  ).join("\n");
+  if(aplicar.length > 14) texto += "\n… y " + (aplicar.length - 14) + " más";
+  texto += "\n\n¿Confirmar la venta?";
+  if(!confirm(texto)) return null;
+
+  const resultado = {};
+  const fallaron = [];
+  for(const a of aplicar){
+    const r = await cli.from("Producto").update({ stock: a.nuevo }).eq("id", a.p.id).eq("stock", a.p.stock).select("id");
+    if(r.error || !r.data || !r.data.length){ fallaron.push(a.p.codigo); continue; }
+    resultado[a.p.id] = a.nuevo;
+    confirmados[a.p.id] = necesita[a.p.id];
+  }
+  localStorage.setItem(CLAVE_STOCK_CONFIRMADO, JSON.stringify(confirmados));
+  if(fallaron.length){
+    alert("No se pudo descontar (el stock cambió o hubo un error): " + fallaron.join(", ") + ".\nVolvé a tocar Confirmar venta para reintentar solo esos.");
+  } else {
+    alert("✅ Venta confirmada. Stock descontado de " + Object.keys(resultado).length + " producto(s).");
+  }
+  return resultado;
+}
+
+async function confirmarVentaTienda(){
+  await confirmarVentaStock(sb, leerPresupuestoCompartido());
+}
+async function actualizarBotonConfirmarVenta(){
+  const b = document.getElementById("btn-confirmar-venta");
+  if(!b) return;
+  let admin = false;
+  try{ const { data } = await sb.auth.getSession(); admin = !!(data && data.session); }catch(e){}
+  b.style.display = admin ? "block" : "none";
+}
+
 function abrirCarrito(){
   const buscador = document.getElementById("buscador-presupuesto");
   if(buscador) buscador.value = "";
   renderCarrito();
+  actualizarBotonConfirmarVenta();
   document.getElementById("cart-panel").classList.add("open");
 }
 function cerrarModales(){
@@ -1744,6 +1855,7 @@ function vaciarCarrito(){
   guardarCambiosManuales({});
   guardarCarrito();
   guardarPresupuestoCompartido([]);
+  limpiarStockConfirmado();
   renderCarrito();
 }
 
