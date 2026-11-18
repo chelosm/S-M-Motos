@@ -409,6 +409,71 @@
     cursor: pointer;
     z-index: 20;
   }
+  #btn-venta-flotante {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background: var(--naranja);
+    color: #1a1a1a;
+    border: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    cursor: pointer;
+    z-index: 20;
+    display: none;
+  }
+  #contador-venta {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--rojo-sinstock);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 50%;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 3px;
+    align-items: center;
+    justify-content: center;
+    display: none;
+  }
+  #overlay-venta {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 30;
+    align-items: flex-end;
+  }
+  #overlay-venta.abierto { display: flex; }
+  #panel-venta {
+    background: var(--metal);
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+  }
+  #panel-venta h2 {
+    font-size: 1.1rem;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel-venta h2 button { background: none; border: none; color: var(--texto-tenue); font-size: 1.2rem; cursor: pointer; }
+  .item-venta { padding: 10px 0; border-bottom: 1px solid var(--metal-claro); }
+  .item-venta .fila1 { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+  .item-venta .cod { font-weight:700; color: var(--amarillo); }
+  .item-venta .desc { font-size:0.82rem; color: var(--texto-tenue); }
+  .item-venta .fila2 { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+  .item-venta .cant-ctl { display:flex; align-items:center; gap:6px; }
+  .item-venta .cant-ctl button { width:32px; height:32px; border-radius:6px; border:1px solid var(--metal-claro); background:var(--asfalto); color:var(--texto); font-size:1.1rem; cursor:pointer; }
+  .item-venta .cant-ctl span { min-width:30px; text-align:center; font-weight:700; }
   #contador-presupuesto {
     position: absolute;
     top: -4px;
@@ -711,6 +776,25 @@
   🧾
   <span id="contador-presupuesto" style="display:none;">0</span>
 </button>
+
+<!-- Botón flotante de ventas (abajo a la izquierda) -->
+<button id="btn-venta-flotante" onclick="abrirVentaEnCurso()">
+  💰
+  <span id="contador-venta">0</span>
+</button>
+
+<!-- Panel de la venta en curso: varios productos, con forma de pago y descuento de stock -->
+<div id="overlay-venta" onclick="if(event.target===this) cerrarVentaEnCurso()">
+  <div id="panel-venta">
+    <h2>Venta en curso <button onclick="cerrarVentaEnCurso()">✕</button></h2>
+    <div id="lista-venta"></div>
+    <div id="total-venta" style="font-size:1.15rem; font-weight:800; color:var(--verde-stock); text-align:right; margin:14px 0;"></div>
+    <button onclick="cerrarVentaEnCurso()" style="width:100%; background:var(--asfalto); color:var(--texto); border:1px dashed var(--metal-claro); padding:12px; border-radius:8px; font-weight:700; cursor:pointer; margin-bottom:10px;">➕ Agregar más productos</button>
+    <button id="btn-cobrar-venta" onclick="cobrarVentaEnCurso()" style="width:100%; background:var(--naranja); color:#1a1a1a; border:none; font-weight:800; font-size:1.05rem; padding:14px; border-radius:8px; cursor:pointer; margin-bottom:10px;">💰 Cobrar</button>
+    <button onclick="vaciarVentaEnCurso()" style="width:100%; background:none; color:var(--texto-tenue); border:1px solid var(--metal-claro); padding:10px; border-radius:8px; cursor:pointer;">Vaciar venta</button>
+    <div id="estado-venta" style="text-align:center; font-size:0.85rem; color:var(--verde-stock); margin-top:10px;"></div>
+  </div>
+</div>
 
 <!-- Panel del presupuesto -->
 <div id="overlay-presupuesto" onclick="if(event.target===this) cerrarPresupuesto()">
@@ -1139,6 +1223,7 @@
     // El botón de copia de seguridad es solo para el administrador
     document.getElementById("btn-respaldo").style.display = (logueado && esAdmin) ? "" : "none";
     document.getElementById("btn-respaldo-fotos").style.display = (logueado && esAdmin) ? "" : "none";
+    actualizarBotonVenta();
     if (logueado) {
       estado.textContent = esAdmin ? "Sesión de administrador activa" : "Sesión activa";
       estado.classList.add("activo");
@@ -2864,6 +2949,76 @@
     }
   }
 
+  // ===== STOCK en la Planilla de Venta Diaria =====
+  // Al registrar una venta de un producto del catálogo se descuenta su stock (si tiene cargado).
+  // Si después se quita esa venta de la planilla, el stock se devuelve.
+  // Devuelve cuántas unidades se descontaron realmente (0 si no hay stock cargado o no es administrador).
+  async function descontarStockVenta(producto, cantidad) {
+    try {
+      if (!HAY_STOCK) return 0;
+      const { data: ses } = await db.auth.getSession();
+      if (!(ses && ses.session)) return 0;
+      for (let intento = 0; intento < 2; intento++) {
+        const r = await db.from("Producto").select("stock").eq("id", producto.id).single();
+        if (r.error || !r.data || r.data.stock === null || r.data.stock === undefined) return 0;
+        const actual = r.data.stock;
+        const nuevo = Math.max(0, actual - cantidad);
+        const u = await db.from("Producto").update({ stock: nuevo }).eq("id", producto.id).eq("stock", actual).select("id");
+        if (!u.error && u.data && u.data.length) {
+          producto.stock = nuevo;
+          if (actual < cantidad) mostrarDebug("⚠️ " + producto.codigo + ": había solo " + actual + " en stock (queda en 0)");
+          return actual - nuevo;
+        }
+      }
+    } catch (e) { /* el stock nunca debe impedir registrar la venta */ }
+    return 0;
+  }
+
+  async function devolverStockVenta(productoId, cantidad) {
+    try {
+      if (!HAY_STOCK || !productoId || !(cantidad > 0)) return;
+      const { data: ses } = await db.auth.getSession();
+      if (!(ses && ses.session)) return;
+      for (let intento = 0; intento < 2; intento++) {
+        const r = await db.from("Producto").select("stock").eq("id", productoId).single();
+        if (r.error || !r.data || r.data.stock === null || r.data.stock === undefined) return;
+        const nuevo = r.data.stock + cantidad;
+        const u = await db.from("Producto").update({ stock: nuevo }).eq("id", productoId).eq("stock", r.data.stock).select("id");
+        if (!u.error && u.data && u.data.length) {
+          const p = PRODUCTOS.find(pr => pr.id === productoId);
+          if (p) p.stock = nuevo;
+          return;
+        }
+      }
+    } catch (e) { /* idem */ }
+  }
+
+  // ===== VENTA EN CURSO (varios productos en una sola venta) =====
+  // Tocás "Venta" en cada producto que se lleva el cliente; se van sumando acá.
+  // Al "Cobrar" se elige la forma de pago (se puede combinar y editar el precio),
+  // las líneas pasan a la Planilla de Venta Diaria y se descuenta el stock.
+  let VENTA_EN_CURSO = [];
+  try { VENTA_EN_CURSO = JSON.parse(localStorage.getItem("ventaEnCurso") || "[]"); } catch (e) { VENTA_EN_CURSO = []; }
+  setTimeout(actualizarBotonVenta, 0);
+  const fmtVenta = n => n.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  function guardarVentaEnCurso() {
+    try { localStorage.setItem("ventaEnCurso", JSON.stringify(VENTA_EN_CURSO)); } catch (e) {}
+    actualizarBotonVenta();
+  }
+
+  function actualizarBotonVenta() {
+    try {
+      const btn = document.getElementById("btn-venta-flotante");
+      const cont = document.getElementById("contador-venta");
+      if (!btn) return;
+      btn.style.display = logueado ? "block" : "none";
+      const total = VENTA_EN_CURSO.reduce((sum, it) => sum + it.cantidad, 0);
+      cont.style.display = total > 0 ? "flex" : "none";
+      cont.textContent = total;
+    } catch (e) { /* todavía no se inicializó la venta en curso */ }
+  }
+
   async function agregarVentaDia(id) {
     const producto = PRODUCTOS.find(p => p.id === id);
     if (!producto) return;
@@ -2877,19 +3032,124 @@
     const costoConIva = costoArs * (1 + IVA);
     const ventaSugerido = redondearA50(costoConIva * (1 + margenDe(producto) / 100));
 
-    const resultado = await pedirFormaPago(cantidad, ventaSugerido);
-    if (!resultado) return; // canceló la elección de pago: no se registra la venta
+    const existente = VENTA_EN_CURSO.find(it => it.id === producto.id);
+    if (existente) {
+      existente.cantidad += cantidad;
+      existente.precioUnitario = ventaSugerido;
+    } else {
+      VENTA_EN_CURSO.push({ id: producto.id, codigo: producto.codigo, descripcion: producto.descripcion || "", cantidad: cantidad, precioUnitario: ventaSugerido });
+    }
+    guardarVentaEnCurso();
+    abrirVentaEnCurso();
+  }
 
-    VENTAS_DIA.push({
-      codigo: producto.codigo,
-      descripcion: producto.descripcion || "",
-      cantidad: cantidad,
-      precioUnitario: resultado.precioUnitario,
-      pagos: resultado.pagos
-    });
+  function abrirVentaEnCurso() {
+    renderVentaEnCurso();
+    document.getElementById("estado-venta").textContent = "";
+    document.getElementById("overlay-venta").classList.add("abierto");
+  }
+  function cerrarVentaEnCurso() {
+    document.getElementById("overlay-venta").classList.remove("abierto");
+  }
+
+  function renderVentaEnCurso() {
+    const lista = document.getElementById("lista-venta");
+    const totalDiv = document.getElementById("total-venta");
+    const btnCobrar = document.getElementById("btn-cobrar-venta");
+    if (VENTA_EN_CURSO.length === 0) {
+      lista.innerHTML = '<div style="color:var(--texto-tenue); text-align:center; padding:20px 0;">Todavía no hay productos en esta venta.<br>Tocá <b>📋 Venta</b> en un producto para agregarlo.</div>';
+      totalDiv.textContent = "";
+      btnCobrar.style.display = "none";
+      return;
+    }
+    btnCobrar.style.display = "block";
+    let total = 0;
+    lista.innerHTML = VENTA_EN_CURSO.map((it, i) => {
+      const sub = it.precioUnitario * it.cantidad;
+      total += sub;
+      const p = PRODUCTOS.find(pr => pr.id === it.id);
+      const aviso = (esAdmin && p && p.stock != null && it.cantidad > p.stock)
+        ? '<div style="font-size:0.75rem; color:var(--rojo-sinstock); margin-top:4px;">⚠️ Hay ' + p.stock + ' en stock</div>' : '';
+      return '<div class="item-venta">' +
+        '<div class="fila1"><div><div class="cod">' + it.codigo + '</div><div class="desc">' + (it.descripcion || "") + '</div></div>' +
+        '<button onclick="quitarDeVentaEnCurso(' + i + ')" style="background:none; border:none; color:var(--texto-tenue); font-size:1.1rem; cursor:pointer;">✕</button></div>' +
+        '<div class="fila2"><div class="cant-ctl"><button onclick="cambiarCantidadVenta(' + i + ',-1)">−</button><span>' + it.cantidad + '</span><button onclick="cambiarCantidadVenta(' + i + ',1)">+</button></div>' +
+        '<div style="text-align:right;"><div style="font-size:0.75rem; color:var(--texto-tenue);">$' + fmtVenta(it.precioUnitario) + ' c/u</div><div style="font-weight:800; color:var(--verde-stock);">$' + fmtVenta(sub) + '</div></div></div>' +
+        aviso + '</div>';
+    }).join("");
+    totalDiv.textContent = "Total: $" + fmtVenta(total);
+  }
+
+  function cambiarCantidadVenta(i, delta) {
+    const it = VENTA_EN_CURSO[i];
+    if (!it) return;
+    it.cantidad = Math.max(1, it.cantidad + delta);
+    guardarVentaEnCurso();
+    renderVentaEnCurso();
+  }
+  function quitarDeVentaEnCurso(i) {
+    VENTA_EN_CURSO.splice(i, 1);
+    guardarVentaEnCurso();
+    renderVentaEnCurso();
+  }
+  function vaciarVentaEnCurso() {
+    if (VENTA_EN_CURSO.length && !confirm("¿Vaciar la venta en curso?")) return;
+    VENTA_EN_CURSO = [];
+    guardarVentaEnCurso();
+    renderVentaEnCurso();
+  }
+
+  async function cobrarVentaEnCurso() {
+    if (!VENTA_EN_CURSO.length) return;
+    const lineas = VENTA_EN_CURSO.map(it => ({ ...it }));
+    const totalSugerido = lineas.reduce((sum, it) => sum + it.precioUnitario * it.cantidad, 0);
+    const unidades = lineas.reduce((sum, it) => sum + it.cantidad, 0);
+
+    // Se usa el mismo modal de forma de pago de siempre, con el total de la venta
+    const promesa = pedirFormaPago(1, totalSugerido);
+    document.getElementById("cantidad-forma-pago").textContent = lineas.length + " producto(s) · " + unidades + " unidad(es)";
+    const resultado = await promesa;
+    if (!resultado) return;   // canceló: no se registra nada
+
+    const totalCobrado = resultado.precioUnitario;   // en este modal el "precio" es el total de la venta
+    const factor = totalSugerido > 0 ? totalCobrado / totalSugerido : 1;
+    const restoPagos = { efectivo: resultado.pagos.efectivo, transferencia: resultado.pagos.transferencia, tarjeta: resultado.pagos.tarjeta };
+
+    for (let i = 0; i < lineas.length; i++) {
+      const it = lineas[i];
+      const esUltima = i === lineas.length - 1;
+      const subSugerido = it.precioUnitario * it.cantidad;
+      const parte = totalSugerido > 0 ? subSugerido / totalSugerido : 1 / lineas.length;
+      const pagos = { efectivo: 0, transferencia: 0, tarjeta: 0 };
+      ["efectivo", "transferencia", "tarjeta"].forEach(m => {
+        const monto = esUltima ? restoPagos[m] : Math.round(resultado.pagos[m] * parte * 100) / 100;
+        pagos[m] = Math.max(0, monto);
+        restoPagos[m] -= monto;
+      });
+      const subCobrado = esUltima
+        ? totalCobrado - lineas.slice(0, i).reduce((sum, l) => sum + (l._subCobrado || 0), 0)
+        : Math.round(subSugerido * factor * 100) / 100;
+      it._subCobrado = subCobrado;
+
+      const producto = PRODUCTOS.find(p => p.id === it.id);
+      const stockDescontado = producto ? await descontarStockVenta(producto, it.cantidad) : 0;
+      VENTAS_DIA.push({
+        codigo: it.codigo,
+        descripcion: it.descripcion || "",
+        cantidad: it.cantidad,
+        precioUnitario: subCobrado / it.cantidad,
+        pagos: pagos,
+        productoId: it.id,
+        stockDescontado: stockDescontado
+      });
+    }
     guardarPlanillaLocal();
     renderPlanilla();
-    mostrarDebug("Venta registrada: " + producto.codigo);
+    VENTA_EN_CURSO = [];
+    guardarVentaEnCurso();
+    renderVentaEnCurso();
+    cerrarVentaEnCurso();
+    mostrarDebug("✅ Venta registrada: " + lineas.length + " producto(s), $" + fmtVenta(totalCobrado));
   }
 
   // Le pone puntos de miles mientras escribís en un campo de monto (ej: 50000 -> 50.000)
@@ -2921,10 +3181,14 @@
     renderPlanilla();
   }
 
-  function quitarVentaDia(indice) {
-    VENTAS_DIA.splice(indice, 1);
+  async function quitarVentaDia(indice) {
+    const quitada = VENTAS_DIA.splice(indice, 1)[0];
     guardarPlanillaLocal();
     renderPlanilla();
+    // Si esa venta había descontado stock, se devuelve
+    if (quitada && quitada.productoId && quitada.stockDescontado > 0) {
+      await devolverStockVenta(quitada.productoId, quitada.stockDescontado);
+    }
   }
 
   function agregarGasto() {
