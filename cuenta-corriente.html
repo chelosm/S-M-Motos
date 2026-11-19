@@ -497,7 +497,7 @@ function cambiarModo(modo){
 
 
 /* ---------- ESTADÍSTICAS MENSUALES ---------- */
-let estClientes = [], estProveedores = [];
+let estClientes = [], estProveedores = [], estNomCli = {}, estNomProv = {}, estAbierto = null;
 
 async function traerTodo(tabla, columnas){
   let todo = [], desde = 0;
@@ -516,8 +516,10 @@ async function abrirEstadisticas(){
   if(!inp.value){ const h=new Date(); inp.value = h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0'); }
   document.getElementById('estContenido').innerHTML = '<div class="card">Cargando...</div>';
   try{
-    estClientes = await traerTodo('movimientos','fecha,venta,deposito,cheque,echeq,pago,observaciones');
-    estProveedores = await traerTodo('movimientos_proveedores','fecha_factura,compra,deposito,cheque,echeq,pago,observaciones,moneda,dolar');
+    const cl = await traerTodo('clientes','id,nombre'); estNomCli = {}; cl.forEach(c=>estNomCli[c.id]=c.nombre);
+    const pv = await traerTodo('proveedores','id,nombre'); estNomProv = {}; pv.forEach(c=>estNomProv[c.id]=c.nombre);
+    estClientes = await traerTodo('movimientos','cliente_id,fecha,venta,deposito,cheque,echeq,pago,observaciones');
+    estProveedores = await traerTodo('movimientos_proveedores','proveedor_id,fecha_factura,compra,deposito,cheque,echeq,pago,observaciones,moneda,dolar');
     renderEstadisticas();
   }catch(e){
     document.getElementById('estContenido').innerHTML = '<div class="card" style="color:var(--rojo)">No se pudieron cargar los datos: '+(e.message||e)+'</div>';
@@ -525,6 +527,7 @@ async function abrirEstadisticas(){
 }
 
 function cambiarMesEst(d){
+  estAbierto = null;
   const [a,m] = document.getElementById('estMes').value.split('-').map(Number);
   const f = new Date(a, m-1+d, 1);
   document.getElementById('estMes').value = f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0');
@@ -563,6 +566,42 @@ function mesesUltimos(mesFin, n){
 const NOMBRES_MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 function nombreMes(k){ const [a,m]=k.split('-'); return NOMBRES_MES[m-1]+' '+a.slice(2); }
 
+
+const EST_CAMPOS = {venta:'Ventas', deposito:'Depósitos', cheque:'Cheques', echeq:'Echeq', pago:'Efectivo'};
+function toggleDetalle(c){ estAbierto = (estAbierto===c) ? null : c; renderEstadisticas(); }
+
+function detalleHTML(campo, mes){
+  if(estAbierto!==campo) return '';
+  let items = [];
+  if(campo==='compra' || campo==='pagoProv'){
+    estProveedores.forEach(m=>{
+      if(!m.fecha_factura || m.fecha_factura.slice(0,7)!==mes || esEspecial(m.observaciones)) return;
+      const v = campo==='compra' ? (Number(m.compra)||0)
+        : (Number(m.deposito)||0)+(Number(m.cheque)||0)+(Number(m.echeq)||0)+(Number(m.pago)||0);
+      if(!v) return;
+      items.push({f:m.fecha_factura, n:estNomProv[m.proveedor_id]||'?', v, usd:(campo==='compra'&&m.moneda==='USD'), o:m.observaciones});
+    });
+  } else {
+    estClientes.forEach(m=>{
+      if(!m.fecha || m.fecha.slice(0,7)!==mes || esEspecial(m.observaciones)) return;
+      const v = Number(m[campo])||0; if(!v) return;
+      items.push({f:m.fecha, n:estNomCli[m.cliente_id]||'?', v, o:m.observaciones});
+    });
+  }
+  if(!items.length) return '<div style="padding:8px;color:#666;font-size:.85rem;">Sin movimientos este mes.</div>';
+  // agrupar por nombre
+  const por = {};
+  items.forEach(i=>{ (por[i.n]=por[i.n]||{t:0,l:[]}); por[i.n].t+=i.v; por[i.n].l.push(i); });
+  const fmt = i => i.usd ? formatoDolar(i.v) : formatoMoneda(i.v);
+  const html = Object.keys(por).sort((a,b)=>por[b].t-por[a].t).map(n=>{
+    const g = por[n];
+    const det = g.l.sort((a,b)=>a.f<b.f?-1:1).map(i=>`<div style="font-size:.78rem;color:#555;padding-left:10px;">${i.f.split('-').reverse().join('/')} · ${fmt(i)}${i.o?' · '+String(i.o).replace(/</g,'&lt;'):''}</div>`).join('');
+    const tot = g.l[0].usd ? formatoDolar(g.t) : formatoMoneda(g.t);
+    return `<div style="padding:5px 0;border-bottom:1px dashed var(--gris-borde);"><div style="display:flex;justify-content:space-between;"><b style="font-size:.88rem;">${n}</b><b style="font-size:.88rem;">${tot}</b></div>${det}</div>`;
+  }).join('');
+  return `<div style="background:var(--gris-claro);border-radius:8px;padding:8px;margin:4px 0 8px;">${html}</div>`;
+}
+
 function renderEstadisticas(){
   const mes = document.getElementById('estMes').value;
   if(!mes) return;
@@ -584,25 +623,28 @@ function renderEstadisticas(){
     <div class="card">
       <h3 style="margin-bottom:10px;">Clientes — ${nombreMes(mes)}</h3>
       <div class="estGrid">
-        <div class="estBox"><small>Ventas</small><b>${formatoMoneda(t.ventas)}</b></div>
+        <div class="estBox" style="cursor:pointer;" onclick="toggleDetalle('venta')"><small>Ventas ▾</small><b>${formatoMoneda(t.ventas)}</b></div>
         <div class="estBox"><small>Cobrado total</small><b>${formatoMoneda(t.cobrado)}</b></div>
         <div class="estBox"><small>Diferencia (cuenta corriente)</small><b>${formatoMoneda(t.ventas-t.cobrado)}</b></div>
         <div class="estBox"><small>Cobrado sobre vendido</small><b>${pct}%</b></div>
       </div>
-      <div class="estRow"><span>🏦 Depósitos</span><b>${formatoMoneda(t.dep)}</b></div>
-      <div class="estRow"><span>📄 Cheques</span><b>${formatoMoneda(t.chq)}</b></div>
-      <div class="estRow"><span>💻 Echeq</span><b>${formatoMoneda(t.ech)}</b></div>
-      <div class="estRow"><span>💵 Efectivo</span><b>${formatoMoneda(t.efe)}</b></div>
+      <div class="estRow" style="cursor:pointer;" onclick="toggleDetalle('deposito')"><span>🏦 Depósitos ▾</span><b>${formatoMoneda(t.dep)}</b></div>${detalleHTML('deposito',mes)}
+      <div class="estRow" style="cursor:pointer;" onclick="toggleDetalle('cheque')"><span>📄 Cheques ▾</span><b>${formatoMoneda(t.chq)}</b></div>${detalleHTML('cheque',mes)}
+      <div class="estRow" style="cursor:pointer;" onclick="toggleDetalle('echeq')"><span>💻 Echeq ▾</span><b>${formatoMoneda(t.ech)}</b></div>${detalleHTML('echeq',mes)}
+      <div class="estRow" style="cursor:pointer;" onclick="toggleDetalle('pago')"><span>💵 Efectivo ▾</span><b>${formatoMoneda(t.efe)}</b></div>${detalleHTML('pago',mes)}
+      ${detalleHTML('venta',mes)}
       <div class="estRow"><span>Movimientos cargados</span><b>${t.movs}</b></div>
       ${t.ajustes? `<div class="estRow"><span>Ajustes de saldo / saldos iniciales (no cuentan)</span><b>${formatoMoneda(t.ajustes)}</b></div>`:''}
     </div>
     <div class="card">
       <h3 style="margin-bottom:10px;">Proveedores — ${nombreMes(mes)}</h3>
       <div class="estGrid">
+        <div class="estBox" style="cursor:pointer;" onclick="toggleDetalle('compra')"><small>Compras (detalle) ▾</small><b>Ver</b></div>
         <div class="estBox"><small>Compras en pesos</small><b>${formatoMoneda(t.compraArs)}</b></div>
         <div class="estBox"><small>Compras en USD</small><b>${formatoDolar(t.compraUsd)}</b></div>
-        <div class="estBox" style="grid-column:span 2"><small>Pagado a proveedores (en pesos)</small><b>${formatoMoneda(t.pagoProv)}</b></div>
+        <div class="estBox" style="grid-column:span 2;cursor:pointer;" onclick="toggleDetalle('pagoProv')"><small>Pagado a proveedores (en pesos) ▾</small><b>${formatoMoneda(t.pagoProv)}</b></div>
       </div>
+      ${detalleHTML('compra',mes)}${detalleHTML('pagoProv',mes)}
     </div>
     <div class="card">
       <h3>Últimos 6 meses</h3>
