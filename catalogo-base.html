@@ -441,6 +441,15 @@
     justify-content: center;
     display: none;
   }
+  #overlay-historial { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:2100; align-items:flex-start; justify-content:center; overflow-y:auto; padding:16px; }
+  #overlay-historial.abierto { display:flex; }
+  #panel-historial { background:var(--metal); border:1px solid var(--metal-claro); border-radius:12px; width:100%; max-width:560px; padding:16px; }
+  #panel-historial h2 { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:1.1rem; }
+  #panel-historial h2 button { background:none; border:none; color:var(--texto-tenue); font-size:1.2rem; cursor:pointer; }
+  .item-hist { background:var(--asfalto); border:1px solid var(--metal-claro); border-radius:8px; margin-bottom:8px; overflow:hidden; }
+  .item-hist .cab { padding:10px 12px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .item-hist .det { display:none; padding:0 12px 12px; font-size:0.82rem; border-top:1px dashed var(--metal-claro); }
+  .item-hist.abierto .det { display:block; }
   #overlay-venta {
     display: none;
     position: fixed;
@@ -646,6 +655,7 @@
     <!-- Descargar la lista de precios para clientes, en Excel -->
     <button id="btn-lista-excel" class="abrir" onclick="descargarListaClientesExcel()" style="font-size:1.1rem;" title="Descargar lista de precios en Excel">📥</button>
     <button id="btn-respaldo" class="abrir" onclick="descargarRespaldo()" style="font-size:1.1rem; display:none;" title="Descargar copia de seguridad de todos los datos">💾</button>
+    <button id="btn-historial" class="abrir" onclick="abrirHistorial()" style="font-size:1.1rem; display:none;" title="Historial de presupuestos y ventas">📚</button>
     <button id="btn-respaldo-fotos" class="abrir" onclick="descargarRespaldoFotos()" style="font-size:1.1rem; display:none;" title="Descargar copia de seguridad de las fotos de la tienda">🖼️</button>
   </div>
   <div id="debug-box" style="width:100%; font-size:0.78rem; color:var(--amarillo); margin-top:4px;"></div>
@@ -753,7 +763,14 @@
   <label style="font-size:0.8rem; color:var(--texto-tenue); display:block; margin-bottom:4px;">Margen propio de este producto (%) — dejalo vacío para usar el margen general</label>
   <input type="number" id="editor-margen-pct" step="1" placeholder="Ej: 20, 50, 100..." style="margin-bottom:16px;">
 
-  <div style="margin-bottom:16px; padding:12px; background:var(--asfalto); border-radius:8px;">
+  <div id="editor-bloque-stock-comercio" style="display:none; margin-bottom:16px; padding:12px; background:var(--asfalto); border-radius:8px;">
+    <label style="font-size:0.85rem; display:block;">📦 Stock del comercio (unidades)
+      <input type="number" inputmode="numeric" id="editor-stock-comercio" min="0" step="1" placeholder="vacío = sin control de stock" style="margin-top:4px;">
+    </label>
+    <div style="font-size:0.75rem; color:var(--texto-tenue); margin-top:6px;">Este artículo solo lo ven el comercio y el administrador. No aparece para los clientes mayoristas ni en la tienda.</div>
+  </div>
+
+  <div id="editor-bloque-tienda" style="margin-bottom:16px; padding:12px; background:var(--asfalto); border-radius:8px;">
     <div style="font-weight:700; margin-bottom:8px;">📸 También se va a crear/actualizar en la tienda</div>
     <label style="font-size:0.8rem; color:var(--texto-tenue); display:block; margin-bottom:4px;">Rubro en la tienda (si lo dejás vacío, usa la categoría de arriba)</label>
     <input type="text" id="editor-tienda-rubro" placeholder="Ej: Accesorios, Bulonería, Led..." style="margin-bottom:10px;">
@@ -776,6 +793,16 @@
   🧾
   <span id="contador-presupuesto" style="display:none;">0</span>
 </button>
+
+<!-- Historial de presupuestos y ventas (solo administrador) -->
+<div id="overlay-historial" onclick="if(event.target===this) cerrarHistorial()">
+  <div id="panel-historial">
+    <h2>📚 Historial <button onclick="cerrarHistorial()">✕</button></h2>
+    <input type="text" id="buscar-historial" placeholder="Buscar por cliente, código, producto o fecha" oninput="renderHistorial()" style="width:100%; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:10px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
+    <div id="estado-historial" style="font-size:0.78rem; color:var(--texto-tenue); margin-bottom:10px;"></div>
+    <div id="lista-historial"></div>
+  </div>
+</div>
 
 <!-- Botón flotante de ventas (abajo a la izquierda) -->
 <button id="btn-venta-flotante" onclick="abrirVentaEnCurso()">
@@ -894,8 +921,16 @@
 <div id="overlay-planilla" onclick="if(event.target===this) cerrarPlanilla()">
   <div id="panel-planilla">
     <h2>Planilla de Venta Diaria <button onclick="cerrarPlanilla()">✕</button></h2>
-    <div style="font-size:0.78rem; color:var(--texto-tenue); margin-bottom:14px;">
+    <div id="aviso-planilla-local" style="font-size:0.78rem; color:var(--texto-tenue); margin-bottom:14px;">
       ⚠️ Esto se guarda solo en este aparato. Se borra cuando cerrás el día, o si empieza un día nuevo sin cerrar.
+    </div>
+    <div id="bloque-fechas-comercio" style="display:none; margin-bottom:14px; padding:10px; background:var(--asfalto); border-radius:8px;">
+      <div style="font-size:0.78rem; color:var(--texto-tenue); margin-bottom:6px;">☁️ La planilla del comercio se guarda sola, por fecha. Elegí un día para verlo:</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="date" id="fecha-planilla" onchange="cambiarFechaPlanilla(this.value)" style="flex:1; background:var(--metal); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:5px;">
+        <button onclick="cambiarFechaPlanilla(fechaHoyISO())" style="background:var(--amarillo); color:#1a1a1a; border:none; font-weight:700; padding:9px 12px; border-radius:5px;">Hoy</button>
+      </div>
+      <div id="estado-fecha-planilla" style="font-size:0.78rem; margin-top:6px; color:var(--verde-stock);"></div>
     </div>
 
     <label style="font-size:0.85rem; display:block; margin-bottom:16px;">💰 Caja inicial (efectivo al empezar el día)
@@ -963,6 +998,11 @@
 
   let logueado = false;
   let esAdmin = false;
+  let esComercio = false;   // sesión del comercio minorista (stock y planilla propios)
+  const EMAIL_COMERCIO = "comercio@smmotos.com"; // usuario de la sesión del comercio (se crea en Supabase)
+  let CAMPO_STOCK = "stock"; // "stock" (admin) o "stock_comercio" (sesión comercio)
+  let HAY_COMERCIO = true;   // pasa a false si todavía no se corrió el SQL del comercio
+  const puedeStock = () => (esAdmin || esComercio);
   let HAY_STOCK = true; // pasa a false si todavía no existe la columna "stock" en Supabase
   const PASSWORD_MAYORISTA = "smmotos1234";
   let PRODUCTOS = [];
@@ -1015,10 +1055,13 @@
     while (true) {
       const { data, error } = await db
         .from("Producto")
-        .select("id, codigo, proveedor, descripcion, categoria, precio_usd, margen_pct" + (HAY_STOCK ? ", stock" : ""))
+        .select("id, codigo, proveedor, descripcion, categoria, precio_usd, margen_pct" + (HAY_STOCK ? ", stock" : "") + (HAY_STOCK && HAY_COMERCIO ? ", stock_comercio, solo_comercio" : ""))
         .order("codigo", { ascending: true })
         .range(desde, desde + TANDA - 1);
 
+      if (error && HAY_STOCK && HAY_COMERCIO && /stock_comercio|solo_comercio/i.test(error.message || "")) {
+        HAY_COMERCIO = false; todos = []; desde = 0; continue;
+      }
       if (error && HAY_STOCK && /stock/i.test(error.message || "")) {
         HAY_STOCK = false; todos = []; desde = 0; continue;
       }
@@ -1046,6 +1089,8 @@
       return;
     }
 
+    // Los artículos que cargó el comercio solo los ven el comercio y el administrador
+    if (!(esAdmin || esComercio)) todos = todos.filter(p => !p.solo_comercio);
     PRODUCTOS = todos;
     mostrarDebug("Catálogo cargado: " + PRODUCTOS.length + " productos.");
     poblarFiltroCategorias();
@@ -1132,6 +1177,16 @@
     renderTabla();
   }
 
+  // El margen se comparte con la tienda (tabla ConfigTienda) para que los clientes
+  // vean los mismos precios de venta que en la web. Solo lo sube el administrador.
+  async function sincronizarMargenTienda() {
+    if (!esAdmin) return;
+    try {
+      const { error } = await db.from("ConfigTienda").update({ margen_global: margenPct }).eq("id", 1);
+      if (error) console.warn("Margen tienda:", error.message);
+    } catch (e) { console.warn("Margen tienda:", e); }
+  }
+
   function guardarMargen() {
     const valor = parseFloat(document.getElementById("input-margen").value);
     if (isNaN(valor) || valor < 0) {
@@ -1140,6 +1195,7 @@
     }
     margenPct = valor;
     localStorage.setItem("margenHada", valor);
+    sincronizarMargenTienda();
     document.getElementById("valor-margen-actual").textContent = valor;
     cerrarPaneles();
     renderTabla();
@@ -1189,25 +1245,36 @@
 
     // 2) Si no matcheó, probamos como admin real (puede agregar/modificar productos)
     mostrarDebug("Verificando...");
-    const { error } = await db.auth.signInWithPassword({ email: ADMIN_EMAIL, password });
+    let { error } = await db.auth.signInWithPassword({ email: ADMIN_EMAIL, password });
     if (error) {
-      mostrarDebug("Contraseña incorrecta.");
+      // 3) Sesión del comercio minorista
+      const rc = await db.auth.signInWithPassword({ email: EMAIL_COMERCIO, password });
+      if (rc.error) {
+        mostrarDebug("Contraseña incorrecta.");
+        return;
+      }
+      // Se recarga la página para arrancar limpia con el stock y la planilla del comercio
+      location.reload();
       return;
     }
     esAdmin = true;
     logueado = true;
     actualizarUI();
-    renderTabla();
+    await cargarProductos();   // el administrador también ve los artículos del comercio
     mostrarDebug("Sesión de administrador iniciada.");
   }
 
   async function cerrarSesion() {
-    if (esAdmin) await db.auth.signOut();
+    const eraComercio = esComercio;
+    if (esAdmin || esComercio) await db.auth.signOut();
     logueado = false;
     esAdmin = false;
+    esComercio = false;
+    CAMPO_STOCK = "stock";
     localStorage.removeItem("sesionSMMotos");
+    if (eraComercio) { location.reload(); return; }
     actualizarUI();
-    renderTabla();
+    await cargarProductos();
   }
 
   function mostrarDebug(msg) {
@@ -1223,12 +1290,13 @@
     // El botón de copia de seguridad es solo para el administrador
     document.getElementById("btn-respaldo").style.display = (logueado && esAdmin) ? "" : "none";
     document.getElementById("btn-respaldo-fotos").style.display = (logueado && esAdmin) ? "" : "none";
+    document.getElementById("btn-historial").style.display = (logueado && esAdmin) ? "" : "none";
     actualizarBotonVenta();
     if (logueado) {
-      estado.textContent = esAdmin ? "Sesión de administrador activa" : "Sesión activa";
+      estado.textContent = esAdmin ? "Sesión de administrador activa" : (esComercio ? "Sesión del comercio activa" : "Sesión activa");
       estado.classList.add("activo");
       btnSalir.style.display = "inline-block";
-      btnAdmin.style.display = esAdmin ? "block" : "none";
+      btnAdmin.style.display = (esAdmin || esComercio) ? "block" : "none";
     } else {
       estado.textContent = "Sin sesión — precios ocultos";
       estado.classList.remove("activo");
@@ -1241,12 +1309,20 @@
     const { data } = await db.auth.getSession();
     if (data && data.session) {
       logueado = true;
-      esAdmin = true;
+      if (data.session.user && data.session.user.email === EMAIL_COMERCIO) {
+        esComercio = true;
+        CAMPO_STOCK = "stock_comercio";
+      } else {
+        esAdmin = true;
+      }
     } else if (localStorage.getItem("sesionSMMotos") === "true") {
       logueado = true;
     }
     actualizarUI();
     cargarConfigGuardada();
+    // Solo si el margen fue guardado en este aparato (así no se pisa con el valor por defecto)
+    if (esAdmin && localStorage.getItem("margenHada") !== null) sincronizarMargenTienda();
+    if (esComercio) await prepararPlanillaComercio();
     await cargarProductos();
   }
 
@@ -1424,20 +1500,22 @@
     }
 
 
-    const filaStock = (esAdmin && !HAY_STOCK) ? `
+    const campoSt = CAMPO_STOCK;
+    const stockActual = p[campoSt];
+    const filaStock = (puedeStock() && (!HAY_STOCK || (esComercio && !HAY_COMERCIO))) ? `
       <div style="margin-top:14px; padding:10px; border:1px dashed var(--rojo-sinstock); border-radius:8px; font-size:0.82rem; color:var(--rojo-sinstock);">
-        📦 Stock: todavía falta crear la columna en Supabase. Corré el SQL <b>alter table "Producto" add column if not exists stock integer;</b> y refrescá la página.
+        📦 Stock: todavía falta crear la columna en Supabase. Falta correr el SQL de stock en Supabase (el que te pasé) y refrescar la página.
       </div>
-    ` : (esAdmin && HAY_STOCK) ? `
+    ` : (puedeStock() && HAY_STOCK) ? `
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--metal-claro);">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-          <span style="color:var(--texto-tenue);">📦 Stock</span>
+          <span style="color:var(--texto-tenue);">📦 Stock${esComercio ? " del comercio" : ""}</span>
           <span style="display:flex; gap:6px; align-items:center;">
-            <input type="number" inputmode="numeric" id="detalle-stock" min="0" step="1" value="${p.stock != null ? p.stock : ""}" placeholder="—" style="width:90px; text-align:right; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:6px; font-size:1rem;">
+            <input type="number" inputmode="numeric" id="detalle-stock" min="0" step="1" value="${stockActual != null ? stockActual : ""}" placeholder="—" style="width:90px; text-align:right; background:var(--asfalto); border:1px solid var(--metal-claro); color:var(--texto); padding:8px; border-radius:6px; font-size:1rem;">
             <button class="btn-agregar" style="background:var(--amarillo-chillon); color:#1a1a1a;" onclick="guardarStockDetalle('${p.id.replace(/'/g,"\\'")}')">Guardar</button>
           </span>
         </div>
-        <div id="detalle-stock-estado" style="font-size:0.78rem; margin-top:6px; color:${p.stock != null && p.stock <= 0 ? "var(--rojo-sinstock)" : "var(--texto-tenue)"};">${p.stock == null ? "Sin stock cargado (se vende igual)" : (p.stock <= 0 ? "⚠️ Sin stock" : "Hay " + p.stock + " unidades")}</div>
+        <div id="detalle-stock-estado" style="font-size:0.78rem; margin-top:6px; color:${stockActual != null && stockActual <= 0 ? "var(--rojo-sinstock)" : "var(--texto-tenue)"};">${stockActual == null ? "Sin stock cargado (se vende igual)" : (stockActual <= 0 ? "⚠️ Sin stock" : "Hay " + stockActual + " unidades")}</div>
       </div>
     ` : "";
 
@@ -1475,12 +1553,12 @@
       if (isNaN(valor) || valor < 0) { estado.textContent = "Poné un número entero (0 o más)."; return; }
     }
     estado.textContent = "Guardando...";
-    const { error } = await db.from("Producto").update({ stock: valor }).eq("id", id);
+    const { error } = await db.from("Producto").update({ [CAMPO_STOCK]: valor }).eq("id", id);
     if (error) {
       estado.textContent = /stock/i.test(error.message || "") ? "Falta crear la columna de stock en Supabase (corré el SQL)." : "Error: " + error.message;
       return;
     }
-    p.stock = valor;
+    p[CAMPO_STOCK] = valor;
     estado.style.color = valor !== null && valor <= 0 ? "var(--rojo-sinstock)" : "var(--verde-stock)";
     estado.textContent = valor === null ? "✔ Sin control de stock" : (valor <= 0 ? "✔ Guardado: sin stock" : "✔ Guardado: hay " + valor + " unidades");
   }
@@ -1491,7 +1569,7 @@
     try {
       const resultado = await confirmarVentaStock(db, PRESUPUESTO, true);
       if (resultado) {
-        PRODUCTOS.forEach(p => { if (resultado[p.id] !== undefined) p.stock = resultado[p.id]; });
+        PRODUCTOS.forEach(p => { if (resultado[p.id] !== undefined) p[CAMPO_STOCK] = resultado[p.id]; });
         const el = document.getElementById("estado-stock-presupuesto");
         if (el) el.textContent = "✅ Stock descontado de " + Object.keys(resultado).length + " producto(s).";
       }
@@ -1499,13 +1577,18 @@
   }
 
   async function confirmarVentaPresupuesto() {
+    window._confCancelada = false;
     const resultado = await confirmarVentaStock(db, PRESUPUESTO);
-    if (resultado) PRODUCTOS.forEach(p => { if (resultado[p.id] !== undefined) p.stock = resultado[p.id]; });
+    if (!window._confCancelada) {
+    const cli = (document.getElementById("input-cliente-presupuesto") || {}).value || "";
+    registrarHistorial("venta_confirmada", cli.trim(), PRESUPUESTO, parseFloat((document.getElementById("input-descuento-presupuesto") || {}).value) || 0);
+    }
+    if (resultado) PRODUCTOS.forEach(p => { if (resultado[p.id] !== undefined) p[CAMPO_STOCK] = resultado[p.id]; });
   }
 
   function actualizarBotonConfirmarVenta() {
     const b = document.getElementById("btn-confirmar-venta");
-    if (b) b.style.display = (logueado && esAdmin && HAY_STOCK) ? "block" : "none";
+    if (b) b.style.display = (logueado && puedeStock() && HAY_STOCK) ? "block" : "none";
   }
 
   function cerrarDetalle() {
@@ -1522,6 +1605,11 @@
 
   function abrirEditorProducto() {
     if (!logueado) return;
+    const bloqueTienda = document.getElementById("editor-bloque-tienda");
+    if (bloqueTienda) bloqueTienda.style.display = esComercio ? "none" : "";
+    const bloqueSc = document.getElementById("editor-bloque-stock-comercio");
+    if (bloqueSc) bloqueSc.style.display = esComercio ? "" : "none";
+    const stIni = document.getElementById("editor-stock-comercio"); if (stIni) stIni.value = "";
     productoEditandoId = null;
     document.getElementById("editor-buscar-codigo").value = "";
     document.getElementById("editor-codigo").value = "";
@@ -1551,8 +1639,14 @@
       return;
     }
     const p = PRODUCTOS.find(pr => (pr.codigo || "").toLowerCase() === codigo.toLowerCase());
+    if (p && esComercio && !p.solo_comercio) {
+      productoEditandoId = null;
+      estado.textContent = "Ese código es de la lista mayorista y no se puede cambiar desde el comercio. Su stock lo cargás tocando el producto en la lista.";
+      return;
+    }
     if (p) {
       productoEditandoId = p.id;
+      const stEd = document.getElementById("editor-stock-comercio"); if (stEd) stEd.value = (p.stock_comercio != null ? p.stock_comercio : "");
       document.getElementById("editor-codigo").value = p.codigo || "";
       document.getElementById("editor-proveedor").value = p.proveedor || "";
       document.getElementById("editor-descripcion").value = p.descripcion || "";
@@ -1598,19 +1692,34 @@
       return;
     }
 
+    let stockCom = null;
+    if (esComercio) {
+      const t = (document.getElementById("editor-stock-comercio").value || "").trim();
+      if (t !== "") {
+        stockCom = parseInt(t, 10);
+        if (isNaN(stockCom) || stockCom < 0) { estado.textContent = "El stock tiene que ser un número entero (0 o más)."; return; }
+      }
+    }
+
     estado.textContent = "Guardando...";
     try {
       if (productoEditandoId) {
-        const { error } = await db.from("Producto").update({
-          codigo, proveedor, descripcion, categoria, precio_usd, margen_pct
-        }).eq("id", productoEditandoId);
+        const cambios = { codigo, proveedor, descripcion, categoria, precio_usd, margen_pct };
+        if (esComercio) cambios.stock_comercio = stockCom;
+        const { error } = await db.from("Producto").update(cambios).eq("id", productoEditandoId);
         if (error) throw error;
       } else {
         const nuevoId = "WEB-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
-        const { error } = await db.from("Producto").insert({
-          id: nuevoId, codigo, proveedor, descripcion, categoria, precio_usd, margen_pct
-        });
+        const fila = { id: nuevoId, codigo, proveedor: proveedor || (esComercio ? "COMERCIO" : proveedor), descripcion, categoria, precio_usd, margen_pct };
+        if (esComercio) { fila.solo_comercio = true; fila.stock_comercio = stockCom; }
+        const { error } = await db.from("Producto").insert(fila);
         if (error) throw error;
+      }
+      if (esComercio) {
+        mostrarDebug("Producto guardado correctamente.");
+        cerrarEditorProducto();
+        await cargarProductos();
+        return;
       }
 
       // Siempre se refleja también en la tienda (con foto si la cargaste, o
@@ -1797,12 +1906,13 @@
   // Guarda, por producto, cuántas unidades de este presupuesto ya se descontaron,
   // así apretar "Confirmar venta" dos veces no descuenta dos veces.
   const CLAVE_STOCK_CONFIRMADO = "presupuestoStockConfirmado";
+function claveStockConfirmado(){ return CLAVE_STOCK_CONFIRMADO + (CAMPO_STOCK === "stock_comercio" ? "_comercio" : ""); }
   function leerStockConfirmado(){
-    try { return JSON.parse(localStorage.getItem(CLAVE_STOCK_CONFIRMADO) || "{}"); }
+    try { return JSON.parse(localStorage.getItem(claveStockConfirmado()) || "{}"); }
     catch(e){ return {}; }
   }
   function limpiarStockConfirmado(){
-    try { localStorage.setItem(CLAVE_STOCK_CONFIRMADO, "{}"); } catch(e){}
+    try { localStorage.setItem(CLAVE_STOCK_CONFIRMADO, "{}"); localStorage.setItem(CLAVE_STOCK_CONFIRMADO + "_comercio", "{}"); } catch(e){}
   }
   // cli = cliente de Supabase; items = ítems del presupuesto compartido.
   // Devuelve { idProducto: stockNuevo } con lo que se descontó, o null si no se hizo nada.
@@ -1811,13 +1921,15 @@
     const { data: ses } = await cli.auth.getSession();
     if(!(ses && ses.session)){
       if(silencioso) return null;
-      alert("Solo el administrador puede descontar stock. Iniciá sesión de administrador en la web principal.");
+      alert("Solo el administrador o el comercio pueden descontar stock. Iniciá sesión en la web principal.");
       return null;
     }
-    items = (items || []).filter(it => it && !it.manual && Number(it.cantidad) > 0);
+    CAMPO_STOCK = (ses.session.user && ses.session.user.email === EMAIL_COMERCIO) ? "stock_comercio" : "stock";
+  const campo = CAMPO_STOCK;
+  items = (items || []).filter(it => it && !it.manual && Number(it.cantidad) > 0);
     if(!items.length){ if(!silencioso) alert("No hay productos del catálogo para descontar."); return null; }
   
-    const cols = "id, codigo, descripcion, stock";
+    const cols = "id, codigo, descripcion, " + campo;
     const ids = [...new Set(items.filter(i => i.origen !== "tienda" && i.id).map(i => String(i.id)))];
     const codigos = [...new Set(items.filter(i => i.codigo && i.codigo !== "—").map(i => String(i.codigo)))];
     const porId = {}, porCodigo = {};
@@ -1860,34 +1972,34 @@
       const p = productos[id];
       const delta = necesita[id] - (Number(confirmados[id]) || 0);
       if(delta <= 0){ yaDescontados.push(p.codigo); return; }
-      if(p.stock === null || p.stock === undefined){ sinControl.push(p.codigo); confirmados[id] = necesita[id]; return; }
-      aplicar.push({ p, delta, nuevo: Math.max(0, p.stock - delta), falta: p.stock - delta < 0 });
+      if(p[campo] === null || p[campo] === undefined){ sinControl.push(p.codigo); confirmados[id] = necesita[id]; return; }
+      aplicar.push({ p, delta, nuevo: Math.max(0, p[campo] - delta), falta: p[campo] - delta < 0 });
     });
   
     if(!aplicar.length){
     // Nada con stock cargado para descontar: la venta igual se da por confirmada, sin avisos de más.
-    localStorage.setItem(CLAVE_STOCK_CONFIRMADO, JSON.stringify(confirmados));
+    localStorage.setItem(claveStockConfirmado(), JSON.stringify(confirmados));
     if(silencioso) return null;
     alert(yaDescontados.length && !sinControl.length && !sinVincular.length ? "Esta venta ya estaba confirmada." : "✅ Venta confirmada.");
     return null;
   }
 
   let texto = "Se va a descontar del stock:\n\n" + aplicar.slice(0, 14).map(a =>
-      (a.falta ? "⚠️ " : "• ") + a.p.codigo + ": " + a.p.stock + " → " + a.nuevo + (a.falta ? " (había menos de lo vendido)" : "")
+      (a.falta ? "⚠️ " : "• ") + a.p.codigo + ": " + a.p[campo] + " → " + a.nuevo + (a.falta ? " (había menos de lo vendido)" : "")
     ).join("\n");
     if(aplicar.length > 14) texto += "\n… y " + (aplicar.length - 14) + " más";
         texto += "\n\n¿Confirmar la venta?";
-    if(!silencioso && !confirm(texto)) return null;
+    if(!silencioso && !confirm(texto)){ window._confCancelada = true; return null; }
   
     const resultado = {};
     const fallaron = [];
     for(const a of aplicar){
-      const r = await cli.from("Producto").update({ stock: a.nuevo }).eq("id", a.p.id).eq("stock", a.p.stock).select("id");
+      const r = await cli.from("Producto").update({ [campo]: a.nuevo }).eq("id", a.p.id).eq(campo, a.p[campo]).select("id");
       if(r.error || !r.data || !r.data.length){ fallaron.push(a.p.codigo); continue; }
       resultado[a.p.id] = a.nuevo;
       confirmados[a.p.id] = necesita[a.p.id];
     }
-    localStorage.setItem(CLAVE_STOCK_CONFIRMADO, JSON.stringify(confirmados));
+    localStorage.setItem(claveStockConfirmado(), JSON.stringify(confirmados));
     if(fallaron.length){
       alert("No se pudo descontar (el stock cambió o hubo un error): " + fallaron.join(", ") + ".\nVolvé a tocar Confirmar venta para reintentar solo esos.");
     } else if(silencioso){
@@ -1897,6 +2009,135 @@
       alert("✅ Venta confirmada. Stock descontado de " + Object.keys(resultado).length + " producto(s).");
     }
     return resultado;
+  }
+
+  /* ============================================
+     HISTORIAL de presupuestos y ventas (solo administrador).
+     Cada vez que se exporta un presupuesto (Excel o imagen), se confirma
+     una venta o se cobra con el 💰, se guarda una copia en Supabase para
+     poder encontrarla después por cliente o fecha.
+     ============================================ */
+  // Aviso en pantalla después de descargar: dice dónde quedó el archivo
+  function avisoDescarga(nombre) {
+    try {
+      let el = document.getElementById("aviso-descarga");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "aviso-descarga";
+        el.style.cssText = "position:fixed; left:12px; right:12px; bottom:84px; z-index:5000; background:var(--verde-stock); color:#0a0a0a; border-radius:10px; padding:12px 14px; font-size:0.85rem; font-weight:600; box-shadow:0 4px 18px rgba(0,0,0,0.5); display:none;";
+        el.onclick = () => { el.style.display = "none"; };
+        document.body.appendChild(el);
+      }
+      el.innerHTML = "✅ Se descargó <b>" + String(nombre).replace(/&/g,"&amp;").replace(/</g,"&lt;") + "</b><br><span style='font-weight:500;'>Buscalo en la app <b>Archivos → Descargas</b> del celular (o en Chrome: ⋮ → Descargas). Tocá este aviso para cerrarlo.</span>";
+      el.style.display = "block";
+      clearTimeout(window._tAvisoDescarga);
+      window._tAvisoDescarga = setTimeout(() => { el.style.display = "none"; }, 12000);
+    } catch (e) {}
+  }
+
+  let _ultimaFirmaHist = "";
+  async function registrarHistorial(tipo, cliente, items, descuentoPct, pagos) {
+    try {
+      if (!esAdmin) return;
+      const itemsOk = (items || []).map(i => ({
+        codigo: i.codigo || "", descripcion: i.descripcion || "",
+        cantidad: Number(i.cantidad) || 0, precioUnitario: Number(i.precioUnitario) || 0
+      })).filter(i => i.cantidad > 0);
+      if (!itemsOk.length) return;
+      const desc = Number(descuentoPct) || 0;
+      const sub = itemsOk.reduce((a, i) => a + i.cantidad * i.precioUnitario, 0);
+      const total = sub - sub * desc / 100;
+      // Si se toca dos veces seguidas el mismo botón con lo mismo, no se duplica
+      const firma = tipo + "|" + (cliente || "") + "|" + Math.round(total) + "|" + itemsOk.length + "|" + itemsOk.map(i => i.codigo + ":" + i.cantidad).join(",");
+      if (firma === _ultimaFirmaHist) return;
+      _ultimaFirmaHist = firma;
+      const { error } = await db.from("HistorialVentas").insert({
+        tipo: tipo, cliente: cliente || "", total: total, descuento_pct: desc, items: itemsOk, pagos: pagos || null
+      });
+      if (error) { console.warn("Historial:", error.message); mostrarDebug("⚠️ No se pudo guardar en el historial (¿corriste el SQL del historial?)"); }
+    } catch (e) { console.warn("Historial:", e); }
+  }
+
+  let HISTORIAL = [];
+  const ETIQUETA_HIST = {
+    presupuesto_excel: "📊 Presupuesto Excel", presupuesto_imagen: "🖼️ Presupuesto imagen",
+    venta_confirmada: "✅ Venta confirmada", venta_caja: "💰 Venta en caja"
+  };
+  const normHist = t => (t || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s\-_.]/g, "");
+
+  async function abrirHistorial() {
+    document.getElementById("overlay-historial").classList.add("abierto");
+    document.getElementById("estado-historial").textContent = "Cargando...";
+    const { data, error } = await db.from("HistorialVentas").select("*").order("creado", { ascending: false }).limit(500);
+    if (error) {
+      document.getElementById("estado-historial").textContent = "No se pudo leer el historial: " + error.message + ". ¿Corriste el SQL del historial?";
+      return;
+    }
+    HISTORIAL = data || [];
+    renderHistorial();
+  }
+  function cerrarHistorial() { document.getElementById("overlay-historial").classList.remove("abierto"); }
+
+  function renderHistorial() {
+    const q = normHist(document.getElementById("buscar-historial").value);
+    const fmt = n => Number(n).toLocaleString("es-AR", { maximumFractionDigits: 0 });
+    const lista = HISTORIAL.filter(h => {
+      if (!q) return true;
+      const f = new Date(h.creado);
+      const txt = [h.cliente, ETIQUETA_HIST[h.tipo], f.toLocaleDateString("es-AR"), f.toLocaleString("es-AR")]
+        .concat((h.items || []).map(i => i.codigo + " " + i.descripcion)).join(" ");
+      return normHist(txt).includes(q);
+    });
+    document.getElementById("estado-historial").textContent = lista.length + " de " + HISTORIAL.length + " registros (los últimos 500)";
+    document.getElementById("lista-historial").innerHTML = lista.map(h => {
+      const f = new Date(h.creado);
+      const fecha = f.toLocaleDateString("es-AR") + " " + f.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+      const esc = t => String(t == null ? "" : t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const filas = (h.items || []).map(i => "<div style='display:flex; justify-content:space-between; gap:8px; padding:3px 0;'><span>" + i.cantidad + " × " + esc(i.codigo) + " " + esc(i.descripcion) + "</span><span>$" + fmt(i.precioUnitario * i.cantidad) + "</span></div>").join("");
+      const pagos = h.pagos ? "<div style='margin-top:6px; color:var(--texto-tenue);'>Pagos: " + ["efectivo","transferencia","tarjeta"].filter(m => h.pagos[m] > 0).map(m => m + " $" + fmt(h.pagos[m])).join(" · ") + "</div>" : "";
+      const dsc = h.descuento_pct > 0 ? "<div style='color:var(--texto-tenue);'>Descuento: " + h.descuento_pct + "%</div>" : "";
+      return "<div class='item-hist' id='hist-" + h.id + "'>" +
+        "<div class='cab' onclick=\"this.parentElement.classList.toggle('abierto')\">" +
+          "<div><div style='font-weight:700;'>" + (esc(h.cliente) || "<span style='color:var(--texto-tenue);'>(sin nombre)</span>") + "</div>" +
+          "<div style='font-size:0.75rem; color:var(--texto-tenue);'>" + fecha + " · " + (ETIQUETA_HIST[h.tipo] || h.tipo) + "</div></div>" +
+          "<div style='font-weight:800; color:var(--verde-stock); white-space:nowrap;'>$" + fmt(h.total) + "</div></div>" +
+        "<div class='det'>" + filas + dsc + pagos +
+          "<div style='display:flex; gap:8px; margin-top:10px;'>" +
+          "<button class='btn-agregar' style='flex:1; background:var(--amarillo-chillon); color:#1a1a1a;' onclick=\"descargarExcelHistorial('" + h.id + "')\">⬇️ Excel</button>" +
+          "<button class='btn-agregar' style='background:none; color:var(--rojo-sinstock); border:1px solid var(--rojo-sinstock);' onclick=\"borrarHistorial('" + h.id + "')\">🗑️</button></div></div></div>";
+    }).join("") || "<div style='text-align:center; color:var(--texto-tenue); padding:20px;'>No hay registros todavía.</div>";
+  }
+
+  function descargarExcelHistorial(id) {
+    const h = HISTORIAL.find(x => String(x.id) === String(id));
+    if (!h) return;
+    const f = new Date(h.creado);
+    const items = h.items || [];
+    const filas = [["", "CLIENTE", h.cliente || "", f.toLocaleString("es-AR"), ""], [], ["CANT", "CODIGO", "DESCRIPCION", "P.UNIT", "P.PARCIAL"]];
+    let subtotal = 0;
+    items.forEach(i => { const sub = i.precioUnitario * i.cantidad; subtotal += sub; filas.push([i.cantidad, i.codigo, i.descripcion, fmtPesos(i.precioUnitario), fmtPesos(sub)]); });
+    filas.push([]);
+    const desc = Number(h.descuento_pct) || 0;
+    if (desc > 0) {
+      filas.push(["", "", "", "SUBTOTAL =", fmtPesos(subtotal)]);
+      filas.push(["", "", "", "DESCUENTO (" + desc + "%) =", "-" + fmtPesos(subtotal * desc / 100)]);
+    }
+    filas.push(["", "", "", "TOTAL =", fmtPesos(subtotal - subtotal * desc / 100)]);
+    const hoja = XLSX.utils.aoa_to_sheet(filas);
+    hoja["!cols"] = [{wch:6},{wch:13},{wch:56},{wch:14},{wch:15}];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Presupuesto");
+    const sello = f.toISOString().slice(0,16).replace("T","_").replace(":","");
+    const nombre = "Presupuesto" + (h.cliente ? "_" + h.cliente.replace(/\s+/g, "_") : "") + "_" + sello + ".xlsx";
+    guardarExcelA4(libro, nombre, 3);
+  }
+
+  async function borrarHistorial(id) {
+    if (!confirm("¿Borrar este registro del historial? No devuelve stock ni cambia la planilla.")) return;
+    const { error } = await db.from("HistorialVentas").delete().eq("id", id);
+    if (error) { alert("No se pudo borrar: " + error.message); return; }
+    HISTORIAL = HISTORIAL.filter(x => String(x.id) !== String(id));
+    renderHistorial();
   }
 
   function guardarPresupuesto() {
@@ -2512,6 +2753,7 @@
     const cliente = document.getElementById("input-cliente-presupuesto").value.trim() || "";
     const fecha = new Date().toLocaleString('es-AR');
     const descuentoPct = parseFloat(document.getElementById("input-descuento-presupuesto").value) || 0;
+    registrarHistorial("presupuesto_excel", cliente, PRESUPUESTO, descuentoPct);
 
     const filas = [];
     filas.push(["", "CLIENTE", cliente, fecha, ""]);
@@ -2627,6 +2869,7 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
+      avisoDescarga(nombreArchivo);
     } catch (e) {
       console.warn("Excel A4 no disponible, se baja el común:", e);
       XLSX.writeFile(libro, nombreArchivo, { bookType: "xlsx" });
@@ -2710,6 +2953,7 @@
     const cliente = document.getElementById("input-cliente-presupuesto").value.trim();
     const fecha = new Date().toLocaleDateString('es-AR');
     const descuentoPct = parseFloat(document.getElementById("input-descuento-presupuesto").value) || 0;
+    registrarHistorial("presupuesto_imagen", cliente, PRESUPUESTO, descuentoPct);
 
     const subtotalGeneral = PRESUPUESTO.reduce((s, it) => s + it.precioUnitario * it.cantidad, 0);
     const totalGeneral = subtotalGeneral - subtotalGeneral * (descuentoPct / 100);
@@ -2781,6 +3025,7 @@
         await esperar(400);
         URL.revokeObjectURL(url);
       }
+      avisoDescarga(archivos.length > 1 ? archivos.length + " imágenes del presupuesto" : archivos[0].name);
       if (estadoPanel) estadoPanel.textContent = "";
     } catch (e) {
       mostrarEstado("❌ No se pudo generar la imagen: " + e.message);
@@ -2934,7 +3179,86 @@
     }
   })();
 
+  // ===== PLANILLA DEL COMERCIO: se guarda en Supabase, una fila por fecha =====
+  let fechaPlanilla = null;
+  function fechaHoyISO() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function estadoPlanillaComercio(msg, ok) {
+    const el = document.getElementById("estado-fecha-planilla");
+    if (el) { el.textContent = msg; el.style.color = ok === false ? "var(--rojo-sinstock)" : "var(--verde-stock)"; }
+  }
+  let _tareaGuardadoPlanilla = Promise.resolve();
+  function guardarPlanillaComercio() {
+    const fecha = fechaPlanilla || fechaHoyISO();
+    const fila = {
+      fecha: fecha,
+      ventas: JSON.parse(JSON.stringify(VENTAS_DIA)),
+      gastos: JSON.parse(JSON.stringify(GASTOS_DIA)),
+      caja_inicial: parseFloat((document.getElementById("caja-inicial") || {}).value) || 0,
+      updated_at: new Date().toISOString()
+    };
+    // Se guardan de a uno, en orden, para que nunca se pise una versión nueva con una vieja
+    _tareaGuardadoPlanilla = _tareaGuardadoPlanilla.then(async () => {
+      try {
+        const { error } = await db.from("PlanillaComercio").upsert(fila, { onConflict: "fecha" });
+        if (error) throw error;
+        estadoPlanillaComercio("✔ Guardado en la nube (" + fecha.split("-").reverse().join("/") + ")");
+      } catch (e) {
+        estadoPlanillaComercio("⚠️ No se pudo guardar en la nube: " + ((e && e.message) || e) + " — no cierres la página.", false);
+      }
+    });
+    return _tareaGuardadoPlanilla;
+  }
+  function normalizarVentasViejas() {
+    VENTAS_DIA.forEach(item => {
+      if (!item.pagos) item.pagos = { efectivo: item.precioUnitario * item.cantidad, transferencia: 0, tarjeta: 0 };
+    });
+  }
+  async function cargarDiaComercio(fecha) {
+    fechaPlanilla = fecha;
+    const inp = document.getElementById("fecha-planilla");
+    if (inp) inp.value = fecha;
+    VENTAS_DIA = []; GASTOS_DIA = [];
+    let caja = "0";
+    try {
+      const { data, error } = await db.from("PlanillaComercio").select("*").eq("fecha", fecha).maybeSingle();
+      if (error) throw error;
+      if (data) {
+        VENTAS_DIA = Array.isArray(data.ventas) ? data.ventas : [];
+        GASTOS_DIA = Array.isArray(data.gastos) ? data.gastos : [];
+        caja = String(data.caja_inicial != null ? data.caja_inicial : 0);
+      }
+      normalizarVentasViejas();
+      estadoPlanillaComercio(fecha === fechaHoyISO() ? "Hoy" + (data ? "" : " (todavía sin ventas)") : "📅 Viendo el " + fecha.split("-").reverse().join("/") + (data ? "" : " (sin datos ese día)"));
+    } catch (e) {
+      estadoPlanillaComercio("⚠️ No se pudo leer la planilla: " + ((e && e.message) || e) + ". ¿Corriste el SQL del comercio?", false);
+    }
+    const c = document.getElementById("caja-inicial"); if (c) c.value = caja;
+    renderPlanilla();
+  }
+  async function cambiarFechaPlanilla(fecha) {
+    if (!fecha) return;
+    await _tareaGuardadoPlanilla;
+    await cargarDiaComercio(fecha);
+  }
+  async function prepararPlanillaComercio() {
+    const av = document.getElementById("aviso-planilla-local"); if (av) av.style.display = "none";
+    const bl = document.getElementById("bloque-fechas-comercio"); if (bl) bl.style.display = "block";
+    const bx = document.querySelector('button[onclick="exportarPlanillaExcel()"]'); if (bx) bx.textContent = "📊 Descargar Excel de este día";
+    await cargarDiaComercio(fechaHoyISO());
+  }
+  // Las ventas siempre se anotan en el día de hoy
+  async function asegurarHoyComercio() {
+    if (esComercio && fechaPlanilla && fechaPlanilla !== fechaHoyISO()) {
+      await _tareaGuardadoPlanilla;
+      await cargarDiaComercio(fechaHoyISO());
+    }
+  }
+
   function guardarPlanillaLocal() {
+    if (esComercio) { guardarPlanillaComercio(); return; }
     localStorage.setItem("planillaFechaDia", new Date().toDateString());
     localStorage.setItem("planillaVentasDia", JSON.stringify(VENTAS_DIA));
     localStorage.setItem("planillaGastosDia", JSON.stringify(GASTOS_DIA));
@@ -2943,6 +3267,7 @@
   }
 
   function cargarCajaInicialGuardada() {
+    if (esComercio) return;
     const guardado = localStorage.getItem("planillaCajaInicial");
     if (guardado !== null) {
       document.getElementById("caja-inicial").value = guardado;
@@ -2959,13 +3284,13 @@
       const { data: ses } = await db.auth.getSession();
       if (!(ses && ses.session)) return 0;
       for (let intento = 0; intento < 2; intento++) {
-        const r = await db.from("Producto").select("stock").eq("id", producto.id).single();
-        if (r.error || !r.data || r.data.stock === null || r.data.stock === undefined) return 0;
-        const actual = r.data.stock;
+        const r = await db.from("Producto").select(CAMPO_STOCK).eq("id", producto.id).single();
+        if (r.error || !r.data || r.data[CAMPO_STOCK] === null || r.data[CAMPO_STOCK] === undefined) return 0;
+        const actual = r.data[CAMPO_STOCK];
         const nuevo = Math.max(0, actual - cantidad);
-        const u = await db.from("Producto").update({ stock: nuevo }).eq("id", producto.id).eq("stock", actual).select("id");
+        const u = await db.from("Producto").update({ [CAMPO_STOCK]: nuevo }).eq("id", producto.id).eq(CAMPO_STOCK, actual).select("id");
         if (!u.error && u.data && u.data.length) {
-          producto.stock = nuevo;
+          producto[CAMPO_STOCK] = nuevo;
           if (actual < cantidad) mostrarDebug("⚠️ " + producto.codigo + ": había solo " + actual + " en stock (queda en 0)");
           return actual - nuevo;
         }
@@ -2980,13 +3305,13 @@
       const { data: ses } = await db.auth.getSession();
       if (!(ses && ses.session)) return;
       for (let intento = 0; intento < 2; intento++) {
-        const r = await db.from("Producto").select("stock").eq("id", productoId).single();
-        if (r.error || !r.data || r.data.stock === null || r.data.stock === undefined) return;
-        const nuevo = r.data.stock + cantidad;
-        const u = await db.from("Producto").update({ stock: nuevo }).eq("id", productoId).eq("stock", r.data.stock).select("id");
+        const r = await db.from("Producto").select(CAMPO_STOCK).eq("id", productoId).single();
+        if (r.error || !r.data || r.data[CAMPO_STOCK] === null || r.data[CAMPO_STOCK] === undefined) return;
+        const nuevo = r.data[CAMPO_STOCK] + cantidad;
+        const u = await db.from("Producto").update({ [CAMPO_STOCK]: nuevo }).eq("id", productoId).eq(CAMPO_STOCK, r.data[CAMPO_STOCK]).select("id");
         if (!u.error && u.data && u.data.length) {
           const p = PRODUCTOS.find(pr => pr.id === productoId);
-          if (p) p.stock = nuevo;
+          if (p) p[CAMPO_STOCK] = nuevo;
           return;
         }
       }
@@ -3068,8 +3393,8 @@
       const sub = it.precioUnitario * it.cantidad;
       total += sub;
       const p = PRODUCTOS.find(pr => pr.id === it.id);
-      const aviso = (esAdmin && p && p.stock != null && it.cantidad > p.stock)
-        ? '<div style="font-size:0.75rem; color:var(--rojo-sinstock); margin-top:4px;">⚠️ Hay ' + p.stock + ' en stock</div>' : '';
+      const aviso = (puedeStock() && p && p[CAMPO_STOCK] != null && it.cantidad > p[CAMPO_STOCK])
+        ? '<div style="font-size:0.75rem; color:var(--rojo-sinstock); margin-top:4px;">⚠️ Hay ' + p[CAMPO_STOCK] + ' en stock</div>' : '';
       return '<div class="item-venta">' +
         '<div class="fila1"><div><div class="cod">' + it.codigo + '</div><div class="desc">' + (it.descripcion || "") + '</div></div>' +
         '<button onclick="quitarDeVentaEnCurso(' + i + ')" style="background:none; border:none; color:var(--texto-tenue); font-size:1.1rem; cursor:pointer;">✕</button></div>' +
@@ -3101,6 +3426,7 @@
 
   async function cobrarVentaEnCurso() {
     if (!VENTA_EN_CURSO.length) return;
+    await asegurarHoyComercio();
     const lineas = VENTA_EN_CURSO.map(it => ({ ...it }));
     const totalSugerido = lineas.reduce((sum, it) => sum + it.precioUnitario * it.cantidad, 0);
     const unidades = lineas.reduce((sum, it) => sum + it.cantidad, 0);
@@ -3145,6 +3471,7 @@
     }
     guardarPlanillaLocal();
     renderPlanilla();
+    registrarHistorial("venta_caja", "", VENTAS_DIA.slice(-lineas.length), 0, resultado.pagos);
     VENTA_EN_CURSO = [];
     guardarVentaEnCurso();
     renderVentaEnCurso();
@@ -3347,8 +3674,11 @@
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Cierre del dia");
 
-    const sello = ahora.toISOString().slice(0,10);
-    XLSX.writeFile(libro, "Cierre_" + sello + ".xlsx", { bookType: "xlsx" });
+    const sello = (esComercio && fechaPlanilla) ? fechaPlanilla : ahora.toISOString().slice(0,10);
+    XLSX.writeFile(libro, (esComercio ? "Cierre_Comercio_" : "Cierre_") + sello + ".xlsx", { bookType: "xlsx" });
+
+    // En el comercio la planilla queda guardada por fecha: no se borra nada
+    if (esComercio) { renderPlanilla(); return; }
 
     // Al "cerrar el día" se vacía todo, como corresponde a un cierre de caja
     VENTAS_DIA = [];
