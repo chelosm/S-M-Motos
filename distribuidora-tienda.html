@@ -722,7 +722,7 @@ async function obtenerDolarBlue(){
 
 function costoDe(p){
   if(p.precio_usd && dolarBlueCache){
-    return Math.round(p.precio_usd * dolarBlueCache * (1 + IVA_TIENDA));
+    return Math.round(p.precio_usd * dolarBlueCache * (1 + IVA_TIENDA) * 100) / 100;
   }
   return null;
 }
@@ -1195,7 +1195,7 @@ async function buscarCatalogoVivo(busqueda){
     .filter(p => p.codigo && !codigosCargados.has(normalizarCodigo(p.codigo)))
     .map(p => {
       // Precio mayorista sin ganancia: solo costo + IVA, igual que en el catálogo base.
-      const costoConIva = Math.round((p.precio_usd||0) * dolar * (1 + IVA_CATALOGO));
+      const costoConIva = Math.round((p.precio_usd||0) * dolar * (1 + IVA_CATALOGO) * 100) / 100;
       const venta = conGananciaWeb(costoConIva, p.margen_pct);
       const item = { codigo: p.codigo, d: p.descripcion || "", p: venta, costo: costoConIva, margen: textoMargen(p.margen_pct), esFinal: true };
       catalogoVivoCache[p.codigo] = { d: item.d, p: item.p, costo: item.costo, margen: item.margen, esFinal: true }; // queda disponible para el carrito
@@ -1274,7 +1274,7 @@ function itemCarritoBase(clave){
     const item = obtenerItemProveedor(info.codigo);
     if(!item) return null;
     const precio = item.esFinal ? item.p : conMargen(item.p);
-    return { p: { pack_size: 1 }, precio, nombre: `${item.d} (${info.codigo})` };
+    return { p: { pack_size: 1 }, precio, costo: (item.esFinal && item.costo != null) ? item.costo : null, nombre: `${item.d} (${info.codigo})` };
   }
   if(info.tipo === "custom"){
     const c = customItems[info.customId];
@@ -1285,9 +1285,9 @@ function itemCarritoBase(clave){
   if(!p) return null;
   if(info.tipo === "variante" && p.variantes && p.variantes[info.varianteIdx]){
     const v = p.variantes[info.varianteIdx];
-    return { p, precio: precioVariante(v), nombre: `${p.nombre} — ${v.modelo}${v.codigo ? ' (Cod: '+v.codigo+')' : ''}` };
+    return { p, precio: precioVariante(v), costo: costoVariante(v), nombre: `${p.nombre} — ${v.modelo}${v.codigo ? ' (Cod: '+v.codigo+')' : ''}` };
   }
-  return { p, precio: precioDe(p), nombre: `${p.nombre}${info.color ? ' — '+info.color : ''}` };
+  return { p, precio: precioDe(p), costo: costoDe(p), nombre: `${p.nombre}${info.color ? ' — '+info.color : ''}` };
 }
 
 let customItems = JSON.parse(localStorage.getItem("dt_custom") || "{}");
@@ -1557,7 +1557,9 @@ function sincronizarPresupuestoCompartido(){
       codigo: (it.p && it.p.codigo) || (String(clave).startsWith("prov|") ? String(clave).slice(5) : ""),
       descripcion: it.nombre,
       cantidad: unidadesCarrito(clave, it),
-      precioUnitario: it.precio,
+      // La web factura a precio mayorista (costo): la ganancia es solo para mostrar en la tienda.
+      // Si el precio se cambió a mano, se respeta ese precio.
+      precioUnitario: (!it.precioEditado && it.costo != null) ? it.costo : it.precio,
       manual: !!it.esCustom,
       origen: "tienda"
     };
@@ -2309,7 +2311,7 @@ async function buscarPrecioProveedorVariante(){
 }
 
 function costoVariante(v){
-  if(v.precio_usd && dolarBlueCache) return Math.round(v.precio_usd * dolarBlueCache * (1 + IVA_TIENDA));
+  if(v.precio_usd && dolarBlueCache) return Math.round(v.precio_usd * dolarBlueCache * (1 + IVA_TIENDA) * 100) / 100;
   return null;
 }
 function precioVariante(v){
