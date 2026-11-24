@@ -1517,10 +1517,36 @@ function agregarAlCarrito(id){
   showToast(`${p.nombre} agregado`);
 }
 
+// ===== Presupuesto compartido: que borrar o agregar en la web o en la tienda se vea en las dos =====
+// Antes esta página se quedaba con el carrito "en memoria": si desde la web vaciabas el
+// presupuesto y volvías a la tienda, al tocar cualquier cosa la tienda volvía a guardar
+// lo viejo y reaparecía. Ahora, cada vez que volvés a esta pestaña (o cambia el
+// presupuesto en otra pestaña), se vuelve a leer lo que hay guardado.
+const CLAVES_PRESUPUESTO = ["dt_cart", "dt_custom", "dt_cambios_manuales", "presupuestoSMMotos"];
+let _firmaCarrito = "";
+function firmaCarritoStorage(){
+  try { return CLAVES_PRESUPUESTO.map(k => localStorage.getItem(k) || "").join("¦"); } catch(e) { return ""; }
+}
+function refrescarCarritoDesdeStorage(){
+  const f = firmaCarritoStorage();
+  if(f === _firmaCarrito) return;
+  _firmaCarrito = f;
+  try { cart = JSON.parse(localStorage.getItem("dt_cart") || "{}"); } catch(e) { /* seguimos con el que hay */ }
+  try { customItems = JSON.parse(localStorage.getItem("dt_custom") || "{}"); } catch(e) { /* idem */ }
+  try { if(productos && productos.length) renderGrid(); } catch(e) {}
+  try { renderCarrito(); } catch(e) {}
+  try { actualizarBarra(); } catch(e) {}
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") refrescarCarritoDesdeStorage(); });
+window.addEventListener("focus", refrescarCarritoDesdeStorage);
+window.addEventListener("pageshow", refrescarCarritoDesdeStorage);
+window.addEventListener("storage", (e) => { if(e.key && CLAVES_PRESUPUESTO.indexOf(e.key) !== -1) refrescarCarritoDesdeStorage(); });
+
 function guardarCarrito(){
   localStorage.setItem("dt_cart", JSON.stringify(cart));
   limpiarCambiosManuales();
   sincronizarPresupuestoCompartido();
+  _firmaCarrito = firmaCarritoStorage();
   actualizarBarra();
   actualizarBotonesCarrito();
   if(document.querySelectorAll(".colores-row, .modelos-row, .compacta-proveedor").length){
@@ -1958,11 +1984,15 @@ function quitarDelCarrito(clave){
 function vaciarCarrito(){
   if(!confirm("¿Vaciar todo el presupuesto? Se van a borrar todos los productos cargados, tanto de la tienda como del catálogo.")) return;
   cart = {};
+  customItems = {};
+  try { guardarCustomItems(); } catch(e) {}
   guardarCambiosManuales({});
   guardarCarrito();
   guardarPresupuestoCompartido([]);
   limpiarStockConfirmado();
+  _firmaCarrito = firmaCarritoStorage();
   renderCarrito();
+  try { renderGrid(); } catch(e) {}
 }
 
 function exportarExcel(){
