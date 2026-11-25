@@ -718,6 +718,10 @@
   <input type="number" id="input-dolar" step="0.01" min="0" placeholder="Ej: 1250">
   <button class="aplicar" onclick="guardarDolar()">Aplicar</button>
   <button class="aplicar" style="background:var(--amarillo-chillon); color:#1a1a1a; margin-top:8px;" onclick="usarDolarBlue()">🔄 Usar dólar blue (auto)</button>
+  <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:0.8rem; cursor:pointer;">
+    <input type="checkbox" id="chk-dolar-auto" onchange="cambiarDolarAuto(this.checked)" style="width:auto;">
+    Actualizar solo al abrir la web
+  </label>
   <div id="msg-dolar-blue" style="font-size:0.72rem; color:var(--texto-tenue); margin-top:6px;"></div>
 </div>
 
@@ -1170,12 +1174,69 @@
       alert("Ingresá un valor de dólar válido.");
       return;
     }
+    const cambioManual = valor !== valorDolar;
     valorDolar = valor;
     localStorage.setItem("valorDolarHada", valor);
     document.getElementById("valor-dolar-actual").textContent = valor.toFixed(2);
+    // Si lo escribís a mano con otro valor, queda fijo (no se pisa solo al abrir).
+    if (cambioManual && dolarAutoActivo()) {
+      localStorage.setItem("dolarAuto", "0");
+      document.getElementById("chk-dolar-auto").checked = false;
+      avisoDolar("💲 Dólar fijado a mano en $" + valor + ". Ya no se actualiza solo (podés volver a activarlo en el panel del dólar).");
+    }
     cerrarPaneles();
     renderTabla();
   }
+
+  // ===== Dólar automático =====
+  // Al abrir la web (y al volver a ella pasada media hora) se consulta el dólar blue "venta"
+  // y, si cambió, se actualiza solo. Si falla la consulta, queda el último valor guardado.
+  function dolarAutoActivo() { return localStorage.getItem("dolarAuto") !== "0"; }
+  function avisoDolar(texto) {
+    try {
+      let el = document.getElementById("aviso-dolar");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "aviso-dolar";
+        el.style.cssText = "position:fixed; left:12px; right:12px; bottom:84px; z-index:5000; background:var(--amarillo-chillon); color:#0a0a0a; border-radius:10px; padding:12px 14px; font-size:0.85rem; font-weight:600; box-shadow:0 4px 18px rgba(0,0,0,0.5); display:none;";
+        el.onclick = () => { el.style.display = "none"; };
+        document.body.appendChild(el);
+      }
+      el.textContent = texto;
+      el.style.display = "block";
+      clearTimeout(window._tAvisoDolar);
+      window._tAvisoDolar = setTimeout(() => { el.style.display = "none"; }, 9000);
+    } catch (e) {}
+  }
+  let ultimaConsultaDolar = 0;
+  async function actualizarDolarAuto() {
+    if (!dolarAutoActivo()) return;
+    ultimaConsultaDolar = Date.now();
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 4000);
+      const resp = await fetch("https://dolarapi.com/v1/dolares/blue", { signal: ctl.signal });
+      clearTimeout(t);
+      if (!resp.ok) throw new Error("no ok");
+      const data = await resp.json();
+      const nuevo = parseFloat(data.venta);
+      if (!(nuevo > 0) || nuevo === valorDolar) return;
+      const antes = valorDolar;
+      valorDolar = nuevo;
+      localStorage.setItem("valorDolarHada", nuevo);
+      document.getElementById("valor-dolar-actual").textContent = nuevo.toFixed(2);
+      document.getElementById("input-dolar").value = nuevo;
+      renderTabla();
+      if (antes > 1) avisoDolar("💲 Dólar actualizado: $" + antes + " → $" + nuevo + ". Lo que ya estaba cargado en el presupuesto conserva su precio.");
+    } catch (e) { /* sin conexión o API caída: se queda con el último valor */ }
+  }
+  function cambiarDolarAuto(activo) {
+    localStorage.setItem("dolarAuto", activo ? "1" : "0");
+    if (activo) actualizarDolarAuto();
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && Date.now() - ultimaConsultaDolar > 30 * 60 * 1000) actualizarDolarAuto();
+  });
 
   // El margen se comparte con la tienda (tabla ConfigTienda) para que los clientes
   // vean los mismos precios de venta que en la web. Solo lo sube el administrador.
@@ -1208,6 +1269,8 @@
       document.getElementById("valor-dolar-actual").textContent = valorDolar.toFixed(2);
       document.getElementById("input-dolar").value = valorDolar;
     }
+    const chk = document.getElementById("chk-dolar-auto");
+    if (chk) chk.checked = dolarAutoActivo();
     const margenGuardado = localStorage.getItem("margenHada");
     if (margenGuardado !== null) {
       margenPct = parseFloat(margenGuardado);
@@ -1320,6 +1383,7 @@
     }
     actualizarUI();
     cargarConfigGuardada();
+    await actualizarDolarAuto(); // máx. 4 s; así los precios salen ya con el dólar de hoy
     // Solo si el margen fue guardado en este aparato (así no se pisa con el valor por defecto)
     if (esAdmin && localStorage.getItem("margenHada") !== null) sincronizarMargenTienda();
     if (esComercio) await prepararPlanillaComercio();
