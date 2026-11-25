@@ -459,6 +459,7 @@
   <div class="sheet">
     <button class="cerrar-x" onclick="cerrarModales()">✕</button>
     <h2>Tu presupuesto</h2>
+    <div id="nota-precios-carrito" style="display:none;font-size:0.8rem;color:var(--gris);margin:-6px 0 10px;">Precios a costo mayorista (sin ganancia)</div>
     <input type="text" id="buscador-presupuesto" placeholder="🔍 Buscar en el presupuesto (código o nombre)..." oninput="renderCarrito()" autocomplete="off"
       style="width:100%;box-sizing:border-box;padding:10px;border:2px solid var(--naranja);border-radius:8px;font-size:0.9rem;margin-bottom:10px;">
     <div id="cart-items"></div>
@@ -842,6 +843,12 @@ async function cargarProductos(){
   await obtenerDolarBlue();
   await cargarConfigPrecios();
   actualizarAvisoCostos();
+  try {
+    const { data: ses } = await sb.auth.getSession();
+    sesionAdminCosto = !!(ses && ses.session && ses.session.user && ses.session.user.email === EMAIL_ADMIN_TIENDA);
+  } catch(e) { sesionAdminCosto = false; }
+  const notaPres = document.getElementById("nota-precios-carrito");
+  if(notaPres) notaPres.style.display = (sesionAdminCosto || esAdmin) ? "block" : "none";
   const grid = document.getElementById("grid");
   const { data, error } = await sb.from("DistribuidoraTienda").select("*").order("created_at",{ascending:true});
   if(error){
@@ -1268,7 +1275,18 @@ function itemCarrito(clave){
   if(o && typeof o.precio === "number") return Object.assign({}, it, { precio: o.precio, precioEditado: true });
   return it;
 }
+// En la sesión de administrador, el presupuesto de la tienda va a precio MAYORISTA (costo),
+// igual que en la web. Las fotos de la tienda siguen mostrando el precio de venta sugerido.
+const EMAIL_ADMIN_TIENDA = "admin@smmotos.com";
+let sesionAdminCosto = false;
+function aCostoSiAdmin(it){
+  if(it && (sesionAdminCosto || esAdmin) && it.costo != null) return Object.assign({}, it, { precio: it.costo });
+  return it;
+}
 function itemCarritoBase(clave){
+  return aCostoSiAdmin(itemCarritoBaseOriginal(clave));
+}
+function itemCarritoBaseOriginal(clave){
   const info = parseClaveCarrito(clave);
   if(info.tipo === "proveedor"){
     const item = obtenerItemProveedor(info.codigo);
