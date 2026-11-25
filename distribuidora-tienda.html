@@ -864,12 +864,8 @@ async function cargarProductos(){
   // en el orden en que se cargaron.
   productos.forEach((p,i)=>{ p._i = i; });
   productos.sort((a,b)=>ordenEfectivo(a)-ordenEfectivo(b));
-  // Primero se muestran los productos (con los costos que ya hubiera en memoria)
-  // y recién después se baja la lista de costos; al terminar se vuelve a dibujar.
-  aplicarCostosGuardados();
-  renderTabs();
-  renderGrid();
-  if(esAdmin) renderAdminLista();
+  // Los costos se cruzan ANTES de dibujar, para que ningún precio se vea "viejo"
+  // ni siquiera un instante (ahora es rápido: tandas en paralelo y con memoria).
   await vincularCostosDelCatalogo();
   if(miCarga !== cargaSeq) return;
   renderTabs();
